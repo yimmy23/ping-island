@@ -1,0 +1,143 @@
+import Foundation
+
+struct HookInstaller {
+    let homeDirectory: URL
+    let appSupportDirectory: URL
+
+    init(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
+        self.homeDirectory = homeDirectory
+        self.appSupportDirectory = homeDirectory.appending(path: ".island", directoryHint: .isDirectory)
+    }
+
+    func installClaudeAssets() throws {
+        try ensureSupportFiles()
+        let fileURL = homeDirectory.appending(path: ".claude/settings.json")
+        let current = try readJSON(fileURL) ?? [:]
+        var updated = current
+        var hooks = current["hooks"] as? [String: Any] ?? [:]
+
+        for event in ["SessionStart", "Stop", "PreToolUse", "PostToolUse", "PermissionRequest", "Notification", "UserPromptSubmit"] {
+            hooks[event] = installHookArray(existing: hooks[event], command: bridgeCommand(source: "claude"))
+        }
+
+        updated["hooks"] = hooks
+        updated["env"] = mergedEnvironment(from: current["env"] as? [String: Any] ?? [:])
+        updated["statusLine"] = [
+            "type": "command",
+            "command": statusLineCommand()
+        ]
+
+        try writeJSON(updated, to: fileURL)
+    }
+
+    func installCodexAssets() throws {
+        try ensureSupportFiles()
+        let fileURL = homeDirectory.appending(path: ".codex/hooks.json")
+        let current = try readJSON(fileURL) ?? [:]
+        var updated = current
+        var hooks = current["hooks"] as? [String: Any] ?? [:]
+
+        for event in ["SessionStart", "UserPromptSubmit", "Stop"] {
+            hooks[event] = installHookArray(existing: hooks[event], command: bridgeCommand(source: "codex"))
+        }
+
+        updated["hooks"] = hooks
+        try writeJSON(updated, to: fileURL)
+    }
+
+    func installStatusLineScript() throws {
+        try ensureBinDirectory()
+        let scriptURL = appSupportDirectory.appending(path: "bin/island-statusline")
+        try writeExecutable(
+            """
+            #!/bin/bash
+            input=$(cat)
+            _rl=$(echo "$input" | jq -c '.rate_limits // empty' 2>/dev/null)
+            [ -n "$_rl" ] && echo "$_rl" > /tmp/island-rate-limits.json
+            echo "$input" | jq -r 'if .model.display_name then "[\\(.model.display_name)] \\(.context_window.used_percentage // 0)% context" else empty end' 2>/dev/null
+            """,
+            to: scriptURL
+        )
+    }
+
+    private func ensureSupportFiles() throws {
+        try ensureBinDirectory()
+        try installStatusLineScript()
+        try installBridgeLauncher()
+    }
+
+    private func ensureBinDirectory() throws {
+        try FileManager.default.createDirectory(at: appSupportDirectory.appending(path: "bin"), withIntermediateDirectories: true)
+    }
+
+    private func installBridgeLauncher() throws {
+        let launcherURL = appSupportDirectory.appending(path: "bin/island-bridge")
+        try writeExecutable(
+            """
+            #!/bin/zsh
+            if [ -x "\(resolvedBridgeBinaryPath())" ]; then
+              exec "\(resolvedBridgeBinaryPath())" "$@"
+            fi
+            if [ -x "/Users/wudanwu/Island/.build/debug/IslandBridge" ]; then
+              exec "/Users/wudanwu/Island/.build/debug/IslandBridge" "$@"
+            fi
+            echo "IslandBridge binary not found" >&2
+            exit 127
+            """,
+            to: launcherURL
+        )
+    }
+
+    private func resolvedBridgeBinaryPath() -> String {
+        let executable = Bundle.main.executableURL?.deletingLastPathComponent().appending(path: "IslandBridge").path()
+        return executable ?? "/Users/wudanwu/Island/.build/debug/IslandBridge"
+    }
+
+    private func bridgeCommand(source: String) -> String {
+        "\(appSupportDirectory.appending(path: "bin/island-bridge").path()) --source \(source)"
+    }
+
+    private func statusLineCommand() -> String {
+        appSupportDirectory.appending(path: "bin/island-statusline").path()
+    }
+
+    private func mergedEnvironment(from existing: [String: Any]) -> [String: Any] {
+        var result = existing
+        result["CLAUDE_CODE_DISABLE_TERMINAL_TITLE"] = "1"
+        return result
+    }
+
+    private func installHookArray(existing: Any?, command: String) -> [[String: Any]] {
+        var hooks = existing as? [[String: Any]] ?? []
+        let hookBody: [String: Any] = [
+            "hooks": [[
+                "type": "command",
+                "command": command
+            ]],
+            "matcher": "*"
+        ]
+        let commands = hooks.compactMap { (($0["hooks"] as? [[String: Any]])?.first?["command"] as? String) }
+        if !commands.contains(command) {
+            hooks.append(hookBody)
+        }
+        return hooks
+    }
+
+    private func readJSON(_ fileURL: URL) throws -> [String: Any]? {
+        guard FileManager.default.fileExists(atPath: fileURL.path()) else { return nil }
+        let data = try Data(contentsOf: fileURL)
+        return (try JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+
+    private func writeJSON(_ object: [String: Any], to fileURL: URL) throws {
+        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: fileURL, options: [.atomic])
+    }
+
+    private func writeExecutable(_ text: String, to fileURL: URL) throws {
+        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(text.utf8).write(to: fileURL, options: [.atomic])
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fileURL.path())
+    }
+}
