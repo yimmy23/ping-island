@@ -1,0 +1,221 @@
+import SwiftUI
+
+struct SessionQuestionForm: View {
+    let intervention: SessionIntervention
+    let submitLabel: String
+    let onSubmit: ([String: [String]]) -> Void
+    var secondaryActionTitle: String? = nil
+    var onSecondaryAction: (() -> Void)? = nil
+
+    @State private var answers: [String: [String]] = [:]
+    @State private var otherAnswers: [String: String] = [:]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(intervention.questions) { question in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text(question.header)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(TerminalColors.blue.opacity(0.9))
+
+                        if question.allowsMultiple {
+                            Text("多选")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(TerminalColors.amber.opacity(0.95))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(TerminalColors.amber.opacity(0.14))
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    Text(question.prompt)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white)
+
+                    if let detail = question.detail, !detail.isEmpty {
+                        Text(detail)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.55))
+                    }
+
+                    questionInput(question)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button(submitLabel) {
+                    onSubmit(submissionPayload())
+                }
+                .buttonStyle(SessionQuestionButtonStyle(background: Color.white.opacity(0.9), foreground: .black))
+                .disabled(!canSubmit)
+
+                if let secondaryActionTitle, let onSecondaryAction {
+                    Button(secondaryActionTitle) {
+                        onSecondaryAction()
+                    }
+                    .buttonStyle(SessionQuestionButtonStyle(background: Color.white.opacity(0.1)))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func questionInput(_ question: SessionInterventionQuestion) -> some View {
+        if !question.options.isEmpty {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
+                ForEach(question.options) { option in
+                    Button {
+                        toggle(option.title, for: question)
+                    } label: {
+                        HStack(alignment: .top, spacing: 8) {
+                            if question.allowsMultiple {
+                                Image(systemName: isSelected(option.title, for: question) ? "checkmark.square.fill" : "square")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(isSelected(option.title, for: question) ? TerminalColors.blue : .white.opacity(0.55))
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(option.title)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.white)
+                                if let detail = option.detail {
+                                    Text(detail)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.white.opacity(0.55))
+                                        .lineLimit(2)
+                                }
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(
+                                    isSelected(option.title, for: question)
+                                        ? TerminalColors.blue.opacity(0.72)
+                                        : Color.white.opacity(0.14),
+                                    lineWidth: 1
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if question.allowsOther {
+                TextField("其他答案", text: Binding(
+                    get: { otherAnswers[question.id] ?? "" },
+                    set: { otherAnswers[question.id] = $0 }
+                ))
+                .textFieldStyle(.plain)
+                .padding(10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                )
+            }
+        } else if question.isSecret {
+            SecureField("Answer", text: Binding(
+                get: { answers[question.id]?.first ?? "" },
+                set: { answers[question.id] = normalizedAnswers(from: $0) }
+            ))
+            .textFieldStyle(.plain)
+            .padding(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+            )
+        } else {
+            TextField("Answer", text: Binding(
+                get: { answers[question.id]?.first ?? "" },
+                set: { answers[question.id] = normalizedAnswers(from: $0) }
+            ))
+            .textFieldStyle(.plain)
+            .padding(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+            )
+        }
+    }
+
+    private var canSubmit: Bool {
+        !intervention.questions.contains { finalAnswers(for: $0).isEmpty }
+    }
+
+    private func isSelected(_ title: String, for question: SessionInterventionQuestion) -> Bool {
+        answers[question.id, default: []].contains(title)
+    }
+
+    private func toggle(_ title: String, for question: SessionInterventionQuestion) {
+        if question.allowsMultiple {
+            var current = answers[question.id, default: []]
+            if current.contains(title) {
+                current.removeAll { $0 == title }
+            } else {
+                current.append(title)
+            }
+            answers[question.id] = current
+            return
+        }
+
+        answers[question.id] = [title]
+    }
+
+    private func finalAnswers(for question: SessionInterventionQuestion) -> [String] {
+        var current = answers[question.id, default: []]
+        let other = otherAnswers[question.id]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !other.isEmpty {
+            current.append(other)
+        }
+        return current.filter { !$0.isEmpty }
+    }
+
+    private func submissionPayload() -> [String: [String]] {
+        intervention.questions.reduce(into: [String: [String]]()) { partial, question in
+            let resolved = finalAnswers(for: question)
+            if !resolved.isEmpty {
+                partial[question.id] = resolved
+            }
+        }
+    }
+
+    private func normalizedAnswers(from value: String) -> [String] {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? [] : [trimmed]
+    }
+}
+
+private struct SessionQuestionButtonStyle: ButtonStyle {
+    let background: Color
+    var foreground: Color = .white
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(
+                foreground.opacity(
+                    isEnabled
+                        ? (configuration.isPressed ? 0.75 : 1)
+                        : 0.45
+                )
+            )
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(
+                Capsule()
+                    .fill(
+                        background.opacity(
+                            isEnabled
+                                ? (configuration.isPressed ? 0.85 : 1)
+                                : 0.35
+                        )
+                    )
+            )
+    }
+}

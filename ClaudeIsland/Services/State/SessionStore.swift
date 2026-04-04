@@ -62,6 +62,9 @@ actor SessionStore {
         case .permissionSocketFailed(let sessionId, let toolUseId):
             await processSocketFailure(sessionId: sessionId, toolUseId: toolUseId)
 
+        case .interventionResolved(let sessionId, let nextPhase):
+            await processInterventionResolved(sessionId: sessionId, nextPhase: nextPhase)
+
         case .fileUpdated(let payload):
             await processFileUpdate(payload)
 
@@ -135,11 +138,18 @@ actor SessionStore {
         }
 
         let newPhase = event.determinePhase()
+        let intervention = event.intervention
 
         if session.phase.canTransition(to: newPhase) {
             session.phase = newPhase
         } else {
             Self.logger.debug("Invalid transition: \(String(describing: session.phase), privacy: .public) -> \(String(describing: newPhase), privacy: .public), ignoring")
+        }
+
+        if let intervention {
+            session.intervention = intervention
+        } else if shouldClearIntervention(for: event, newPhase: newPhase, currentIntervention: session.intervention) {
+            session.intervention = nil
         }
 
         if event.event == "PermissionRequest", let toolUseId = event.toolUseId {
@@ -289,6 +299,9 @@ actor SessionStore {
     private func processSubagentToolCompleted(sessionId: String, toolId: String, status: ToolStatus) {
         guard var session = sessions[sessionId] else { return }
         session.subagentState.updateSubagentToolStatus(toolId: toolId, status: status)
+        if status == .error {
+            session.completedErrorToolIDs.insert(toolId)
+        }
         sessions[sessionId] = session
     }
 
@@ -398,6 +411,10 @@ actor SessionStore {
             }
         }
 
+        if result.status == .error {
+            session.completedErrorToolIDs.insert(toolUseId)
+        }
+
         sessions[sessionId] = session
     }
 
@@ -477,6 +494,16 @@ actor SessionStore {
             }
         }
 
+        sessions[sessionId] = session
+    }
+
+    private func processInterventionResolved(sessionId: String, nextPhase: SessionPhase) async {
+        guard var session = sessions[sessionId] else { return }
+        session.intervention = nil
+        if session.phase.canTransition(to: nextPhase) || session.phase == nextPhase {
+            session.phase = nextPhase
+        }
+        session.lastActivity = Date()
         sessions[sessionId] = session
     }
 
@@ -789,6 +816,17 @@ actor SessionStore {
         }
     }
 
+    private func shouldClearIntervention(for event: HookEvent, newPhase: SessionPhase, currentIntervention: SessionIntervention?) -> Bool {
+        guard currentIntervention?.kind == .question else { return false }
+        if event.event == "PostToolUse" || event.event == "Stop" || event.event == "SessionEnd" {
+            return true
+        }
+        if event.isAskUserQuestionRequest {
+            return false
+        }
+        return newPhase != .waitingForInput
+    }
+
     // MARK: - Interrupt Processing
 
     private func processInterrupt(sessionId: String) async {
@@ -1053,6 +1091,43 @@ actor SessionStore {
         session.sessionName = name
         session.lastActivity = Date()
         sessions[sessionId] = session
+        publishState()
+    }
+
+    func syncCodexThreadSnapshot(_ snapshot: CodexThreadSnapshot) {
+        let fallbackCwd = snapshot.cwd.isEmpty ? (sessions[snapshot.threadId]?.cwd ?? "/") : snapshot.cwd
+        let fallbackName = snapshot.name ?? snapshot.preview ?? "Codex"
+        let projectName = Self.projectName(for: fallbackCwd, fallback: fallbackName)
+
+        var session = sessions[snapshot.threadId] ?? SessionState(
+            sessionId: snapshot.threadId,
+            cwd: fallbackCwd,
+            projectName: projectName,
+            provider: .codex,
+            sessionName: snapshot.name,
+            previewText: snapshot.preview,
+            phase: snapshot.phase
+        )
+
+        session.provider = .codex
+        session.cwd = fallbackCwd
+        session.projectName = Self.projectName(for: fallbackCwd, fallback: session.projectName)
+        if let name = snapshot.name, !name.isEmpty {
+            session.sessionName = name
+        }
+        if let preview = snapshot.displayResultText, !preview.isEmpty {
+            session.previewText = preview
+        } else if let preview = snapshot.preview, !preview.isEmpty {
+            session.previewText = preview
+        }
+        session.chatItems = snapshot.historyItems
+        session.conversationInfo = snapshot.conversationInfo
+        if case .none = session.intervention {
+            session.phase = snapshot.phase
+        }
+        session.lastActivity = snapshot.updatedAt
+
+        sessions[snapshot.threadId] = session
         publishState()
     }
 

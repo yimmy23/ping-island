@@ -57,8 +57,17 @@ def send_event(state):
         sock.connect(SOCKET_PATH)
         sock.sendall(json.dumps(state).encode())
 
-        # For permission requests, wait for response
-        if state.get("status") == "waiting_for_approval":
+        should_wait = (
+            state.get("status") == "waiting_for_approval"
+            or (
+                state.get("event") == "PreToolUse"
+                and state.get("tool") == "AskUserQuestion"
+                and state.get("tool_input", {}).get("questions")
+            )
+        )
+
+        # For interactive requests, wait for response
+        if should_wait:
             response = sock.recv(4096)
             sock.close()
             if response:
@@ -101,13 +110,35 @@ def main():
         state["status"] = "processing"
 
     elif event == "PreToolUse":
-        state["status"] = "running_tool"
         state["tool"] = data.get("tool_name")
         state["tool_input"] = tool_input
         # Send tool_use_id to Swift for caching
         tool_use_id_from_event = data.get("tool_use_id")
         if tool_use_id_from_event:
             state["tool_use_id"] = tool_use_id_from_event
+
+        if state["tool"] == "AskUserQuestion" and tool_input.get("questions"):
+            state["status"] = "waiting_for_input"
+            response = send_event(state)
+
+            if response:
+                decision = response.get("decision", "ask")
+                updated_input = response.get("updatedInput")
+
+                if decision == "answer" and updated_input:
+                    output = {
+                        "hookSpecificOutput": {
+                            "hookEventName": "PreToolUse",
+                            "permissionDecision": "allow",
+                            "updatedInput": updated_input,
+                        }
+                    }
+                    print(json.dumps(output))
+                    sys.exit(0)
+
+            sys.exit(0)
+
+        state["status"] = "running_tool"
 
     elif event == "PostToolUse":
         state["status"] = "processing"

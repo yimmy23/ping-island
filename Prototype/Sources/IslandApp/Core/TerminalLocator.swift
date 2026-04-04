@@ -27,9 +27,9 @@ actor AppleTerminalLocator: TerminalLocator {
             return bundleID
         }
         switch context.terminalProgram?.lowercased() {
-        case "iterm2", "iterm":
+        case "iterm2", "iterm", "iterm.app":
             return "com.googlecode.iterm2"
-        case "apple_terminal", "terminal":
+        case "apple_terminal", "terminal", "apple terminal":
             return "com.apple.Terminal"
         default:
             return nil
@@ -55,15 +55,13 @@ actor AppleTerminalLocator: TerminalLocator {
                 activate
                 repeat with theWindow in windows
                     repeat with theTab in tabs of theWindow
-                        if busy of theTab is true then
-                            try
-                                if tty of theTab is "\(tty)" then
-                                    set frontmost of theWindow to true
-                                    set selected of theTab to true
-                                    return
-                                end if
-                            end try
-                        end if
+                        try
+                            if tty of theTab is "\(tty)" then
+                                set frontmost of theWindow to true
+                                set selected of theTab to true
+                                return
+                            end if
+                        end try
                     end repeat
                 end repeat
             end tell

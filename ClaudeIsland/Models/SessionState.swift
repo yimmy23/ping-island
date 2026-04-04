@@ -42,6 +42,10 @@ struct SessionState: Equatable, Identifiable, Sendable {
     /// Unified tool tracker (replaces 6+ dictionaries in ChatHistoryManager)
     var toolTracker: ToolTracker
 
+    /// Tool IDs that completed with an actual execution error.
+    /// Used for event-specific notifications such as CESP `task.error`.
+    var completedErrorToolIDs: Set<String>
+
     // MARK: - Subagent State
 
     /// State for Task tools and their nested subagent tools
@@ -82,6 +86,7 @@ struct SessionState: Equatable, Identifiable, Sendable {
         phase: SessionPhase = .idle,
         chatItems: [ChatHistoryItem] = [],
         toolTracker: ToolTracker = ToolTracker(),
+        completedErrorToolIDs: Set<String> = [],
         subagentState: SubagentState = SubagentState(),
         conversationInfo: ConversationInfo = ConversationInfo(
             summary: nil, lastMessage: nil, lastMessageRole: nil,
@@ -104,6 +109,7 @@ struct SessionState: Equatable, Identifiable, Sendable {
         self.phase = phase
         self.chatItems = chatItems
         self.toolTracker = toolTracker
+        self.completedErrorToolIDs = completedErrorToolIDs
         self.subagentState = subagentState
         self.conversationInfo = conversationInfo
         self.needsClearReconciliation = needsClearReconciliation
@@ -116,6 +122,11 @@ struct SessionState: Equatable, Identifiable, Sendable {
     /// Whether this session needs user attention
     nonisolated var needsAttention: Bool {
         phase.needsAttention || intervention != nil
+    }
+
+    /// Whether this session should be surfaced before active/background work.
+    nonisolated var needsManualAttention: Bool {
+        needsAttention
     }
 
     /// The active permission context, if any
@@ -199,6 +210,67 @@ struct SessionState: Equatable, Identifiable, Sendable {
     /// Whether the session is waiting on a question-like intervention
     nonisolated var needsQuestionResponse: Bool {
         intervention?.kind == .question
+    }
+
+    /// Timestamp used when sorting sessions that need manual attention.
+    nonisolated var attentionRequestedAt: Date? {
+        if let permission = activePermission {
+            return permission.receivedAt
+        }
+        if needsAttention {
+            return lastActivity
+        }
+        return nil
+    }
+
+    /// Timestamp used for recency ordering once attention-demanding sessions are handled.
+    nonisolated var queueSortActivityDate: Date {
+        lastUserMessageDate ?? lastActivity
+    }
+
+    nonisolated func shouldSortBeforeInQueue(_ other: SessionState) -> Bool {
+        if needsManualAttention != other.needsManualAttention {
+            return needsManualAttention
+        }
+
+        if needsManualAttention, other.needsManualAttention {
+            let dateA = attentionRequestedAt ?? createdAt
+            let dateB = other.attentionRequestedAt ?? other.createdAt
+            if dateA != dateB {
+                return dateA < dateB
+            }
+        }
+
+        let priorityA = queuePhasePriority
+        let priorityB = other.queuePhasePriority
+        if priorityA != priorityB {
+            return priorityA < priorityB
+        }
+
+        let dateA = queueSortActivityDate
+        let dateB = other.queueSortActivityDate
+        if dateA != dateB {
+            return dateA > dateB
+        }
+
+        return stableId < other.stableId
+    }
+
+    private nonisolated var queuePhasePriority: Int {
+        if needsManualAttention {
+            return 0
+        }
+
+        switch phase {
+        case .processing, .compacting:
+            return 1
+        case .idle:
+            return 2
+        case .ended:
+            return 3
+        case .waitingForInput, .waitingForApproval:
+            return 0
+        }
     }
 }
 

@@ -43,11 +43,17 @@ public enum HookPayloadMapper {
         case .claude:
             switch decision {
             case .approve:
-                return #"{"permissionDecision":"allow","message":"Approved from Island"}"#
+                return #"""
+                {"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}
+                """#
             case .approveForSession:
-                return #"{"permissionDecision":"allow","message":"Approved for session from Island"}"#
+                return #"""
+                {"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}
+                """#
             case .deny, .cancel:
-                return #"{"permissionDecision":"deny","message":"Denied from Island"}"#
+                return #"""
+                {"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"Denied from Island"}}}
+                """#
             case .answer(let answers):
                 return String(data: (try? JSONSerialization.data(withJSONObject: answers, options: [.sortedKeys])) ?? Data("{}".utf8), encoding: .utf8) ?? "{}"
             }
@@ -163,11 +169,18 @@ public enum HookPayloadMapper {
     }
 
     private static func detectPreview(payload: [String: Any]) -> String? {
-        [
+        if let toolName = payload["tool_name"] as? String {
+            if let input = summarizeValue(payload["tool_input"]) {
+                return "\(toolName) \(input)"
+            }
+            return toolName
+        }
+        return [
             payload["prompt"] as? String,
             payload["message"] as? String,
             payload["last_assistant_message"] as? String,
-            payload["tool_input"] as? String
+            payload["command"] as? String,
+            summarizeValue(payload["tool_input"])
         ].compactMap { $0 }.first
     }
 
@@ -248,25 +261,38 @@ public enum HookPayloadMapper {
     private static func flattenMetadata(payload: [String: Any]) -> [String: String] {
         var result: [String: String] = [:]
         for (key, value) in payload {
-            switch value {
-            case let string as String:
-                result[key] = string
-            case let number as NSNumber:
-                result[key] = number.stringValue
-            case let array as [Any]:
-                if JSONSerialization.isValidJSONObject(array),
-                   let data = try? JSONSerialization.data(withJSONObject: array, options: [.sortedKeys]) {
-                    result[key] = String(data: data, encoding: .utf8)
-                }
-            case let object as [String: Any]:
-                if JSONSerialization.isValidJSONObject(object),
-                   let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) {
-                    result[key] = String(data: data, encoding: .utf8)
-                }
-            default:
-                continue
-            }
+            guard let stringValue = summarizeValue(value) else { continue }
+            result[key] = stringValue
         }
         return result
+    }
+
+    private static func summarizeValue(_ value: Any?) -> String? {
+        guard let value else { return nil }
+        switch value {
+        case let string as String:
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        case let number as NSNumber:
+            return number.stringValue
+        case let array as [Any]:
+            guard JSONSerialization.isValidJSONObject(array),
+                  let data = try? JSONSerialization.data(withJSONObject: array, options: [.sortedKeys]),
+                  let string = String(data: data, encoding: .utf8)
+            else {
+                return nil
+            }
+            return string
+        case let object as [String: Any]:
+            guard JSONSerialization.isValidJSONObject(object),
+                  let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+                  let string = String(data: data, encoding: .utf8)
+            else {
+                return nil
+            }
+            return string
+        default:
+            return nil
+        }
     }
 }

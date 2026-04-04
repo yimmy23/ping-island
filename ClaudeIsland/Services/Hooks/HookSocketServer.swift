@@ -78,7 +78,8 @@ struct HookEvent: Codable, Sendable {
 
     /// Whether this event expects a response (permission request)
     nonisolated var expectsResponse: Bool {
-        event == "PermissionRequest" && status == "waiting_for_approval"
+        (event == "PermissionRequest" && status == "waiting_for_approval")
+            || (event == "PreToolUse" && tool == "AskUserQuestion" && toolInput?["questions"] != nil)
     }
 }
 
@@ -86,6 +87,7 @@ struct HookEvent: Codable, Sendable {
 struct HookResponse: Codable {
     let decision: String // "allow", "deny", or "ask"
     let reason: String?
+    let updatedInput: [String: AnyCodable]?
 }
 
 /// Pending permission request waiting for user decision
@@ -215,7 +217,7 @@ class HookSocketServer {
     /// Respond to a pending permission request by toolUseId
     func respondToPermission(toolUseId: String, decision: String, reason: String? = nil) {
         queue.async { [weak self] in
-            self?.sendPermissionResponse(toolUseId: toolUseId, decision: decision, reason: reason)
+            self?.sendHookResponse(toolUseId: toolUseId, decision: decision, reason: reason, updatedInput: nil)
         }
     }
 
@@ -223,6 +225,14 @@ class HookSocketServer {
     func respondToPermissionBySession(sessionId: String, decision: String, reason: String? = nil) {
         queue.async { [weak self] in
             self?.sendPermissionResponseBySession(sessionId: sessionId, decision: decision, reason: reason)
+        }
+    }
+
+    /// Respond to an interactive intervention by toolUseId.
+    func respondToIntervention(toolUseId: String, decision: String, updatedInput: [String: Any]? = nil, reason: String? = nil) {
+        queue.async { [weak self] in
+            let encodedInput = updatedInput?.mapValues { AnyCodable($0) }
+            self?.sendHookResponse(toolUseId: toolUseId, decision: decision, reason: reason, updatedInput: encodedInput)
         }
     }
 
@@ -470,7 +480,7 @@ class HookSocketServer {
         eventHandler?(event)
     }
 
-    private func sendPermissionResponse(toolUseId: String, decision: String, reason: String?) {
+    private func sendHookResponse(toolUseId: String, decision: String, reason: String?, updatedInput: [String: AnyCodable]?) {
         permissionsLock.lock()
         guard let pending = pendingPermissions.removeValue(forKey: toolUseId) else {
             permissionsLock.unlock()
@@ -479,7 +489,7 @@ class HookSocketServer {
         }
         permissionsLock.unlock()
 
-        let response = HookResponse(decision: decision, reason: reason)
+        let response = HookResponse(decision: decision, reason: reason, updatedInput: updatedInput)
         guard let data = try? JSONEncoder().encode(response) else {
             close(pending.clientSocket)
             return
@@ -520,7 +530,7 @@ class HookSocketServer {
         pendingPermissions.removeValue(forKey: pending.toolUseId)
         permissionsLock.unlock()
 
-        let response = HookResponse(decision: decision, reason: reason)
+        let response = HookResponse(decision: decision, reason: reason, updatedInput: nil)
         guard let data = try? JSONEncoder().encode(response) else {
             close(pending.clientSocket)
             permissionFailureHandler?(sessionId, pending.toolUseId)

@@ -51,6 +51,11 @@ struct ChatView: View {
         session.phase.approvalToolName
     }
 
+    private var activeQuestionIntervention: SessionIntervention? {
+        guard session.intervention?.kind == .question else { return nil }
+        return session.intervention
+    }
+
     
     var body: some View {
         ZStack {
@@ -67,22 +72,19 @@ struct ChatView: View {
                     messageList
                 }
 
-                // Approval bar, interactive prompt, or Input bar
-                if let tool = approvalTool {
-                    if tool == "AskUserQuestion" {
-                        // Interactive tools - show prompt to answer in terminal
-                        interactivePromptBar
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .bottom)),
-                                removal: .opacity
-                            ))
-                    } else {
-                        approvalBar(tool: tool)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .bottom)),
-                                removal: .opacity
-                            ))
-                    }
+                // Approval bar, question form, or Input bar
+                if let intervention = activeQuestionIntervention {
+                    questionForm(intervention)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .bottom)),
+                            removal: .opacity
+                        ))
+                } else if let tool = approvalTool {
+                    approvalBar(tool: tool)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .bottom)),
+                            removal: .opacity
+                        ))
                 } else {
                     inputBar
                         .transition(.opacity)
@@ -168,6 +170,8 @@ struct ChatView: View {
             }
         }
         .onAppear {
+            syncSessionFromMonitor()
+
             // Auto-focus input when chat opens and tmux messaging is available
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 if canSendMessages {
@@ -272,69 +276,77 @@ struct ChatView: View {
     private let fadeColor = Color(red: 0.00, green: 0.00, blue: 0.00)
 
     private var messageList: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 16) {
-                    // Invisible anchor at bottom (first due to flip)
-                    Color.clear
-                        .frame(height: 1)
-                        .id("bottom")
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 16) {
+                        // Invisible anchor at bottom (first due to flip)
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom")
 
-                    // Processing indicator at bottom (first due to flip)
-                    if isProcessing {
-                        ProcessingIndicatorView(turnId: lastUserMessageId)
-                            .padding(.horizontal, 16)
-                            .scaleEffect(x: 1, y: -1)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: -4)),
-                                removal: .opacity
-                            ))
-                    }
+                        // Processing indicator at bottom (first due to flip)
+                        if isProcessing {
+                            ProcessingIndicatorView(turnId: lastUserMessageId)
+                                .padding(.horizontal, 16)
+                                .scaleEffect(x: 1, y: -1)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: -4)),
+                                    removal: .opacity
+                                ))
+                        }
 
-                    ForEach(history.reversed()) { item in
-                        MessageItemView(item: item, sessionId: sessionId)
-                            .padding(.horizontal, 16)
-                            .scaleEffect(x: 1, y: -1)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.98)),
-                                removal: .opacity
-                            ))
+                        ForEach(history.reversed()) { item in
+                            MessageItemView(item: item, sessionId: sessionId)
+                                .padding(.horizontal, 16)
+                                .scaleEffect(x: 1, y: -1)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .scale(scale: 0.98)),
+                                    removal: .opacity
+                                ))
+                        }
                     }
+                    .padding(.top, 20)
+                    .padding(.top, activeQuestionIntervention == nil ? 0 : 12)
+                    .padding(.bottom, 20)
+                    .frame(
+                        maxWidth: .infinity,
+                        minHeight: geometry.size.height,
+                        alignment: activeQuestionIntervention == nil ? .top : .bottom
+                    )
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isProcessing)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: history.count)
                 }
-                .padding(.top, 20)
-                .padding(.bottom, 20)
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isProcessing)
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: history.count)
-            }
-            .scaleEffect(x: 1, y: -1)
-            .onChange(of: shouldScrollToBottom) { _, shouldScroll in
-                if shouldScroll {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        // In inverted scroll, use .bottom anchor to scroll to the visual bottom
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
-                    shouldScrollToBottom = false
-                    resumeAutoscroll()
-                }
-            }
-            // New messages indicator overlay
-            .overlay(alignment: .bottom) {
-                if isAutoscrollPaused && newMessageCount > 0 {
-                    NewMessagesIndicator(count: newMessageCount) {
+                .scaleEffect(x: 1, y: -1)
+                .onChange(of: shouldScrollToBottom) { _, shouldScroll in
+                    if shouldScroll {
                         withAnimation(.easeOut(duration: 0.3)) {
                             // In inverted scroll, use .bottom anchor to scroll to the visual bottom
                             proxy.scrollTo("bottom", anchor: .bottom)
                         }
+                        shouldScrollToBottom = false
                         resumeAutoscroll()
                     }
-                    .padding(.bottom, 16)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .bottom)),
-                        removal: .opacity
-                    ))
                 }
+                // New messages indicator overlay
+                .overlay(alignment: .bottom) {
+                    if isAutoscrollPaused && newMessageCount > 0 {
+                        NewMessagesIndicator(count: newMessageCount) {
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                // In inverted scroll, use .bottom anchor to scroll to the visual bottom
+                                proxy.scrollTo("bottom", anchor: .bottom)
+                            }
+                            resumeAutoscroll()
+                        }
+                        .padding(.bottom, 16)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .bottom)),
+                            removal: .opacity
+                        ))
+                    }
+                }
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isAutoscrollPaused && newMessageCount > 0)
             }
-            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isAutoscrollPaused && newMessageCount > 0)
         }
     }
 
@@ -404,14 +416,48 @@ struct ChatView: View {
         )
     }
 
-    // MARK: - Interactive Prompt Bar
+    // MARK: - Question Form
 
-    /// Bar for interactive tools like AskUserQuestion that need terminal input
-    private var interactivePromptBar: some View {
-        ChatInteractivePromptBar(
-            isInTmux: session.isInTmux,
-            onGoToTerminal: { focusTerminal() }
-        )
+    private func questionForm(_ intervention: SessionIntervention) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(intervention.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text(intervention.message)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.6))
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            SessionQuestionForm(
+                intervention: intervention,
+                submitLabel: "提交所有回答",
+                onSubmit: { payload in
+                    sessionMonitor.answerIntervention(sessionId: sessionId, answers: payload)
+                },
+                secondaryActionTitle: session.isInTmux ? "打开终端" : nil,
+                onSecondaryAction: session.isInTmux ? { focusTerminal() } : nil
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.black.opacity(0.2))
+        .overlay(alignment: .top) {
+            LinearGradient(
+                colors: [fadeColor.opacity(0), fadeColor.opacity(0.7)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 24)
+            .offset(y: -24)
+            .allowsHitTesting(false)
+        }
+        .zIndex(1)
     }
 
     // MARK: - Autoscroll Management
@@ -433,11 +479,14 @@ struct ChatView: View {
 
     private func focusTerminal() {
         Task {
-            if let pid = session.pid {
-                _ = await YabaiController.shared.focusWindow(forClaudePid: pid)
-            } else {
-                _ = await YabaiController.shared.focusWindow(forWorkingDirectory: session.cwd)
-            }
+            _ = await SessionLauncher.shared.activate(session)
+        }
+    }
+
+    private func syncSessionFromMonitor() {
+        if let liveSession = sessionMonitor.instances.first(where: { $0.sessionId == sessionId }),
+           liveSession != session {
+            session = liveSession
         }
     }
 

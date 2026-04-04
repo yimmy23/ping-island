@@ -1,5 +1,6 @@
 import Foundation
 import IslandShared
+import Darwin
 
 @main
 struct IslandBridgeMain {
@@ -7,7 +8,10 @@ struct IslandBridgeMain {
         do {
             let source = try parseSource(arguments: CommandLine.arguments)
             let stdinData = FileHandle.standardInput.readDataToEndOfFile()
-            let environment = ProcessInfo.processInfo.environment
+            var environment = ProcessInfo.processInfo.environment
+            if environment["TTY"]?.isEmpty != false, let tty = detectTTY(parentPID: getppid()) {
+                environment["TTY"] = tty
+            }
             let envelope = HookPayloadMapper.makeEnvelope(
                 source: source,
                 arguments: CommandLine.arguments,
@@ -15,12 +19,12 @@ struct IslandBridgeMain {
                 stdinData: stdinData
             )
 
-            let response = try SocketClient.send(
+            let response = try sendEnvelopeIfPossible(
                 envelope: envelope,
                 socketPath: environment["ISLAND_SOCKET_PATH"] ?? "/tmp/island.sock"
             )
 
-            if let decision = response.decision {
+            if let decision = response?.decision {
                 let payload = HookPayloadMapper.stdoutPayload(
                     for: source,
                     decision: decision,
@@ -42,6 +46,55 @@ struct IslandBridgeMain {
             throw BridgeError.invalidArguments
         }
         return source
+    }
+
+    private static func detectTTY(parentPID: pid_t) -> String? {
+        if let tty = ttyName(from: STDIN_FILENO) ?? ttyName(from: STDOUT_FILENO) {
+            return tty
+        }
+
+        let process = Process()
+        let output = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-p", String(parentPID), "-o", "tty="]
+        process.standardOutput = output
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            guard let tty = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                !tty.isEmpty,
+                tty != "??",
+                tty != "-"
+            else {
+                return nil
+            }
+            return tty.hasPrefix("/dev/") ? tty : "/dev/\(tty)"
+        } catch {
+            return nil
+        }
+    }
+
+    private static func ttyName(from fd: Int32) -> String? {
+        guard isatty(fd) == 1, let name = ttyname(fd) else {
+            return nil
+        }
+        return String(cString: name)
+    }
+
+    private static func sendEnvelopeIfPossible(
+        envelope: BridgeEnvelope,
+        socketPath: String
+    ) throws -> BridgeResponse? {
+        do {
+            return try SocketClient.send(envelope: envelope, socketPath: socketPath)
+        } catch BridgeError.connectionFailed where !envelope.expectsResponse {
+            // State-only hooks should not fail the calling CLI when Island is unavailable.
+            return nil
+        }
     }
 }
 

@@ -12,11 +12,23 @@ struct MarkdownText: View {
     }
 
     var body: some View {
-        Text(text)
+        Text(renderedText)
             .foregroundColor(baseColor)
             .font(.system(size: fontSize))
             .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var renderedText: AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .full,
+            failurePolicy: .returnPartiallyParsedIfPossible
+        )
+
+        if let attributed = try? AttributedString(markdown: text, options: options) {
+            return attributed
+        }
+
+        return AttributedString(text)
     }
 }
 

@@ -35,4 +35,10 @@ func installerMergesClaudeHooksWithoutDroppingExistingValues() throws {
     let hooks = try #require(json["hooks"] as? [String: Any])
     let sessionStart = try #require(hooks["SessionStart"] as? [[String: Any]])
     #expect(sessionStart.count >= 2)
+
+    let permissionRequest = try #require(hooks["PermissionRequest"] as? [[String: Any]])
+    let installedHook = try #require(permissionRequest.last?["hooks"] as? [[String: Any]])
+    #expect(installedHook.first?["timeout"] as? Int == 86_400)
+    #expect(hooks["SessionEnd"] != nil)
+    #expect(hooks["PreCompact"] != nil)
 }

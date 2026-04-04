@@ -52,6 +52,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func focus(sessionID: String) {
+        guard let session = snapshot.sessions.first(where: { $0.id == sessionID }) else {
+            return
+        }
+        focus(session)
+    }
+
     func approve(_ request: InterventionRequest, forSession: Bool = false) {
         Task {
             let decision: InterventionDecision = forSession ? .approveForSession : .approve

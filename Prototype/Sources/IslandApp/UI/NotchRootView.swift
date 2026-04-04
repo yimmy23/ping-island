@@ -51,7 +51,10 @@ struct NotchRootView: View {
     private func bodyContent(snapshot: SessionSnapshot) -> some View {
         VStack(spacing: 14) {
             if let request = snapshot.highlightedIntervention {
-                interventionCard(request)
+                interventionCard(
+                    request,
+                    session: snapshot.sessions.first(where: { $0.id == request.sessionID })
+                )
             }
             ScrollView {
                 LazyVStack(spacing: 10) {
@@ -75,7 +78,7 @@ struct NotchRootView: View {
         }
     }
 
-    private func interventionCard(_ request: InterventionRequest) -> some View {
+    private func interventionCard(_ request: InterventionRequest, session: AgentSession?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(request.title)
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -83,24 +86,53 @@ struct NotchRootView: View {
             Text(request.message)
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.75))
-                .lineLimit(3)
+                .lineLimit(5)
+
+            let details = interventionDetails(for: request, session: session)
+            if !details.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(details) { detail in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(detail.label)
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.48))
+                            Text(detail.value)
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .lineLimit(detail.lineLimit)
+                        }
+                    }
+                }
+            }
 
             if request.kind == .approval {
                 HStack(spacing: 8) {
                     Button("Allow Once") { appModel.approve(request) }
                         .buttonStyle(PillButtonStyle(accent: .green.opacity(0.28)))
-                    Button("Allow Session") { appModel.approve(request, forSession: true) }
-                        .buttonStyle(PillButtonStyle(accent: .blue.opacity(0.24)))
+                    if supportsSessionScope(request, session: session) {
+                        Button("Allow Session") { appModel.approve(request, forSession: true) }
+                            .buttonStyle(PillButtonStyle(accent: .blue.opacity(0.24)))
+                    }
                     Button("Deny") { appModel.deny(request) }
                         .buttonStyle(PillButtonStyle(accent: .red.opacity(0.22)))
+                    if canFocus(session) {
+                        Button("Terminal") { appModel.focus(sessionID: request.sessionID) }
+                            .buttonStyle(PillButtonStyle(accent: .white.opacity(0.08)))
+                    }
                 }
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], alignment: .leading, spacing: 8) {
-                    ForEach(request.options) { option in
-                        Button(option.title) {
-                            appModel.answer(request, option: option)
+                VStack(alignment: .leading, spacing: 10) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], alignment: .leading, spacing: 8) {
+                        ForEach(request.options) { option in
+                            Button(option.title) {
+                                appModel.answer(request, option: option)
+                            }
+                            .buttonStyle(PillButtonStyle(accent: .white.opacity(0.08)))
                         }
-                        .buttonStyle(PillButtonStyle(accent: .white.opacity(0.08)))
+                    }
+                    if canFocus(session) {
+                        Button("Open Terminal") { appModel.focus(sessionID: request.sessionID) }
+                            .buttonStyle(PillButtonStyle(accent: .white.opacity(0.08)))
                     }
                 }
             }
@@ -141,6 +173,48 @@ struct NotchRootView: View {
             )
         )
     }
+
+    private func interventionDetails(for request: InterventionRequest, session: AgentSession?) -> [InterventionDetail] {
+        var details: [InterventionDetail] = []
+
+        if let tool = request.rawContext["tool_name"] ?? request.rawContext["tool"] {
+            details.append(InterventionDetail(label: "Tool", value: tool, lineLimit: 1))
+        }
+        if let command = request.rawContext["command"] {
+            details.append(InterventionDetail(label: "Command", value: command, lineLimit: 3))
+        }
+        if let input = request.rawContext["tool_input"] {
+            details.append(InterventionDetail(label: "Input", value: input, lineLimit: 4))
+        }
+        if let cwd = session?.cwd ?? request.rawContext["cwd"] ?? request.rawContext["workspace"] {
+            details.append(InterventionDetail(label: "Workspace", value: cwd, lineLimit: 1))
+        }
+
+        return details
+    }
+
+    private func supportsSessionScope(_ request: InterventionRequest, session: AgentSession?) -> Bool {
+        if let session {
+            return session.provider == .codex
+        }
+        return !request.sessionID.hasPrefix("claude:")
+    }
+
+    private func canFocus(_ session: AgentSession?) -> Bool {
+        guard let session else { return false }
+        let context = session.terminalContext
+        return context.terminalBundleID != nil
+            || context.terminalProgram != nil
+            || context.iTermSessionID != nil
+            || context.tty != nil
+    }
+}
+
+private struct InterventionDetail: Identifiable {
+    let id = UUID()
+    let label: String
+    let value: String
+    let lineLimit: Int
 }
 
 private struct SessionRow: View {

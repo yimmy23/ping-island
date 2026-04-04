@@ -16,8 +16,24 @@ struct HookInstaller {
         var updated = current
         var hooks = current["hooks"] as? [String: Any] ?? [:]
 
-        for event in ["SessionStart", "Stop", "PreToolUse", "PostToolUse", "PermissionRequest", "Notification", "UserPromptSubmit"] {
-            hooks[event] = installHookArray(existing: hooks[event], command: bridgeCommand(source: "claude"))
+        for event in [
+            "SessionStart",
+            "SessionEnd",
+            "Stop",
+            "PreToolUse",
+            "PostToolUse",
+            "PermissionRequest",
+            "Notification",
+            "UserPromptSubmit",
+            "PreCompact",
+            "SubagentStart",
+            "SubagentStop"
+        ] {
+            hooks[event] = installHookArray(
+                existing: hooks[event],
+                command: bridgeCommand(source: "claude"),
+                timeout: event == "PermissionRequest" ? 86_400 : nil
+            )
         }
 
         updated["hooks"] = hooks
@@ -107,18 +123,44 @@ struct HookInstaller {
         return result
     }
 
-    private func installHookArray(existing: Any?, command: String) -> [[String: Any]] {
+    private func installHookArray(existing: Any?, command: String, timeout: Int? = nil) -> [[String: Any]] {
         var hooks = existing as? [[String: Any]] ?? []
+        var commandBody: [String: Any] = [
+            "type": "command",
+            "command": command
+        ]
+        if let timeout {
+            commandBody["timeout"] = timeout
+        }
         let hookBody: [String: Any] = [
-            "hooks": [[
-                "type": "command",
-                "command": command
-            ]],
+            "hooks": [commandBody],
             "matcher": "*"
         ]
-        let commands = hooks.compactMap { (($0["hooks"] as? [[String: Any]])?.first?["command"] as? String) }
-        if !commands.contains(command) {
+        let existingCommands = hooks.compactMap { hook -> String? in
+            ((hook["hooks"] as? [[String: Any]])?.first?["command"] as? String)
+        }
+        if !existingCommands.contains(command) {
             hooks.append(hookBody)
+            return hooks
+        }
+
+        hooks = hooks.map { hook in
+            guard let hookCommands = hook["hooks"] as? [[String: Any]],
+                  let first = hookCommands.first,
+                  first["command"] as? String == command
+            else {
+                return hook
+            }
+
+            guard let timeout else {
+                return hook
+            }
+
+            var updatedHook = hook
+            var updatedCommands = hookCommands
+            updatedCommands[0]["timeout"] = timeout
+            updatedHook["hooks"] = updatedCommands
+            return updatedHook
         }
         return hooks
     }

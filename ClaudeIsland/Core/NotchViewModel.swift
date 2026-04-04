@@ -25,13 +25,11 @@ enum NotchOpenReason {
 
 enum NotchContentType: Equatable {
     case instances
-    case menu
     case chat(SessionState)
 
     var id: String {
         switch self {
         case .instances: return "instances"
-        case .menu: return "menu"
         case .chat(let session): return "chat-\(session.sessionId)"
         }
     }
@@ -45,36 +43,50 @@ class NotchViewModel: ObservableObject {
     @Published var openReason: NotchOpenReason = .unknown
     @Published var contentType: NotchContentType = .instances
     @Published var isHovering: Bool = false
-
-    // MARK: - Dependencies
-
-    private let screenSelector = ScreenSelector.shared
-    private let soundSelector = SoundSelector.shared
+    @Published var hoverPreviewSession: SessionState?
+    @Published private(set) var areInteractionsSuppressed = false
+    @Published private(set) var isSettingsPopoverPresented = false
 
     // MARK: - Geometry
 
     let geometry: NotchGeometry
     let spacing: CGFloat = 12
     let hasPhysicalNotch: Bool
+    let closedWidth: CGFloat = 266
+    let closedHeight: CGFloat = 30
 
     var deviceNotchRect: CGRect { geometry.deviceNotchRect }
     var screenRect: CGRect { geometry.screenRect }
     var windowHeight: CGFloat { geometry.windowHeight }
+    var closedSize: CGSize {
+        CGSize(width: closedWidth, height: closedHeight)
+    }
+    var closedScreenRect: CGRect {
+        CGRect(
+            x: screenRect.midX - closedSize.width / 2,
+            y: screenRect.maxY - closedSize.height,
+            width: closedSize.width,
+            height: closedSize.height
+        )
+    }
 
     /// Dynamic opened size based on content type
     var openedSize: CGSize {
+        let maxPanelHeight = CGFloat(AppSettings.maxPanelHeight)
+
+        if openReason == .hover {
+            return CGSize(
+                width: min(screenRect.width - 64, 600),
+                height: min(screenRect.height - 120, max(460, maxPanelHeight - 60))
+            )
+        }
+
         switch contentType {
         case .chat:
             // Large size for chat view
             return CGSize(
-                width: min(screenRect.width * 0.5, 600),
-                height: 580
-            )
-        case .menu:
-            // Compact size for settings menu
-            return CGSize(
-                width: min(screenRect.width * 0.4, 480),
-                height: 420 + screenSelector.expandedPickerHeight + soundSelector.expandedPickerHeight
+                width: min(screenRect.width - 64, 600),
+                height: min(screenRect.height - 120, maxPanelHeight)
             )
         case .instances:
             return CGSize(
@@ -106,17 +118,53 @@ class NotchViewModel: ObservableObject {
         )
         self.hasPhysicalNotch = hasPhysicalNotch
         setupEventHandlers()
-        observeSelectors()
+        observeEnvironment()
+        refreshInteractionSuppression()
     }
 
-    private func observeSelectors() {
-        screenSelector.$isPickerExpanded
-            .sink { [weak self] _ in self?.objectWillChange.send() }
+    private func observeEnvironment() {
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+
+        workspaceCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)
+            .sink { [weak self] _ in
+                self?.refreshInteractionSuppression()
+            }
             .store(in: &cancellables)
 
-        soundSelector.$isPickerExpanded
-            .sink { [weak self] _ in self?.objectWillChange.send() }
+        workspaceCenter.publisher(for: NSWorkspace.activeSpaceDidChangeNotification)
+            .sink { [weak self] _ in
+                self?.refreshInteractionSuppression()
+            }
             .store(in: &cancellables)
+
+        AppSettings.shared.$hideInFullscreen
+            .sink { [weak self] _ in
+                self?.refreshInteractionSuppression()
+            }
+            .store(in: &cancellables)
+
+        AppSettings.shared.$maxPanelHeight
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func refreshInteractionSuppression() {
+        let shouldSuppress = AppSettings.hideInFullscreen &&
+            FullscreenAppDetector.isFullscreenAppActive(screenFrame: screenRect)
+
+        guard shouldSuppress != areInteractionsSuppressed else { return }
+        areInteractionsSuppressed = shouldSuppress
+
+        if shouldSuppress {
+            hoverTimer?.cancel()
+            hoverTimer = nil
+            isHovering = false
+            if status == .opened {
+                notchClose()
+            }
+        }
     }
 
     // MARK: - Event Handling
@@ -147,7 +195,16 @@ class NotchViewModel: ObservableObject {
     private var currentChatSession: SessionState?
 
     private func handleMouseMove(_ location: CGPoint) {
-        let inNotch = geometry.isPointInNotch(location)
+        if areInteractionsSuppressed {
+            hoverTimer?.cancel()
+            hoverTimer = nil
+            if isHovering {
+                isHovering = false
+            }
+            return
+        }
+
+        let inNotch = isPointInClosedNotch(location)
         let inOpened = status == .opened && geometry.isPointInOpenedPanel(location, size: openedSize)
 
         let newHovering = inNotch || inOpened
@@ -161,18 +218,34 @@ class NotchViewModel: ObservableObject {
         hoverTimer?.cancel()
         hoverTimer = nil
 
-        // Start hover timer to auto-expand after 1 second
+        if !newHovering,
+           status == .opened,
+           openReason == .hover,
+           !isSettingsPopoverPresented,
+           AppSettings.autoCollapseOnLeave {
+            notchClose()
+        }
+
+        // Start hover timer to auto-expand after a short dwell
         if isHovering && (status == .closed || status == .popping) {
             let workItem = DispatchWorkItem { [weak self] in
                 guard let self = self, self.isHovering else { return }
                 self.notchOpen(reason: .hover)
             }
             hoverTimer = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: workItem)
         }
     }
 
     private func handleMouseDown() {
+        if areInteractionsSuppressed {
+            return
+        }
+
+        if isSettingsPopoverPresented {
+            return
+        }
+
         let location = NSEvent.mouseLocation
 
         switch status {
@@ -188,10 +261,14 @@ class NotchViewModel: ObservableObject {
                 }
             }
         case .closed, .popping:
-            if geometry.isPointInNotch(location) {
+            if isPointInClosedNotch(location) {
                 notchOpen(reason: .click)
             }
         }
+    }
+
+    private func isPointInClosedNotch(_ point: CGPoint) -> Bool {
+        closedScreenRect.insetBy(dx: -10, dy: -5).contains(point)
     }
 
     /// Re-posts a mouse click at the given screen location so it reaches windows behind us
@@ -231,9 +308,18 @@ class NotchViewModel: ObservableObject {
         openReason = reason
         status = .opened
 
+        if reason != .hover {
+            hoverPreviewSession = nil
+        }
+
         // Don't restore chat on notification - show instances list instead
         if reason == .notification {
             currentChatSession = nil
+            return
+        }
+
+        // Hover opens a lightweight preview instead of restoring the full chat view.
+        if reason == .hover {
             return
         }
 
@@ -254,6 +340,7 @@ class NotchViewModel: ObservableObject {
         }
         status = .closed
         contentType = .instances
+        hoverPreviewSession = nil
     }
 
     func notchPop() {
@@ -266,13 +353,16 @@ class NotchViewModel: ObservableObject {
         status = .closed
     }
 
-    func toggleMenu() {
-        contentType = contentType == .menu ? .instances : .menu
+    func setSettingsPopoverPresented(_ isPresented: Bool) {
+        isSettingsPopoverPresented = isPresented
     }
 
     func showChat(for session: SessionState) {
-        // Avoid unnecessary updates if already showing this chat
-        if case .chat(let current) = contentType, current.sessionId == session.sessionId {
+        hoverPreviewSession = nil
+        currentChatSession = session
+
+        // Avoid unnecessary updates only when the snapshot is already current.
+        if case .chat(let current) = contentType, current == session {
             return
         }
         contentType = .chat(session)
@@ -282,6 +372,13 @@ class NotchViewModel: ObservableObject {
     func exitChat() {
         currentChatSession = nil
         contentType = .instances
+    }
+
+    func setHoverPreview(session: SessionState?) {
+        if hoverPreviewSession?.sessionId == session?.sessionId {
+            return
+        }
+        hoverPreviewSession = session
     }
 
     /// Perform boot animation: expand briefly then collapse

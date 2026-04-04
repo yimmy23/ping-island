@@ -139,12 +139,44 @@ class ClaudeSessionMonitor: ObservableObject {
 
     func answerIntervention(sessionId: String, answers: [String: [String]]) {
         Task {
-            guard let session = await SessionStore.shared.session(for: sessionId),
-                  session.provider == .codex else {
+            guard let session = await SessionStore.shared.session(for: sessionId) else {
                 return
             }
-            await CodexAppServerMonitor.shared.answer(threadId: sessionId, answers: answers)
+
+            if session.provider == .codex {
+                await CodexAppServerMonitor.shared.answer(threadId: sessionId, answers: answers)
+                return
+            }
+
+            guard let intervention = session.intervention,
+                  intervention.kind == .question,
+                  let updatedInput = updatedClaudeToolInput(for: intervention, answers: answers)
+            else {
+                return
+            }
+
+            HookSocketServer.shared.respondToIntervention(
+                toolUseId: intervention.id,
+                decision: "answer",
+                updatedInput: updatedInput
+            )
+
+            await SessionStore.shared.process(
+                .interventionResolved(sessionId: sessionId, nextPhase: .processing)
+            )
         }
+    }
+
+    func loadCodexThread(sessionId: String) async throws -> CodexThreadSnapshot {
+        try await CodexAppServerMonitor.shared.readThread(threadId: sessionId, includeTurns: true)
+    }
+
+    func continueCodexThread(sessionId: String, expectedTurnId: String, text: String) async throws {
+        try await CodexAppServerMonitor.shared.continueThread(
+            threadId: sessionId,
+            expectedTurnId: expectedTurnId,
+            text: text
+        )
     }
 
     /// Archive (remove) a session from the instances list
@@ -168,6 +200,38 @@ class ClaudeSessionMonitor: ObservableObject {
         Task {
             await SessionStore.shared.process(.loadHistory(sessionId: sessionId, cwd: cwd))
         }
+    }
+
+    private func updatedClaudeToolInput(for intervention: SessionIntervention, answers: [String: [String]]) -> [String: Any]? {
+        guard let rawJSON = intervention.metadata["toolInputJSON"],
+              let data = rawJSON.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return nil
+        }
+
+        var updated = payload
+        let questions = payload["questions"] as? [[String: Any]] ?? []
+        var encodedAnswers: [String: Any] = [:]
+
+        for (index, question) in questions.enumerated() {
+            let keys = [
+                question["id"] as? String,
+                question["question"] as? String,
+                "\(index)"
+            ].compactMap { value -> String? in
+                guard let value, !value.isEmpty else { return nil }
+                return value
+            }
+            guard let values = keys.compactMap({ answers[$0] }).first, !values.isEmpty else { continue }
+            let encodedValue: Any = values.count == 1 ? values[0] : values
+            for key in keys {
+                encodedAnswers[key] = encodedValue
+            }
+        }
+
+        updated["answers"] = encodedAnswers
+        return updated
     }
 }
 

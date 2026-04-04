@@ -27,6 +27,9 @@ enum SessionEvent: Sendable {
     /// Permission socket failed (connection died before response)
     case permissionSocketFailed(sessionId: String, toolUseId: String)
 
+    /// A question/approval intervention was resolved inside the app
+    case interventionResolved(sessionId: String, nextPhase: SessionPhase)
+
     // MARK: - File Events (from ConversationParser)
 
     /// JSONL file was updated with new content
@@ -127,11 +130,94 @@ struct ToolCompletionResult: Sendable {
 // MARK: - Hook Event Extensions
 
 extension HookEvent {
+    nonisolated var isAskUserQuestionRequest: Bool {
+        event == "PreToolUse" && tool == "AskUserQuestion" && !(questionPayloads?.isEmpty ?? true)
+    }
+
+    nonisolated var questionPayloads: [[String: Any]]? {
+        guard let rawQuestions = toolInput?["questions"]?.value as? [[String: Any]], !rawQuestions.isEmpty else {
+            return nil
+        }
+        return rawQuestions
+    }
+
+    nonisolated var toolInputJSONObject: [String: Any]? {
+        guard let toolInput else { return nil }
+        return toolInput.mapValues { $0.value }
+    }
+
+    nonisolated var intervention: SessionIntervention? {
+        guard isAskUserQuestionRequest, let questions = questionPayloads else { return nil }
+
+        let parsedQuestions = questions.enumerated().compactMap { index, question -> SessionInterventionQuestion? in
+            let prompt = (question["question"] as? String)
+                ?? (question["prompt"] as? String)
+                ?? (question["label"] as? String)
+            guard let prompt, !prompt.isEmpty else { return nil }
+
+            let options = (question["options"] as? [[String: Any]] ?? []).enumerated().compactMap { entry -> SessionInterventionOption? in
+                let (optionIndex, option) = entry
+                guard let label = option["label"] as? String, !label.isEmpty else { return nil }
+                return SessionInterventionOption(
+                    id: option["id"] as? String ?? "\(index)-option-\(optionIndex)",
+                    title: label,
+                    detail: option["description"] as? String
+                )
+            }
+
+            return SessionInterventionQuestion(
+                id: question["id"] as? String ?? prompt,
+                header: question["header"] as? String ?? "\(index + 1).",
+                prompt: prompt,
+                detail: question["description"] as? String,
+                options: options,
+                allowsMultiple: question["isMultiple"] as? Bool
+                    ?? question["allowsMultiple"] as? Bool
+                    ?? question["multiSelect"] as? Bool
+                    ?? question["multiple"] as? Bool
+                    ?? false,
+                allowsOther: question["isOther"] as? Bool
+                    ?? question["allowsOther"] as? Bool
+                    ?? false,
+                isSecret: question["isSecret"] as? Bool
+                    ?? question["secret"] as? Bool
+                    ?? false
+            )
+        }
+
+        guard !parsedQuestions.isEmpty else { return nil }
+
+        let title = parsedQuestions.count == 1
+            ? "Claude 的提问"
+            : "Claude 的提问（\(parsedQuestions.count) 个问题）"
+        var metadata: [String: String] = ["toolName": "AskUserQuestion"]
+        if let toolInputJSONObject,
+           let data = try? JSONSerialization.data(withJSONObject: toolInputJSONObject, options: [.sortedKeys]),
+           let json = String(data: data, encoding: .utf8) {
+            metadata["toolInputJSON"] = json
+        }
+
+        return SessionIntervention(
+            id: toolUseId ?? UUID().uuidString,
+            kind: .question,
+            title: title,
+            message: "Claude 需要你补充回答，提交后会继续执行当前会话。",
+            options: [],
+            questions: parsedQuestions,
+            supportsSessionScope: false,
+            metadata: metadata
+        )
+    }
+
     /// Determine the target session phase based on this hook event
     nonisolated func determinePhase() -> SessionPhase {
         // PreCompact takes priority
         if event == "PreCompact" {
             return .compacting
+        }
+
+        if isAskUserQuestionRequest {
+            return .waitingForInput
         }
 
         // Permission request creates waitingForApproval state
@@ -191,6 +277,8 @@ extension SessionEvent: CustomStringConvertible {
             return "permissionDenied(session: \(sessionId.prefix(8)), tool: \(toolUseId.prefix(12)))"
         case .permissionSocketFailed(let sessionId, let toolUseId):
             return "permissionSocketFailed(session: \(sessionId.prefix(8)), tool: \(toolUseId.prefix(12)))"
+        case .interventionResolved(let sessionId, let nextPhase):
+            return "interventionResolved(session: \(sessionId.prefix(8)), next: \(String(describing: nextPhase)))"
         case .fileUpdated(let payload):
             return "fileUpdated(session: \(payload.sessionId.prefix(8)), messages: \(payload.messages.count))"
         case .interruptDetected(let sessionId):

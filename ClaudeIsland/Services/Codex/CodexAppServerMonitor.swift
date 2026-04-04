@@ -144,6 +144,62 @@ actor CodexAppServerMonitor {
         await SessionStore.shared.resolveCodexIntervention(sessionId: threadId, nextPhase: .processing)
     }
 
+    func readThread(threadId: String, includeTurns: Bool = true) async throws -> CodexThreadSnapshot {
+        if websocket == nil {
+            await start()
+        }
+
+        let response = try await sendRequest(
+            method: "thread/read",
+            params: [
+                "threadId": threadId,
+                "includeTurns": includeTurns
+            ]
+        )
+
+        guard let thread = response["thread"] as? [String: Any],
+              let snapshot = parseThreadSnapshot(thread) else {
+            throw NSError(domain: "CodexAppServer", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "Invalid thread/read response"
+            ])
+        }
+
+        await SessionStore.shared.syncCodexThreadSnapshot(snapshot)
+        return snapshot
+    }
+
+    func continueThread(threadId: String, expectedTurnId: String, text: String) async throws {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        if websocket == nil {
+            await start()
+        }
+
+        _ = try await sendRequest(
+            method: "turn/steer",
+            params: [
+                "threadId": threadId,
+                "expectedTurnId": expectedTurnId,
+                "input": [
+                    [
+                        "type": "text",
+                        "text": trimmed
+                    ]
+                ]
+            ]
+        )
+
+        await SessionStore.shared.upsertCodexSession(
+            sessionId: threadId,
+            name: nil,
+            preview: trimmed,
+            cwd: nil,
+            phase: .processing,
+            intervention: nil
+        )
+    }
+
     private func connectToServer() async -> Bool {
         guard websocket == nil else { return true }
         guard let url = URL(string: "ws://127.0.0.1:\(port)") else { return false }
@@ -534,6 +590,102 @@ actor CodexAppServerMonitor {
         )
     }
 
+    private func parseThreadSnapshot(_ thread: [String: Any]) -> CodexThreadSnapshot? {
+        guard let threadId = thread["id"] as? String else { return nil }
+
+        let createdAt = date(fromUnixTimestamp: thread["createdAt"]) ?? Date()
+        let updatedAt = date(fromUnixTimestamp: thread["updatedAt"]) ?? createdAt
+        let status = thread["status"] as? [String: Any]
+        let phase = phaseFromCodexStatus(status, intervention: pendingRequestsByThread[threadId]?.intervention)
+        let turns = thread["turns"] as? [[String: Any]] ?? []
+
+        var historyItems: [ChatHistoryItem] = []
+        var firstUserMessage: String?
+        var lastMessage: String?
+        var lastMessageRole: String?
+        var lastUserMessageDate: Date?
+        var latestUserText: String?
+        var latestAgentText: String?
+        var latestAgentPhase: String?
+        var latestFinalText: String?
+        var latestFinalPhase: String?
+        var latestTurnId: String?
+        var itemOffset: TimeInterval = 0
+
+        for (turnIndex, turn) in turns.enumerated() {
+            if turnIndex == turns.count - 1 {
+                latestTurnId = turn["id"] as? String
+            }
+
+            let items = turn["items"] as? [[String: Any]] ?? []
+            for item in items {
+                itemOffset += 1
+                let timestamp = createdAt.addingTimeInterval(itemOffset)
+                let itemId = item["id"] as? String ?? UUID().uuidString
+
+                switch item["type"] as? String {
+                case "userMessage":
+                    let text = parseUserMessageText(item["content"] as? [[String: Any]] ?? [])
+                    guard let text else { continue }
+
+                    if firstUserMessage == nil {
+                        firstUserMessage = text
+                    }
+                    latestUserText = text
+                    lastMessage = text
+                    lastMessageRole = "user"
+                    lastUserMessageDate = timestamp
+                    historyItems.append(ChatHistoryItem(id: itemId, type: .user(text), timestamp: timestamp))
+
+                case "agentMessage":
+                    guard let text = sanitizedText(item["text"] as? String) else { continue }
+                    let messagePhase = item["phase"] as? String
+                    latestAgentText = text
+                    latestAgentPhase = messagePhase
+                    if messagePhase != "commentary" {
+                        latestFinalText = text
+                        latestFinalPhase = messagePhase
+                    }
+
+                    lastMessage = text
+                    lastMessageRole = "assistant"
+                    let type: ChatHistoryItemType = messagePhase == "commentary" ? .thinking(text) : .assistant(text)
+                    historyItems.append(ChatHistoryItem(id: itemId, type: type, timestamp: timestamp))
+
+                default:
+                    continue
+                }
+            }
+        }
+
+        let preview = sanitizedText(thread["preview"] as? String)
+        let summary = sanitizedText(thread["name"] as? String) ?? preview ?? firstUserMessage
+        let conversationInfo = ConversationInfo(
+            summary: summary,
+            lastMessage: lastMessage,
+            lastMessageRole: lastMessageRole,
+            lastToolName: nil,
+            firstUserMessage: firstUserMessage,
+            lastUserMessageDate: lastUserMessageDate
+        )
+
+        return CodexThreadSnapshot(
+            threadId: threadId,
+            name: sanitizedText(thread["name"] as? String),
+            preview: preview,
+            cwd: (thread["cwd"] as? String) ?? "/",
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            phase: phase,
+            historyItems: historyItems,
+            conversationInfo: conversationInfo,
+            latestTurnId: latestTurnId,
+            latestResponseText: latestFinalText ?? latestAgentText ?? preview,
+            latestResponsePhase: latestFinalPhase ?? latestAgentPhase,
+            latestUserText: latestUserText
+        )
+    }
+
     private func phaseFromCodexStatus(_ status: [String: Any]?, intervention: SessionIntervention?) -> SessionPhase {
         guard let type = status?["type"] as? String else {
             if intervention?.kind == .question {
@@ -581,6 +733,11 @@ actor CodexAppServerMonitor {
                 prompt: question["question"] as? String ?? "",
                 detail: nil,
                 options: options,
+                allowsMultiple: question["isMultiple"] as? Bool
+                    ?? question["allowsMultiple"] as? Bool
+                    ?? question["multiSelect"] as? Bool
+                    ?? question["multiple"] as? Bool
+                    ?? false,
                 allowsOther: question["isOther"] as? Bool ?? false,
                 isSecret: question["isSecret"] as? Bool ?? false
             )
@@ -605,6 +762,52 @@ actor CodexAppServerMonitor {
         }
 
         return parts.isEmpty ? "Codex requested extra permissions." : parts.joined(separator: "\n")
+    }
+
+    private func parseUserMessageText(_ content: [[String: Any]]) -> String? {
+        let fragments = content.compactMap { item -> String? in
+            switch item["type"] as? String {
+            case "text":
+                return sanitizedText(item["text"] as? String)
+            case "image":
+                return "[Image]"
+            case "localImage":
+                if let path = item["path"] as? String {
+                    return "[Image] \(URL(fileURLWithPath: path).lastPathComponent)"
+                }
+                return "[Image]"
+            case "mention", "skill":
+                return sanitizedText(item["name"] as? String)
+            default:
+                return nil
+            }
+        }
+
+        guard !fragments.isEmpty else { return nil }
+        return sanitizedText(fragments.joined(separator: "\n"))
+    }
+
+    private func sanitizedText(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let collapsed = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return collapsed.isEmpty ? nil : collapsed
+    }
+
+    private func date(fromUnixTimestamp rawValue: Any?) -> Date? {
+        if let value = rawValue as? NSNumber {
+            return Date(timeIntervalSince1970: value.doubleValue)
+        }
+        if let value = rawValue as? Double {
+            return Date(timeIntervalSince1970: value)
+        }
+        if let value = rawValue as? Int {
+            return Date(timeIntervalSince1970: TimeInterval(value))
+        }
+        return nil
     }
 
     private func stringify(_ value: Any) -> String {

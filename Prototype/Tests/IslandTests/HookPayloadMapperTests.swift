@@ -53,3 +53,40 @@ func mapsQuestionEventOptions() throws {
     #expect(envelope.intervention?.options.count == 2)
     #expect(envelope.status?.kind == .waitingForInput)
 }
+
+@Test
+func claudePermissionPayloadUsesHookSpecificOutput() throws {
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        decision: .approve,
+        eventType: "PermissionRequest"
+    )
+    let json = try #require(
+        JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any]
+    )
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    #expect(hookSpecificOutput["hookEventName"] as? String == "PermissionRequest")
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
+}
+
+@Test
+func previewFallsBackToStructuredToolInput() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Bash",
+      "tool_input": {"command": "npm test"},
+      "session_id": "abc123"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: ["island-bridge", "--source", "claude"],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.preview == #"Bash {"command":"npm test"}"#)
+}

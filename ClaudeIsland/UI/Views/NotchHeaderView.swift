@@ -8,87 +8,462 @@
 import Combine
 import SwiftUI
 
-struct ClaudeCrabIcon: View {
+enum NotchIndicatorTone: Equatable {
+    case normal
+    case warning
+    case intervention
+
+    var emphasisColor: Color {
+        switch self {
+        case .normal:
+            return TerminalColors.green
+        case .warning:
+            return Color(red: 1.0, green: 0.66, blue: 0.18)
+        case .intervention:
+            return TerminalColors.prompt
+        }
+    }
+
+    var petPalette: NotchPetPalette {
+        switch self {
+        case .normal:
+            return NotchPetPalette(
+                primary: Color(red: 0.34, green: 0.93, blue: 0.61),
+                secondary: Color(red: 0.29, green: 0.87, blue: 0.57),
+                accent: Color(red: 0.23, green: 0.74, blue: 0.48),
+                shade: Color(red: 0.17, green: 0.55, blue: 0.35),
+                detail: Color(red: 0.11, green: 0.38, blue: 0.24),
+                highlight: Color(red: 0.78, green: 1.00, blue: 0.88),
+                feature: Color(red: 0.58, green: 0.97, blue: 0.74),
+                glow: Color(red: 0.31, green: 0.95, blue: 0.63),
+                outerGlow: Color(red: 0.21, green: 0.83, blue: 0.50)
+            )
+        case .warning:
+            return NotchPetPalette(
+                primary: Color(red: 0.97, green: 0.69, blue: 0.30),
+                secondary: Color(red: 0.93, green: 0.60, blue: 0.25),
+                accent: Color(red: 0.84, green: 0.48, blue: 0.20),
+                shade: Color(red: 0.67, green: 0.34, blue: 0.14),
+                detail: Color(red: 0.47, green: 0.23, blue: 0.10),
+                highlight: Color(red: 1.00, green: 0.90, blue: 0.70),
+                feature: Color(red: 1.00, green: 0.80, blue: 0.52),
+                glow: Color(red: 0.98, green: 0.70, blue: 0.28),
+                outerGlow: Color(red: 0.95, green: 0.57, blue: 0.18)
+            )
+        case .intervention:
+            return NotchPetPalette(
+                primary: Color(red: 0.95, green: 0.58, blue: 0.42),
+                secondary: Color(red: 0.90, green: 0.50, blue: 0.36),
+                accent: Color(red: 0.80, green: 0.38, blue: 0.27),
+                shade: Color(red: 0.62, green: 0.26, blue: 0.16),
+                detail: Color(red: 0.42, green: 0.17, blue: 0.11),
+                highlight: Color(red: 1.00, green: 0.84, blue: 0.74),
+                feature: Color(red: 0.98, green: 0.69, blue: 0.56),
+                glow: TerminalColors.prompt,
+                outerGlow: Color(red: 0.92, green: 0.49, blue: 0.32)
+            )
+        }
+    }
+}
+
+struct NotchPetPalette {
+    let primary: Color
+    let secondary: Color
+    let accent: Color
+    let shade: Color
+    let detail: Color
+    let highlight: Color
+    let feature: Color
+    let glow: Color
+    let outerGlow: Color
+}
+
+struct NotchPetIcon: View {
+    let style: NotchPetStyle
     let size: CGFloat
-    let color: Color
-    var animateLegs: Bool = false
+    let tone: NotchIndicatorTone
+    var isProcessing: Bool = false
 
-    @State private var legPhase: Int = 0
+    @State private var phase: Int = 0
 
-    // Timer for leg animation
-    private let legTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
+    private let animationTimer = Timer.publish(every: 0.18, on: .main, in: .common).autoconnect()
 
-    init(size: CGFloat = 16, color: Color = Color(red: 0.85, green: 0.47, blue: 0.34), animateLegs: Bool = false) {
+    init(style: NotchPetStyle, size: CGFloat = 16, tone: NotchIndicatorTone = .normal, isProcessing: Bool = false) {
+        self.style = style
         self.size = size
-        self.color = color
-        self.animateLegs = animateLegs
+        self.tone = tone
+        self.isProcessing = isProcessing
     }
 
     var body: some View {
+        let palette = tone.petPalette
+
         Canvas { context, canvasSize in
-            let scale = size / 52.0  // Original viewBox height is 52
-            let xOffset = (canvasSize.width - 66 * scale) / 2
+            let frames = style.frames(isProcessing: isProcessing)
+            guard !frames.isEmpty else { return }
 
-            // Left antenna
-            let leftAntenna = Path { p in
-                p.addRect(CGRect(x: 0, y: 13, width: 6, height: 13))
-            }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(leftAntenna, with: .color(color))
+            let frame = frames[phase % frames.count]
+            let logicalSize = style.logicalSize
+            let scale = min(canvasSize.width / CGFloat(logicalSize.width), canvasSize.height / CGFloat(logicalSize.height))
+            let pixelSize = max(1, floor(scale))
+            let contentWidth = CGFloat(logicalSize.width) * pixelSize
+            let contentHeight = CGFloat(logicalSize.height) * pixelSize
+            let xOffset = (canvasSize.width - contentWidth) / 2
+            let yOffset = (canvasSize.height - contentHeight) / 2
 
-            // Right antenna
-            let rightAntenna = Path { p in
-                p.addRect(CGRect(x: 60, y: 13, width: 6, height: 13))
-            }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(rightAntenna, with: .color(color))
+            for (rowIndex, row) in frame.enumerated() {
+                for (columnIndex, symbol) in row.enumerated() {
+                    guard let color = style.color(for: symbol, palette: palette) else { continue }
+                    let rect = CGRect(
+                        x: xOffset + CGFloat(columnIndex) * pixelSize,
+                        y: yOffset + CGFloat(rowIndex) * pixelSize,
+                        width: pixelSize,
+                        height: pixelSize
+                    )
+                    let glowRect = rect.insetBy(dx: -pixelSize * 0.42, dy: -pixelSize * 0.42)
+                    context.fill(
+                        Path(roundedRect: glowRect, cornerRadius: pixelSize * 0.28),
+                        with: .color(style.glowColor(for: symbol, palette: palette))
+                    )
+                    context.fill(Path(rect), with: .color(color))
+                }
+            }
+        }
+        .frame(width: size * style.aspectRatio, height: size)
+        .shadow(color: palette.outerGlow.opacity(0.72), radius: 6, y: 0)
+        .onReceive(animationTimer) { _ in
+            phase = (phase + 1) % max(1, style.frames(isProcessing: isProcessing).count)
+        }
+    }
+}
 
-            // Animated legs - alternating up/down pattern for walking effect
-            // Legs stay attached to body (y=39), only height changes
-            let baseLegPositions: [CGFloat] = [6, 18, 42, 54]
-            let baseLegHeight: CGFloat = 13
+private extension NotchPetStyle {
+    var logicalSize: (width: Int, height: Int) {
+        switch self {
+        case .crab:
+            return (11, 8)
+        case .slime:
+            return (8, 8)
+        case .cat:
+            return (10, 8)
+        case .owl:
+            return (8, 8)
+        }
+    }
 
-            // Height offsets: positive = longer leg (down), negative = shorter leg (up)
-            let legHeightOffsets: [[CGFloat]] = [
-                [3, -3, 3, -3],   // Phase 0: alternating
-                [0, 0, 0, 0],     // Phase 1: neutral
-                [-3, 3, -3, 3],   // Phase 2: alternating (opposite)
-                [0, 0, 0, 0],     // Phase 3: neutral
+    var aspectRatio: CGFloat {
+        CGFloat(logicalSize.width) / CGFloat(logicalSize.height)
+    }
+
+    func color(for symbol: Character, palette: NotchPetPalette) -> Color? {
+        switch symbol {
+        case "P":
+            return palette.primary
+        case "M":
+            return palette.secondary
+        case "S":
+            return palette.accent
+        case "E":
+            return palette.shade
+        case "D":
+            return palette.detail
+        case "H":
+            return palette.highlight
+        case "C":
+            return palette.feature
+        default:
+            return nil
+        }
+    }
+
+    func glowColor(for symbol: Character, palette: NotchPetPalette) -> Color {
+        switch symbol {
+        case "H":
+            return palette.highlight.opacity(0.22)
+        case "C":
+            return palette.feature.opacity(0.16)
+        case "D":
+            return palette.detail.opacity(0.08)
+        case "E":
+            return palette.shade.opacity(0.10)
+        case "M":
+            return palette.secondary.opacity(0.14)
+        default:
+            return palette.glow.opacity(0.18)
+        }
+    }
+
+    func frames(isProcessing: Bool) -> [[String]] {
+        switch self {
+        case .crab:
+            return isProcessing ? crabActiveFrames : crabIdleFrames
+        case .slime:
+            return isProcessing ? slimeActiveFrames : slimeIdleFrames
+        case .cat:
+            return isProcessing ? catActiveFrames : catIdleFrames
+        case .owl:
+            return isProcessing ? owlActiveFrames : owlIdleFrames
+        }
+    }
+
+    private var crabIdleFrames: [[String]] {
+        [
+            [
+                " H       H ",
+                "  MPPPPPM  ",
+                " MPPHCHPPM ",
+                "MPPSDDDSPPM",
+                "PPPPSSSPPPP",
+                " MPPPMPPPM ",
+                "M  M   M  M",
+                "  M     M  "
+            ],
+            [
+                " H       H ",
+                "  MPPPPPM  ",
+                " MPPHCHPPM ",
+                "MPPSDDDSPPM",
+                "PPPPSSSPPPP",
+                " MPPPMPPPM ",
+                " M  M M  M ",
+                "M   M M   M"
             ]
+        ]
+    }
 
-            let currentHeightOffsets = animateLegs ? legHeightOffsets[legPhase % 4] : [CGFloat](repeating: 0, count: 4)
+    private var crabActiveFrames: [[String]] {
+        [
+            [
+                " H       H ",
+                "  MPPPPPM  ",
+                " MPPHCHPPM ",
+                "MPPSDDDSPPM",
+                "PPPPSSSPPPP",
+                " MPPPMPPPM ",
+                "M  M   M  M",
+                "  M     M  "
+            ],
+            [
+                " H       H ",
+                "  MPPPPPM  ",
+                " MPPHCHPPM ",
+                "MPPSDDDSPPM",
+                "PPPPSSSPPPP",
+                " MPPPMPPPM ",
+                " M  M M  M ",
+                "M   M M   M"
+            ],
+            [
+                " H       H ",
+                "  MPPPPPM  ",
+                " MPPHCHPPM ",
+                "MPPSDDDSPPM",
+                "PPPPSSSPPPP",
+                " MPPPMPPPM ",
+                "  M M M M  ",
+                " M  M M  M "
+            ]
+        ]
+    }
 
-            for (index, xPos) in baseLegPositions.enumerated() {
-                let heightOffset = currentHeightOffsets[index]
-                let legHeight = baseLegHeight + heightOffset
-                let leg = Path { p in
-                    p.addRect(CGRect(x: xPos, y: 39, width: 6, height: legHeight))
-                }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-                context.fill(leg, with: .color(color))
-            }
+    private var slimeIdleFrames: [[String]] {
+        [
+            [
+                "  HHH   ",
+                " HMPMH  ",
+                "HMPPPMH ",
+                "MPPCCPPM",
+                "PPSEESPP",
+                " MPPPPM ",
+                "  MPPM  ",
+                "        "
+            ],
+            [
+                "  HHH   ",
+                " HMPMH  ",
+                "HMPPPMH ",
+                "MPPCCPPM",
+                "PPSEESPP",
+                " MPPPPM ",
+                " MPPPPM ",
+                "        "
+            ],
+            [
+                "  HHH   ",
+                " HMPMH  ",
+                "HMPPPMH ",
+                "MPP  PPM",
+                "PPSCCSPP",
+                " MPPPPM ",
+                "  MPPM  ",
+                "        "
+            ]
+        ]
+    }
 
-            // Main body
-            let body = Path { p in
-                p.addRect(CGRect(x: 6, y: 0, width: 54, height: 39))
-            }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(body, with: .color(color))
+    private var slimeActiveFrames: [[String]] {
+        [
+            [
+                "  HHH   ",
+                " HMPMH  ",
+                "HMPPPMH ",
+                "MPPCCPPM",
+                "PPSEESPP",
+                " MPPPPM ",
+                "  MPPM  ",
+                "        "
+            ],
+            [
+                "   HH   ",
+                " HMPPMH ",
+                "MPPPPPPM",
+                "PPCCSCPP",
+                "PPSEESPP",
+                "PPPPPPPP",
+                " MPPPPM ",
+                "        "
+            ],
+            [
+                "  HHH   ",
+                "  HMMH  ",
+                " HPPPPS ",
+                "MPPCCPPM",
+                "PPSEESPP",
+                " MPPPPM ",
+                "  MPPM  ",
+                "   MM   "
+            ]
+        ]
+    }
 
-            // Left eye
-            let leftEye = Path { p in
-                p.addRect(CGRect(x: 12, y: 13, width: 6, height: 6.5))
-            }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(leftEye, with: .color(.black))
+    private var catIdleFrames: [[String]] {
+        [
+            [
+                " S    H  P",
+                "SS MPPM PP",
+                "S MPPPPM P",
+                " MPPHHPPM ",
+                "PPSECDECPP",
+                " MPPCCPPM ",
+                "  MP  MPP ",
+                " P      P "
+            ],
+            [
+                "  S   H  P",
+                " S MPPM PP",
+                "S MPPPPM P",
+                " MPPHHPPM ",
+                "PPSECDECPP",
+                " MPPCCPPM ",
+                "  MPP M P ",
+                " P     P  "
+            ],
+            [
+                "   S  H  P",
+                "  SMPPM PP",
+                " SMPPPPM P",
+                " MPPHHPPM ",
+                "PP CDDC PP",
+                " MPPCCPPM ",
+                "  MP  MPP ",
+                " P      P "
+            ]
+        ]
+    }
 
-            // Right eye
-            let rightEye = Path { p in
-                p.addRect(CGRect(x: 48, y: 13, width: 6, height: 6.5))
-            }.applying(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: xOffset / scale, y: 0))
-            context.fill(rightEye, with: .color(.black))
-        }
-        .frame(width: size * (66.0 / 52.0), height: size)
-        .onReceive(legTimer) { _ in
-            if animateLegs {
-                legPhase = (legPhase + 1) % 4
-            }
-        }
+    private var catActiveFrames: [[String]] {
+        [
+            [
+                " S    H  P",
+                "SS MPPM PP",
+                "S MPPPPM P",
+                " MPPHHPPM ",
+                "PPSECDECPP",
+                " MPPCCPPM ",
+                "  MP M MPP",
+                " P  M   P "
+            ],
+            [
+                "  S   H  P",
+                " S MPPM PP",
+                "SMPPPPPM P",
+                " MPPHHPPM ",
+                "PPSECDECPP",
+                " MPPCCPPM ",
+                "  MPP MPP ",
+                " P      P "
+            ],
+            [
+                "   S  H  P",
+                "  SMPPM PP",
+                " SMPPPPM P",
+                " MPPHHPPM ",
+                "PPSECDECPP",
+                " MPPCCPPM ",
+                "  MP  MMPP",
+                " P   M  P "
+            ]
+        ]
+    }
+
+    private var owlIdleFrames: [[String]] {
+        [
+            [
+                "  MPPM  ",
+                " MSPPSM ",
+                "MPHCCHPM",
+                "MPEDDEPM",
+                "MPSSSSPM",
+                " MSPPSM ",
+                "  MPPM  ",
+                " M    M "
+            ],
+            [
+                "  MPPM  ",
+                " MSPPSM ",
+                "MPHCCHPM",
+                "MP    PM",
+                "MPSSSSPM",
+                " MSPPSM ",
+                "  MPPM  ",
+                " M    M "
+            ]
+        ]
+    }
+
+    private var owlActiveFrames: [[String]] {
+        [
+            [
+                "  MPPM  ",
+                " MSPPSM ",
+                "MPHCCHPM",
+                "MPEDDEPM",
+                "MPSSSSPM",
+                " MSPPSM ",
+                "  MPPM  ",
+                " M    M "
+            ],
+            [
+                "  MPPM  ",
+                "MSPPPPSM",
+                "MPHCCHPM",
+                "MPEDDEPM",
+                "MPSSSSPM",
+                "  MSPM  ",
+                "  M  M  ",
+                " M    M "
+            ],
+            [
+                "  MPPM  ",
+                " MSPPSM ",
+                "MPHCCHPM",
+                "MPEDDEPM",
+                "MPSSSSPM",
+                "MS    SM",
+                " M    M ",
+                "  M  M  "
+            ]
+        ]
     }
 }
 
@@ -96,22 +471,34 @@ struct ClaudeCrabIcon: View {
 struct PermissionIndicatorIcon: View {
     let size: CGFloat
     let color: Color
+    @State private var phase: Int = 0
+
+    private let animationTimer = Timer.publish(every: 0.34, on: .main, in: .common).autoconnect()
 
     init(size: CGFloat = 14, color: Color = Color(red: 0.11, green: 0.12, blue: 0.13)) {
         self.size = size
         self.color = color
     }
 
-    // Visible pixel positions from the SVG (at 30x30 scale)
-    private let pixels: [(CGFloat, CGFloat)] = [
-        (7, 7), (7, 11),           // Left column
-        (11, 3),                    // Top left
-        (15, 3), (15, 19), (15, 27), // Center column
-        (19, 3), (19, 15),          // Right of center
-        (23, 7), (23, 11)           // Right column
+    // Bold pixel-art question mark with a small two-frame pulse.
+    private let frames: [[(CGFloat, CGFloat)]] = [
+        [
+            (9, 3), (13, 3), (17, 3), (21, 3),
+            (5, 7), (9, 7), (17, 7), (21, 7), (25, 7),
+            (21, 11), (17, 15), (13, 19),
+            (13, 27), (17, 27)
+        ],
+        [
+            (9, 3), (13, 3), (17, 3), (21, 3),
+            (5, 7), (9, 7), (17, 7), (21, 7), (25, 7),
+            (21, 11), (17, 15), (17, 19),
+            (13, 25), (17, 25)
+        ]
     ]
 
     var body: some View {
+        let pixels = frames[phase % frames.count]
+
         Canvas { context, canvasSize in
             let scale = size / 30.0
             let pixelSize: CGFloat = 4 * scale
@@ -127,6 +514,13 @@ struct PermissionIndicatorIcon: View {
             }
         }
         .frame(width: size, height: size)
+        .shadow(color: color.opacity(0.45), radius: phase.isMultiple(of: 2) ? 3 : 6)
+        .scaleEffect(phase.isMultiple(of: 2) ? 1.0 : 1.08)
+        .offset(y: phase.isMultiple(of: 2) ? 0 : -0.5)
+        .animation(.easeInOut(duration: 0.22), value: phase)
+        .onReceive(animationTimer) { _ in
+            phase = (phase + 1) % frames.count
+        }
     }
 }
 
@@ -170,3 +564,19 @@ struct ReadyForInputIndicatorIcon: View {
     }
 }
 
+struct BellIndicatorIcon: View {
+    let size: CGFloat
+    let color: Color
+
+    init(size: CGFloat = 14, color: Color = TerminalColors.prompt) {
+        self.size = size
+        self.color = color
+    }
+
+    var body: some View {
+        Image(systemName: "bell.fill")
+            .font(.system(size: size - 2, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(width: size, height: size)
+    }
+}

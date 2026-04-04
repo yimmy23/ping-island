@@ -5,17 +5,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowManager: WindowManager?
     private var screenObserver: ScreenObserver?
 
-    static var shared: AppDelegate?
-
-    var windowController: NotchWindowController? {
-        windowManager?.windowController
-    }
-
-    override init() {
-        super.init()
-        AppDelegate.shared = self
-    }
-
     func applicationDidFinishLaunching(_ notification: Notification) {
         if !ensureSingleInstance() {
             NSApplication.shared.terminate(nil)

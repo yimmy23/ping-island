@@ -22,6 +22,7 @@ struct SessionInterventionQuestion: Equatable, Identifiable, Sendable {
     let prompt: String
     let detail: String?
     let options: [SessionInterventionOption]
+    let allowsMultiple: Bool
     let allowsOther: Bool
     let isSecret: Bool
 }
@@ -37,6 +38,9 @@ struct SessionIntervention: Equatable, Identifiable, Sendable {
     let metadata: [String: String]
 
     nonisolated var summaryText: String {
+        if kind == .question, let firstQuestion = questions.first {
+            return firstQuestion.prompt
+        }
         if !message.isEmpty {
             return message
         }
