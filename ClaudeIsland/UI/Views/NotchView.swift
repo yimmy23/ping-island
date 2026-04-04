@@ -37,7 +37,7 @@ struct NotchView: View {
 
     @Namespace private var activityNamespace
 
-    private let petIconSize: CGFloat = 17
+    private let petIconSize: CGFloat = 16
 
     /// Whether any Claude session is currently processing or compacting
     private var isAnyProcessing: Bool {
@@ -202,6 +202,7 @@ struct NotchView: View {
         .onAppear {
             sessionMonitor.startMonitoring()
             isVisible = !viewModel.areInteractionsSuppressed
+            viewModel.setHumanInterventionActive(hasHumanIntervention)
             handleProcessingChange()
         }
         .onChange(of: viewModel.status) { oldStatus, newStatus in
@@ -211,6 +212,9 @@ struct NotchView: View {
             handlePendingSessionsChange(sessions)
         }
         .onChange(of: sessionMonitor.instances) { _, instances in
+            viewModel.setHumanInterventionActive(
+                instances.contains { $0.phase == .waitingForInput && $0.intervention != nil }
+            )
             handleProcessingChange()
             handleSessionSoundTransitions(instances)
             handleQuestionInterventionChange(instances)
@@ -709,9 +713,9 @@ private struct SessionCountIndicator: View {
         PixelNumberView(
             value: count,
             color: .white.opacity(0.92),
-            pixelSize: count >= 10 ? 1.7 : 2,
-            pixelSpacing: 1,
-            digitSpacing: 2
+            pixelSize: count >= 10 ? 1.1 : 1.25,
+            pixelSpacing: 0.8,
+            digitSpacing: 1.2
         )
         .frame(minWidth: 18)
     }

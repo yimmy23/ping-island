@@ -77,7 +77,6 @@ struct SessionHoverPreviewView: View {
 private struct HoverConversationSnapshot {
     let userText: String?
     let assistantText: String?
-    let statusText: String
 }
 
 private struct SessionHoverCompactRow: View {
@@ -131,17 +130,21 @@ private struct HoverSelectedSessionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let intervention = session.intervention, intervention.kind == .question {
+            if session.phase.isWaitingForApproval {
+                HoverSessionHeader(session: session)
+
+                HoverApprovalCard(
+                    session: session,
+                    sessionMonitor: sessionMonitor
+                )
+            } else if let intervention = session.intervention, intervention.kind == .question {
                 HoverSessionHeader(session: session)
 
                 HoverQuestionInterventionCard(
-                    session: session,
+                    sessionId: session.sessionId,
                     intervention: intervention,
-                    sessionMonitor: sessionMonitor,
-                    viewModel: viewModel
+                    sessionMonitor: sessionMonitor
                 )
-                .padding(.leading, HoverSessionLayout.headerContentInset)
-                .padding(.trailing, 4)
             } else if session.provider == .codex, session.intervention == nil {
                 HoverSessionHeader(session: session, showPath: false)
 
@@ -159,26 +162,17 @@ private struct HoverSelectedSessionCard: View {
         .padding(.horizontal, session.provider == .codex && session.intervention == nil ? 16 : 0)
         .padding(.vertical, session.provider == .codex && session.intervention == nil ? 16 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.white.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.05), Color.clear],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .blendMode(.screen)
-        )
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onTapGesture {
+            guard session.intervention == nil else { return }
+            activateSession()
+        }
+    }
+
+    private func activateSession() {
+        Task {
+            _ = await SessionLauncher.shared.activate(session)
+        }
     }
 }
 
@@ -202,68 +196,106 @@ private struct HoverConversationCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             if let userText = snapshot.userText {
-                HStack(alignment: .top, spacing: 10) {
-                    Text("你：")
-                        .font(.system(size: max(12, settings.contentFontSize - 1), weight: .bold))
-                        .foregroundColor(.white.opacity(0.76))
-                        .padding(.top, 1)
-
-                    MarkdownText(userText, color: .white.opacity(0.9), fontSize: userFontSize)
-                        .lineLimit(3)
-
-                    Spacer(minLength: 8)
-
-                    Text(snapshot.statusText)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.38))
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(Color.white.opacity(0.05))
+                HoverConversationLine(
+                    label: "你：",
+                    labelColor: .white.opacity(0.54),
+                    text: userText,
+                    textColor: .white.opacity(0.84),
+                    fontSize: userFontSize,
+                    lineLimit: 2
+                )
             }
 
             if let assistantText = snapshot.assistantText {
-                MarkdownText(assistantText, color: .white.opacity(0.78), fontSize: assistantFontSize)
-                    .lineLimit(8)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, session.cwd.isEmpty || session.cwd == "/" ? 16 : 0)
-                    .padding(.top, snapshot.userText == nil ? 16 : 4)
+                HoverConversationLine(
+                    label: HoverPreviewStyle.providerLabel(for: session) + "：",
+                    labelColor: HoverPreviewStyle.assistantPrefixColor(for: session),
+                    text: assistantText,
+                    textColor: HoverPreviewStyle.assistantTextColor(for: session, compact: false),
+                    fontSize: assistantFontSize,
+                    lineLimit: 3
+                )
             } else {
                 HoverSessionPreviewLines(session: session)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, session.cwd.isEmpty || session.cwd == "/" ? 16 : 0)
-                    .padding(.top, snapshot.userText == nil ? 16 : 4)
             }
 
             if !session.cwd.isEmpty && session.cwd != "/" {
                 Text(session.cwd)
                     .font(.system(size: max(10, settings.contentFontSize - 2), weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.34))
+                    .foregroundColor(.white.opacity(0.3))
                     .lineLimit(1)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                    .padding(.top, 2)
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.18))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-                )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct HoverApprovalCard: View {
+    let session: SessionState
+    let sessionMonitor: ClaudeSessionMonitor
+
+    private var providerLabel: String {
+        session.provider == .claude ? "Claude" : "Codex"
+    }
+
+    private var toolLabel: String {
+        guard let toolName = session.pendingToolName else { return "当前操作" }
+        return MCPToolFormatter.formatToolName(toolName)
+    }
+
+    private var detailText: String {
+        if let input = session.pendingToolInput, !input.isEmpty {
+            return input
+        }
+        return "批准后会继续执行当前会话。"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(providerLabel) 请求批准")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Text(toolLabel)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(TerminalColors.amber.opacity(0.95))
+
+                Text(detailText)
+                    .font(.system(size: 11, weight: .medium, design: session.pendingToolInput == nil ? .default : .monospaced))
+                    .foregroundColor(.white.opacity(0.68))
+                    .lineLimit(4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HStack(spacing: 8) {
+                Button("Deny") {
+                    sessionMonitor.denyPermission(sessionId: session.sessionId, reason: nil)
+                }
+                .buttonStyle(HoverApprovalButtonStyle(background: Color.white.opacity(0.1)))
+
+                Button("Allow") {
+                    sessionMonitor.approvePermission(sessionId: session.sessionId)
+                }
+                .buttonStyle(HoverApprovalButtonStyle(background: Color.white.opacity(0.92), foreground: .black))
+            }
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 private struct HoverQuestionInterventionCard: View {
-    let session: SessionState
+    let sessionId: String
     let intervention: SessionIntervention
     let sessionMonitor: ClaudeSessionMonitor
-    @ObservedObject var viewModel: NotchViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -284,27 +316,30 @@ private struct HoverQuestionInterventionCard: View {
                 intervention: intervention,
                 submitLabel: "提交所有回答",
                 onSubmit: { payload in
-                    sessionMonitor.answerIntervention(sessionId: session.sessionId, answers: payload)
-                },
-                secondaryActionTitle: "查看会话",
-                onSecondaryAction: {
-                    viewModel.showChat(for: session)
+                    sessionMonitor.answerIntervention(sessionId: sessionId, answers: payload)
                 }
             )
         }
-        .padding(.horizontal, 18)
         .padding(.top, 12)
         .padding(.bottom, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.18))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-                )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct HoverApprovalButtonStyle: ButtonStyle {
+    let background: Color
+    var foreground: Color = .white
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(foreground.opacity(configuration.isPressed ? 0.75 : 1))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(background.opacity(configuration.isPressed ? 0.82 : 1))
+            )
     }
 }
 
@@ -314,22 +349,22 @@ private struct HoverSessionHeader: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: showPath ? 10 : 0) {
+        VStack(alignment: .leading, spacing: showPath ? 8 : 0) {
             HStack(alignment: .center, spacing: HoverSessionLayout.headerSpacing) {
                 HoverProviderGlyph(session: session)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(session.projectName)
-                            .font(.system(size: max(14, settings.contentFontSize + 1), weight: .semibold))
+                            .font(.system(size: max(13, settings.contentFontSize), weight: .semibold))
                             .foregroundColor(.white.opacity(0.88))
 
                         Text("·")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.white.opacity(0.42))
 
                         Text(session.displayTitle)
-                            .font(.system(size: max(16, settings.contentFontSize + 4), weight: .bold))
+                            .font(.system(size: max(15, settings.contentFontSize + 3), weight: .bold))
                             .foregroundColor(.white)
                             .lineLimit(1)
                     }
@@ -370,7 +405,7 @@ private struct HoverSessionPreviewLines: View {
                     if let prefix = line.prefix {
                         Text(prefix)
                             .font(.system(size: compact ? max(10, settings.contentFontSize - 2) : max(11, settings.contentFontSize - 1), weight: .semibold))
-                            .foregroundColor(.white.opacity(0.72))
+                            .foregroundColor(line.prefixColor)
                     }
 
                     Text(line.text)
@@ -386,16 +421,6 @@ private struct HoverSessionPreviewLines: View {
 private struct HoverSessionBadges: View {
     let session: SessionState
 
-    private var providerColor: Color {
-        session.provider == .claude
-            ? Color(red: 0.85, green: 0.47, blue: 0.34)
-            : Color(red: 0.36, green: 0.62, blue: 1.0)
-    }
-
-    private var providerLabel: String {
-        session.provider == .claude ? "Claude" : "Codex"
-    }
-
     private var timeLabel: String {
         let value = SessionPhaseHelpers.timeAgo(session.lastActivity)
         return value == "now" ? "<1m" : value
@@ -403,18 +428,26 @@ private struct HoverSessionBadges: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            previewBadge(providerLabel, tint: providerColor)
-            previewBadge(timeLabel, tint: .white.opacity(0.12), foreground: .white.opacity(0.62))
+            previewBadge(
+                HoverPreviewStyle.providerLabel(for: session),
+                tint: HoverPreviewStyle.providerBadgeFill(for: session),
+                foreground: .white.opacity(0.95)
+            )
+            previewBadge(timeLabel, tint: .white.opacity(0.08), foreground: .white.opacity(0.72))
         }
     }
 
     private func previewBadge(_ text: String, tint: Color, foreground: Color = .white.opacity(0.92)) -> some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 10, weight: .semibold))
             .foregroundColor(foreground)
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.vertical, 5)
             .background(tint)
+            .overlay(
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.04), lineWidth: 1)
+            )
             .clipShape(Capsule())
     }
 }
@@ -424,41 +457,116 @@ private struct HoverProviderGlyph: View {
     @ObservedObject private var settings = AppSettings.shared
 
     private var petTone: NotchIndicatorTone {
-        if session.needsQuestionResponse {
-            return .intervention
-        }
         if session.phase.isWaitingForApproval {
             return .warning
         }
         return .normal
     }
 
+    private var attentionTone: NotchIndicatorTone? {
+        if session.needsQuestionResponse {
+            return .intervention
+        }
+        if session.phase.isWaitingForApproval {
+            return .warning
+        }
+        return nil
+    }
+
     var body: some View {
-        Group {
-            if session.provider == .codex {
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(TerminalColors.blue)
-            } else {
-                NotchPetIcon(
-                    style: settings.notchPetStyle,
-                    size: 18,
-                    tone: petTone,
-                    isProcessing: session.phase.isActive
-                )
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if session.provider == .codex {
+                    Image(systemName: "square.grid.2x2.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(TerminalColors.blue)
+                } else {
+                    NotchPetIcon(
+                        style: settings.notchPetStyle,
+                        size: 18,
+                        tone: petTone,
+                        isProcessing: session.phase.isActive
+                    )
+                }
+            }
+            .frame(width: HoverSessionLayout.glyphSize, height: HoverSessionLayout.glyphSize)
+            .background(attentionTone == nil ? Color.white.opacity(0.04) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            if let attentionTone {
+                PermissionIndicatorIcon(size: 11, color: attentionTone.emphasisColor)
+                    .offset(x: 2, y: -2)
             }
         }
-            .frame(width: HoverSessionLayout.glyphSize, height: HoverSessionLayout.glyphSize)
-            .background(Color.white.opacity(0.04))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
 private struct HoverPreviewLine: Identifiable {
     let id: String
     let prefix: String?
+    let prefixColor: Color
     let text: String
     let color: Color
+}
+
+private struct HoverConversationLine: View {
+    let label: String
+    let labelColor: Color
+    let text: String
+    let textColor: Color
+    let fontSize: CGFloat
+    let lineLimit: Int
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(label)
+                .font(.system(size: max(11, fontSize - 1), weight: .semibold))
+                .foregroundColor(labelColor)
+
+            MarkdownText(text, color: textColor, fontSize: fontSize)
+                .lineLimit(lineLimit)
+        }
+    }
+}
+
+private enum HoverPreviewStyle {
+    private static let claudeOrange = Color(red: 0.85, green: 0.47, blue: 0.34)
+    private static let codexBlue = Color(red: 0.36, green: 0.62, blue: 1.0)
+
+    static func providerLabel(for session: SessionState) -> String {
+        session.provider == .claude ? "Claude" : "Codex"
+    }
+
+    static func providerColor(for session: SessionState) -> Color {
+        session.provider == .claude ? claudeOrange : codexBlue
+    }
+
+    static func providerBadgeFill(for session: SessionState) -> Color {
+        providerColor(for: session).opacity(session.provider == .claude ? 0.26 : 0.22)
+    }
+
+    static func assistantPrefixColor(for session: SessionState) -> Color {
+        if session.needsQuestionResponse {
+            return TerminalColors.blue.opacity(0.96)
+        }
+        if session.phase.isWaitingForApproval {
+            return TerminalColors.amber.opacity(0.96)
+        }
+        return providerColor(for: session).opacity(session.phase.isActive ? 0.96 : 0.9)
+    }
+
+    static func assistantTextColor(for session: SessionState, compact: Bool) -> Color {
+        if session.needsQuestionResponse {
+            return .white.opacity(compact ? 0.82 : 0.88)
+        }
+        if session.phase.isWaitingForApproval {
+            return .white.opacity(compact ? 0.74 : 0.8)
+        }
+        if session.phase.isActive {
+            return .white.opacity(compact ? 0.68 : 0.78)
+        }
+        return .white.opacity(compact ? 0.58 : 0.68)
+    }
 }
 
 private enum HoverPreviewLineBuilder {
@@ -470,8 +578,9 @@ private enum HoverPreviewLineBuilder {
                 HoverPreviewLine(
                     id: "user",
                     prefix: "你：",
+                    prefixColor: .white.opacity(compact ? 0.44 : 0.52),
                     text: userLine,
-                    color: .white.opacity(compact ? 0.62 : 0.72)
+                    color: .white.opacity(compact ? 0.68 : 0.76)
                 )
             )
         }
@@ -480,9 +589,10 @@ private enum HoverPreviewLineBuilder {
             lines.append(
                 HoverPreviewLine(
                     id: "assistant",
-                    prefix: nil,
+                    prefix: HoverPreviewStyle.providerLabel(for: session) + "：",
+                    prefixColor: HoverPreviewStyle.assistantPrefixColor(for: session),
                     text: assistantLine,
-                    color: .white.opacity(compact ? 0.48 : 0.56)
+                    color: HoverPreviewStyle.assistantTextColor(for: session, compact: compact)
                 )
             )
         }
@@ -492,6 +602,7 @@ private enum HoverPreviewLineBuilder {
                 HoverPreviewLine(
                     id: "fallback",
                     prefix: nil,
+                    prefixColor: .clear,
                     text: fallback,
                     color: .white.opacity(0.64)
                 )
@@ -553,8 +664,7 @@ private enum HoverConversationSnapshotBuilder {
     static func snapshot(for session: SessionState) -> HoverConversationSnapshot {
         HoverConversationSnapshot(
             userText: latestUserText(for: session),
-            assistantText: latestAssistantText(for: session),
-            statusText: statusText(for: session)
+            assistantText: latestAssistantText(for: session)
         )
     }
 
@@ -590,23 +700,6 @@ private enum HoverConversationSnapshotBuilder {
         }
 
         return sanitized(session.previewText) ?? sanitized(session.lastMessage)
-    }
-
-    private static func statusText(for session: SessionState) -> String {
-        switch session.phase {
-        case .waitingForApproval:
-            return "等待授权"
-        case .waitingForInput:
-            return "待输入"
-        case .processing:
-            return "处理中"
-        case .compacting:
-            return "压缩中"
-        case .idle:
-            return "完成"
-        case .ended:
-            return "结束"
-        }
     }
 
     private static func sanitized(_ text: String?) -> String? {

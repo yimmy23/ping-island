@@ -97,9 +97,9 @@ struct NotchPetIcon: View {
 
     var body: some View {
         let palette = tone.petPalette
+        let frames = style.frames(isProcessing: isProcessing, tone: tone)
 
         Canvas { context, canvasSize in
-            let frames = style.frames(isProcessing: isProcessing)
             guard !frames.isEmpty else { return }
 
             let frame = frames[phase % frames.count]
@@ -132,7 +132,13 @@ struct NotchPetIcon: View {
         .frame(width: size * style.aspectRatio, height: size)
         .shadow(color: palette.outerGlow.opacity(0.72), radius: 6, y: 0)
         .onReceive(animationTimer) { _ in
-            phase = (phase + 1) % max(1, style.frames(isProcessing: isProcessing).count)
+            phase = (phase + 1) % max(1, frames.count)
+        }
+        .onChange(of: isProcessing) { _, _ in
+            phase = 0
+        }
+        .onChange(of: tone) { _, _ in
+            phase = 0
         }
     }
 }
@@ -146,8 +152,16 @@ private extension NotchPetStyle {
             return (8, 8)
         case .cat:
             return (10, 8)
+        case .sittingCat:
+            return (10, 8)
         case .owl:
             return (8, 8)
+        case .roundBlob:
+            return (8, 8)
+        case .antennaBean:
+            return (8, 8)
+        case .tinyDino:
+            return (10, 8)
         }
     }
 
@@ -193,16 +207,82 @@ private extension NotchPetStyle {
         }
     }
 
-    func frames(isProcessing: Bool) -> [[String]] {
+    func frames(isProcessing: Bool, tone: NotchIndicatorTone) -> [[String]] {
+        if isProcessing {
+            return activeFrames
+        }
+
+        switch tone {
+        case .normal:
+            return idleFrames
+        case .warning:
+            return warningFrames
+        case .intervention:
+            return interventionFrames
+        }
+    }
+
+    private var idleFrames: [[String]] {
         switch self {
         case .crab:
-            return isProcessing ? crabActiveFrames : crabIdleFrames
+            return crabIdleFrames
         case .slime:
-            return isProcessing ? slimeActiveFrames : slimeIdleFrames
+            return slimeIdleFrames
         case .cat:
-            return isProcessing ? catActiveFrames : catIdleFrames
+            return catIdleFrames
+        case .sittingCat:
+            return sittingCatIdleFrames
         case .owl:
-            return isProcessing ? owlActiveFrames : owlIdleFrames
+            return owlIdleFrames
+        case .roundBlob:
+            return roundBlobIdleFrames
+        case .antennaBean:
+            return antennaBeanIdleFrames
+        case .tinyDino:
+            return tinyDinoIdleFrames
+        }
+    }
+
+    private var activeFrames: [[String]] {
+        switch self {
+        case .crab:
+            return crabActiveFrames
+        case .slime:
+            return slimeActiveFrames
+        case .cat:
+            return catActiveFrames
+        case .sittingCat:
+            return sittingCatActiveFrames
+        case .owl:
+            return owlActiveFrames
+        case .roundBlob:
+            return roundBlobActiveFrames
+        case .antennaBean:
+            return antennaBeanActiveFrames
+        case .tinyDino:
+            return tinyDinoActiveFrames
+        }
+    }
+
+    private var warningFrames: [[String]] {
+        switch self {
+        case .cat:
+            return catWarningFrames
+        case .sittingCat:
+            return sittingCatWarningFrames
+        default:
+            return activeFrames
+        }
+    }
+
+    private var interventionFrames: [[String]] {
+        switch self {
+        case .cat:
+            return catInterventionFrames
+        case .sittingCat:
+            return sittingCatInterventionFrames
+        default:
+            return activeFrames
         }
     }
 
@@ -406,6 +486,176 @@ private extension NotchPetStyle {
         ]
     }
 
+    private var catWarningFrames: [[String]] {
+        [
+            [
+                " S    H  P",
+                "SS MPPM PP",
+                "S MPPPPM P",
+                " MPPHHPPM ",
+                "PPHCDDCHPP",
+                " MPPCCPPM ",
+                "  MPP MPP ",
+                " P   M  P "
+            ],
+            [
+                "  S   H  P",
+                " S MPPM PP",
+                "SMPPPPPM P",
+                " MPPHHPPM ",
+                "PPHCDDCHPP",
+                " MPPCCPPM ",
+                "  MP  MMPP",
+                " P  M   P "
+            ]
+        ]
+    }
+
+    private var catInterventionFrames: [[String]] {
+        [
+            [
+                "  S   H  P",
+                " S MPPM PP",
+                " SMPPPPM P",
+                " MPPHCCPM ",
+                "PPSEDDECPP",
+                " MPPCCPPM ",
+                "  MPP  MPP",
+                " P  M   P "
+            ],
+            [
+                "   S  H  P",
+                "  SMPPM PP",
+                " SMPPPPM P",
+                " MPPCCHPM ",
+                "PPSEDDCEPP",
+                " MPPCCPPM ",
+                "  MP M MPP",
+                " P   M  P "
+            ]
+        ]
+    }
+
+    private var sittingCatIdleFrames: [[String]] {
+        [
+            [
+                " PP  PP   ",
+                "PPPMMMPP  ",
+                "PPPPPPPP  ",
+                "PPHCCHPP  ",
+                "PPSEEDSPP ",
+                " PPPPPPP  ",
+                " PPP  PPP ",
+                "PP     PPP"
+            ],
+            [
+                " PP  PP   ",
+                "PPPMMMPP  ",
+                "PPPPPPPP  ",
+                "PPH  HPP  ",
+                "PP CDDCPP ",
+                " PPPPPPP  ",
+                " PPPP PPP ",
+                " P     PPP"
+            ],
+            [
+                " PP  PP   ",
+                "PPPMMMPP  ",
+                "PPPPPPPP  ",
+                "PPDCCDPP  ",
+                "PPSEEDCPP ",
+                " PPPPPPP  ",
+                " PPP  PPP ",
+                "PP    PPP "
+            ]
+        ]
+    }
+
+    private var sittingCatActiveFrames: [[String]] {
+        [
+            [
+                "PPP  PPP  ",
+                "PPPMMMPPP ",
+                "PPPPPPPPP ",
+                "PPHCCHPPP ",
+                "PPSEEDSPPP",
+                " PPPPPPPP ",
+                " PPP M PPP",
+                "PP   M  PP"
+            ],
+            [
+                " PP  PPP  ",
+                "PPPMMMPPP ",
+                "PPPPPPPPP ",
+                "PPHCCDHPP ",
+                "PPSEEDSPPP",
+                " PPPPPPPP ",
+                " PPPP  PPP",
+                " P   M  PP"
+            ],
+            [
+                "PPP  PP   ",
+                "PPPMMMPPP ",
+                "PPPPPPPPP ",
+                "PPHCCDHPP ",
+                "PPSEEDSPPP",
+                " PPPPPPPP ",
+                " PPP  MPPP",
+                "PP  M   PP"
+            ]
+        ]
+    }
+
+    private var sittingCatWarningFrames: [[String]] {
+        [
+            [
+                "PPP  PPP  ",
+                "PPPMMMPPP ",
+                "PPPPPPPPP ",
+                "PPHHCHHPP ",
+                "PPSCDDCSPP",
+                " PPPPPPPP ",
+                " PPP  MPPP",
+                "PP  M   PP"
+            ],
+            [
+                " PP  PPP  ",
+                "PPPMMMPPP ",
+                "PPPPPPPPP ",
+                "PPHCHCHPP ",
+                "PPSCDDCSPP",
+                " PPPPPPPP ",
+                " PPPP  PPP",
+                " P   M  PP"
+            ]
+        ]
+    }
+
+    private var sittingCatInterventionFrames: [[String]] {
+        [
+            [
+                "  PP  PPP ",
+                " PPPMMMPP ",
+                " PPPPPPPP ",
+                " PPHCCHPP ",
+                "PPSEDDECPP",
+                "  PPPPPP  ",
+                "  PPP MPP ",
+                " PP M   PP"
+            ],
+            [
+                " PPP  PP  ",
+                "PPPMMMPP  ",
+                "PPPPPPPP  ",
+                "PPHCCHPP  ",
+                "PPCEDDESPP",
+                " PPPPPP   ",
+                " PPP  MPP ",
+                "PP   M  PP"
+            ]
+        ]
+    }
+
     private var owlIdleFrames: [[String]] {
         [
             [
@@ -462,6 +712,206 @@ private extension NotchPetStyle {
                 "MS    SM",
                 " M    M ",
                 "  M  M  "
+            ]
+        ]
+    }
+
+    private var roundBlobIdleFrames: [[String]] {
+        [
+            [
+                "  MPPM  ",
+                " MPPPPM ",
+                "MPHCCHPM",
+                "PPSSSSPP",
+                "PPEDDEPP",
+                " MPPPPM ",
+                "  MPPM  ",
+                "  M  M  "
+            ],
+            [
+                "  MPPM  ",
+                " MPPPPM ",
+                "MPH  HPM",
+                "PPCCCCPP",
+                "PPEDDEPP",
+                " MPPPPM ",
+                "  MPPM  ",
+                "  M  M  "
+            ],
+            [
+                " MPPPPM ",
+                "MPPPPPPM",
+                "PPHCCHPP",
+                "PPSSSSPP",
+                "PPEDDEPP",
+                "  MPPM  ",
+                "  MPPM  ",
+                " M    M "
+            ]
+        ]
+    }
+
+    private var roundBlobActiveFrames: [[String]] {
+        [
+            [
+                "  MPPM  ",
+                " MPPPPM ",
+                "MPHCCHPM",
+                "PPSSSSPP",
+                "PPEDDEPP",
+                " MPPPPM ",
+                "  MPPM  ",
+                "  M  M  "
+            ],
+            [
+                " MPPPPM ",
+                "MPPPPPPM",
+                "PPHCCHPP",
+                "PPSSSSPP",
+                "PPEDDEPP",
+                "  MPPM  ",
+                "  MPPM  ",
+                " M    M "
+            ],
+            [
+                "  MPPM  ",
+                " MPPPPM ",
+                "MPH  HPM",
+                "PPCCCCPP",
+                "PPEDDEPP",
+                " MPPPPM ",
+                " MPPPPM ",
+                "  M  M  "
+            ]
+        ]
+    }
+
+    private var antennaBeanIdleFrames: [[String]] {
+        [
+            [
+                " P    P ",
+                "PPM  MPP",
+                "PPPPPPPP",
+                "PPHCCHPP",
+                " PSEESP ",
+                "  MPPM  ",
+                "  M  M  ",
+                " M    M "
+            ],
+            [
+                "  P  P  ",
+                " PPMMPP ",
+                "PPPPPPPP",
+                "PPH  HPP",
+                " P CDDP ",
+                "  MPPM  ",
+                "  MPPM  ",
+                "   MM   "
+            ],
+            [
+                " P    P ",
+                "PPM  MPP",
+                "PPPPPPPP",
+                "PPDCCDPP",
+                " PSEESP ",
+                "  MPPM  ",
+                " M  M   ",
+                "M    M  "
+            ]
+        ]
+    }
+
+    private var antennaBeanActiveFrames: [[String]] {
+        [
+            [
+                " P    P ",
+                "PPM  MPP",
+                "PPPPPPPP",
+                "PPHCCHPP",
+                " PSEESP ",
+                "  MPPM  ",
+                "  M  M  ",
+                " M    M "
+            ],
+            [
+                "P      P",
+                "PPM  MPP",
+                "PPPPPPPP",
+                "PPHCCHPP",
+                " PSEESP ",
+                "  MPPM  ",
+                "  MPPM  ",
+                " M MM M "
+            ],
+            [
+                "  P  P  ",
+                " PPMMPP ",
+                "PPPPPPPP",
+                "PPH  HPP",
+                " P CDDP ",
+                "  MPPM  ",
+                " MPPM   ",
+                "M    MM "
+            ]
+        ]
+    }
+
+    private var tinyDinoIdleFrames: [[String]] {
+        [
+            [
+                "  MPP     ",
+                " MPPPPM   ",
+                "MPHCCHPP  ",
+                "MPPSSSSPM ",
+                " MPPEDSPPM",
+                "  MPPPPMMM",
+                " M  M  M M",
+                " M M     M"
+            ],
+            [
+                "  MPP     ",
+                " MPPPPM   ",
+                "MPH  HPP  ",
+                "MPPCCCCPM ",
+                " MPPEDSPPM",
+                "  MPPPPMM ",
+                " M  MM  MM",
+                "  M M   M "
+            ]
+        ]
+    }
+
+    private var tinyDinoActiveFrames: [[String]] {
+        [
+            [
+                "  MPP     ",
+                " MPPPPM   ",
+                "MPHCCHPP  ",
+                "MPPSSSSPM ",
+                " MPPEDSPPM",
+                "  MPPPPMMM",
+                " M  M  M M",
+                " M M     M"
+            ],
+            [
+                "   MPP    ",
+                " MPPPPM   ",
+                "MPHCCHPP  ",
+                "MPPSSSSPM ",
+                " MPPEDSPPM",
+                "  MPPPPMMM",
+                "  MM  M MM",
+                " M   M   M"
+            ],
+            [
+                "  MPP     ",
+                " MPPPPM   ",
+                "MPH  HPP  ",
+                "MPPCCCCPM ",
+                " MPPEDSPPM",
+                "  MPPPPMM ",
+                " M  MM  MM",
+                "  M M   M "
             ]
         ]
     }

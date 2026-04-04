@@ -124,8 +124,12 @@ struct NotchRootView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], alignment: .leading, spacing: 8) {
                         ForEach(request.options) { option in
-                            Button(option.title) {
+                            Button {
                                 appModel.answer(request, option: option)
+                            } label: {
+                                Text(option.title)
+                                    .frame(maxWidth: .infinity)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(PillButtonStyle(accent: .white.opacity(0.08)))
                         }

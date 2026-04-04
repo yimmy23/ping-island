@@ -33,15 +33,18 @@ struct SessionQuestionForm: View {
                     Text(question.prompt)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     if let detail = question.detail, !detail.isEmpty {
                         Text(detail)
                             .font(.system(size: 11))
                             .foregroundColor(.white.opacity(0.55))
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     questionInput(question)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             HStack(spacing: 8) {
@@ -59,6 +62,7 @@ struct SessionQuestionForm: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -92,6 +96,14 @@ struct SessionQuestionForm: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(
+                                    isSelected(option.title, for: question)
+                                        ? TerminalColors.blue.opacity(0.12)
+                                        : Color.white.opacity(0.04)
+                                )
+                        )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .stroke(
@@ -101,10 +113,12 @@ struct SessionQuestionForm: View {
                                     lineWidth: 1
                                 )
                         )
+                        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if question.allowsOther {
                 TextField("其他答案", text: Binding(

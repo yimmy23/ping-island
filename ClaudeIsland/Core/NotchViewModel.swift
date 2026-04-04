@@ -52,8 +52,11 @@ class NotchViewModel: ObservableObject {
     let geometry: NotchGeometry
     let spacing: CGFloat = 12
     let hasPhysicalNotch: Bool
-    let closedWidth: CGFloat = 266
-    let closedHeight: CGFloat = 30
+    let closedHeight: CGFloat = 32
+
+    private static let defaultClosedWidth: CGFloat = 266
+    private static let manualAttentionClosedWidth: CGFloat = 300
+    @Published private(set) var closedWidth: CGFloat
 
     var deviceNotchRect: CGRect { geometry.deviceNotchRect }
     var screenRect: CGRect { geometry.screenRect }
@@ -117,6 +120,7 @@ class NotchViewModel: ObservableObject {
             windowHeight: windowHeight
         )
         self.hasPhysicalNotch = hasPhysicalNotch
+        self.closedWidth = Self.defaultClosedWidth
         setupEventHandlers()
         observeEnvironment()
         refreshInteractionSuppression()
@@ -379,6 +383,12 @@ class NotchViewModel: ObservableObject {
             return
         }
         hoverPreviewSession = session
+    }
+
+    func setHumanInterventionActive(_ isActive: Bool) {
+        let targetWidth = isActive ? Self.manualAttentionClosedWidth : Self.defaultClosedWidth
+        guard closedWidth != targetWidth else { return }
+        closedWidth = targetWidth
     }
 
     /// Perform boot animation: expand briefly then collapse

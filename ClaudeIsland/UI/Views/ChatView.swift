@@ -307,12 +307,13 @@ struct ChatView: View {
                         }
                     }
                     .padding(.top, 20)
-                    .padding(.top, activeQuestionIntervention == nil ? 0 : 12)
                     .padding(.bottom, 20)
                     .frame(
                         maxWidth: .infinity,
                         minHeight: geometry.size.height,
-                        alignment: activeQuestionIntervention == nil ? .top : .bottom
+                        // The scroll view is vertically flipped below, so `.top` keeps the
+                        // newest content visually anchored near the footer/question panel.
+                        alignment: .top
                     )
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isProcessing)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: history.count)

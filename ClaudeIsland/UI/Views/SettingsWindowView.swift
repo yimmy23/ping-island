@@ -312,11 +312,6 @@ private struct SettingsPanelContentView: View {
                 endPoint: .bottomTrailing
             )
         }
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.black.opacity(0.24))
-                .frame(height: 1)
-        }
         .frame(height: titlebarHeight)
     }
 
@@ -711,8 +706,7 @@ private struct SettingsPanelContentView: View {
             }
         }
         .labelsHidden()
-        .pickerStyle(.menu)
-        .frame(width: 180)
+        .settingsMenuPicker(width: 168)
     }
 
     private var soundThemeModePicker: some View {
@@ -722,8 +716,7 @@ private struct SettingsPanelContentView: View {
             }
         }
         .labelsHidden()
-        .pickerStyle(.menu)
-        .frame(width: 180)
+        .settingsMenuPicker(width: 168)
     }
 
     private var soundPackPicker: some View {
@@ -737,8 +730,7 @@ private struct SettingsPanelContentView: View {
             }
         }
         .labelsHidden()
-        .pickerStyle(.menu)
-        .frame(width: 220)
+        .settingsMenuPicker(width: 204)
     }
 
     private var notchPetPicker: some View {
@@ -748,8 +740,7 @@ private struct SettingsPanelContentView: View {
             }
         }
         .labelsHidden()
-        .pickerStyle(.menu)
-        .frame(width: 180)
+        .settingsMenuPicker(width: 168)
     }
 
     private var screenSelectionBinding: Binding<String> {
@@ -914,6 +905,7 @@ private struct SidebarItemView: View {
 
             Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .background(
@@ -924,6 +916,7 @@ private struct SidebarItemView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(Color.white.opacity(isSelected ? 0.08 : 0), lineWidth: 1)
         )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -987,30 +980,47 @@ private struct SettingsToggleLine: View {
     @Binding var isOn: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 16) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
 
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.58))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Spacer(minLength: 12)
+
+                Toggle("", isOn: $isOn)
+                    .labelsHidden()
+                    .settingsCompactSwitch()
             }
 
-            Spacer(minLength: 12)
-
-            Toggle("", isOn: $isOn)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.regular)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.58))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.clear)
+    }
+}
+
+private extension View {
+    func settingsCompactSwitch(scale: CGFloat = 0.84) -> some View {
+        self
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .scaleEffect(scale)
+            .frame(width: 32, height: 18)
+    }
+
+    func settingsMenuPicker(width: CGFloat) -> some View {
+        self
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .frame(width: width, alignment: .trailing)
     }
 }
 
@@ -1020,26 +1030,27 @@ private struct SettingsInfoLine<Accessory: View>: View {
     @ViewBuilder let accessory: Accessory
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 16) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
 
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.58))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Spacer(minLength: 12)
+
+                accessory
             }
 
-            Spacer(minLength: 12)
-
-            accessory
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.58))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1078,6 +1089,7 @@ private struct SettingsValueLine: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1092,24 +1104,22 @@ private struct SettingsSliderLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.58))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
 
                 Spacer(minLength: 12)
 
                 Text(format(value))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white.opacity(0.72))
+            }
+
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.58))
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Slider(value: $value, in: range, step: step)
@@ -1129,34 +1139,35 @@ private struct SettingsStatusLine: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .center, spacing: 16) {
                     Text(title)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
 
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.58))
-                            .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 12)
+
+                    HStack(spacing: 10) {
+                        Text(status)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(statusColor)
+
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.5))
                     }
                 }
 
-                Spacer(minLength: 12)
-
-                HStack(spacing: 10) {
-                    Text(status)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(statusColor)
-
-                    Image(systemName: "arrow.up.right.square")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.5))
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.58))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1170,54 +1181,54 @@ private struct SoundEventSettingsLine: View {
     let preview: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 10) {
-                    Text(event.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 16) {
+                Text(event.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
 
+                Spacer(minLength: 12)
+
+                HStack(alignment: .center, spacing: 8) {
                     Toggle("", isOn: $isEnabled)
                         .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                }
+                        .settingsCompactSwitch()
 
-                Text(event.subtitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.58))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 12)
-
-            HStack(spacing: 10) {
-                Picker(event.title, selection: $selectedSound) {
-                    ForEach(NotificationSound.allCases, id: \.self) { sound in
-                        Text(sound.rawValue).tag(sound)
+                    Picker(event.title, selection: $selectedSound) {
+                        ForEach(NotificationSound.allCases, id: \.self) { sound in
+                            Text(sound.rawValue).tag(sound)
+                        }
                     }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .frame(width: 180)
-                .disabled(!isEnabled)
+                    .labelsHidden()
+                    .settingsMenuPicker(width: 148)
+                    .disabled(!isEnabled)
 
-                Button(action: preview) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(isEnabled ? 0.82 : 0.4))
-                        .frame(width: 30, height: 30)
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(isEnabled ? 0.08 : 0.03))
-                        )
+                    Button(action: preview) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white.opacity(isEnabled ? 0.82 : 0.4))
+                            .frame(width: 26, height: 26)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(isEnabled ? 0.08 : 0.03))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isEnabled)
                 }
-                .buttonStyle(.plain)
-                .disabled(!isEnabled)
             }
+
+            Text(event.subtitle)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.58))
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 18)
+        .padding(.vertical, 16)
     }
 }
 
@@ -1231,45 +1242,48 @@ private struct SoundPackEventLine: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 10) {
-                    Text(event.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 16) {
+                Text(event.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
 
+                Spacer(minLength: 12)
+
+                HStack(spacing: 8) {
                     Toggle("", isOn: $isEnabled)
                         .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
+                        .settingsCompactSwitch()
+
+                    Button(action: preview) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white.opacity(isEnabled ? 0.82 : 0.4))
+                            .frame(width: 26, height: 26)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(isEnabled ? 0.08 : 0.03))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isEnabled)
                 }
-
-                Text(event.subtitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.58))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(categorySummary)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.42))
             }
 
-            Spacer(minLength: 12)
+            Text(event.subtitle)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.58))
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
 
-            Button(action: preview) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(isEnabled ? 0.82 : 0.4))
-                    .frame(width: 30, height: 30)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(isEnabled ? 0.08 : 0.03))
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(!isEnabled)
+            Text(categorySummary)
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.42))
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 18)
+        .padding(.vertical, 16)
     }
 }

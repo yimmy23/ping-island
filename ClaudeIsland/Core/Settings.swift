@@ -53,7 +53,11 @@ enum NotchPetStyle: String, CaseIterable, Identifiable {
     case crab
     case slime
     case cat
+    case sittingCat
     case owl
+    case roundBlob
+    case antennaBean
+    case tinyDino
 
     var id: String { rawValue }
 
@@ -65,8 +69,16 @@ enum NotchPetStyle: String, CaseIterable, Identifiable {
             return "果冻史莱姆"
         case .cat:
             return "团子猫"
+        case .sittingCat:
+            return "坐着猫"
         case .owl:
             return "豆豆鸮"
+        case .roundBlob:
+            return "正面团子兽"
+        case .antennaBean:
+            return "天线豆豆"
+        case .tinyDino:
+            return "侧身小恐龙"
         }
     }
 
@@ -78,8 +90,16 @@ enum NotchPetStyle: String, CaseIterable, Identifiable {
             return "软弹变形与高光晃动"
         case .cat:
             return "尾巴摆动和眨眼反馈"
+        case .sittingCat:
+            return "一直端坐，支持更多表情动作"
         case .owl:
             return "轻拍翅膀和点头观察"
+        case .roundBlob:
+            return "早期口袋宠物式正面团子构图"
+        case .antennaBean:
+            return "大头小身与双角剪影"
+        case .tinyDino:
+            return "侧身尾巴外扩的经典小兽构图"
         }
     }
 }
