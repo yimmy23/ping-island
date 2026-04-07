@@ -99,6 +99,8 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
   - `swift test --package-path Prototype`
 - Bridge-focused e2e slice:
   - `swift test --package-path Prototype --filter IslandBridgeE2ETests`
+- Mascot GIF export for docs/resources:
+  - `./scripts/render-mascots.sh`
 - Release automation:
   - `./scripts/build.sh`
   - `./scripts/package-unsigned.sh`

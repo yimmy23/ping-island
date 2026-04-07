@@ -17,6 +17,20 @@
   <img src="docs/images/notch-panel.png" width="960" alt="Ping Island 预览图">
 </p>
 
+<p align="center">
+  <img src="PingIsland/Assets.xcassets/ClaudeLogo.imageset/claude-logo.png" width="28" alt="Claude Code 图标" title="Claude Code">&nbsp;
+  <img src="PingIsland/Assets.xcassets/CodexLogo.imageset/codex-logo.png" width="28" alt="Codex 图标" title="Codex">&nbsp;
+  <img src="PingIsland/Assets.xcassets/GeminiLogo.imageset/gemini-logo.png" width="28" alt="Gemini CLI 图标" title="Gemini CLI">&nbsp;
+  <img src="docs/images/mascots/opencode.gif" width="28" alt="OpenCode 图标" title="OpenCode">&nbsp;
+  <img src="docs/images/mascots/cursor.gif" width="28" alt="Cursor 图标" title="Cursor">&nbsp;
+  <img src="PingIsland/Assets.xcassets/QoderLogo.imageset/qoder-logo.png" width="28" alt="Qoder 图标" title="Qoder">&nbsp;
+  <img src="docs/images/mascots/codebuddy.gif" width="28" alt="CodeBuddy 图标" title="CodeBuddy">&nbsp;
+  <img src="PingIsland/Assets.xcassets/CopilotLogo.imageset/copilot-logo.png" width="28" alt="GitHub Copilot 图标" title="GitHub Copilot">
+</p>
+<p align="center">
+  <sub>Claude Code · Codex · Gemini CLI · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
+</p>
+
 ## Ping Island 是什么？
 
 Ping Island 是一个 macOS 菜单栏应用。当你的编码 Agent 需要你处理审批、输入或查看结果时，它会展开成一个类似 Dynamic Island 的悬浮界面。它能接 Claude 风格 hooks、Codex hooks、Gemini CLI hooks、Codex app-server、OpenCode 插件，以及兼容 IDE 的集成层，所以你不用一直盯着终端标签页，也能看到会话状态。
@@ -35,7 +49,7 @@ Hook / app-server 事件
 ## 功能特性
 
 - **Dynamic Island 风格菜单栏 UI** - 默认紧凑展示，会话需要你介入时自动展开；支持刘海屏和外接显示器。
-- **多客户端会话监控** - 可跟踪 Claude Code、Codex、Gemini CLI、OpenCode、Cursor、Qoder、CodeBuddy、Trae、Copilot 以及兼容 hooks 的会话。
+- **多客户端会话监控** - 可跟踪 Claude Code、Codex、Gemini CLI、OpenCode、Cursor、Qoder、CodeBuddy、GitHub Copilot 以及兼容 hooks 的会话。
 - **就地审批与回答** - 在刘海界面里直接批准、拒绝或回答，不用切回终端。
 - **终端和 IDE 跳转** - 支持把你带回对应的 iTerm2、Ghostty、Terminal.app、tmux pane，或 VS Code 兼容 IDE 窗口。
 - **托管集成安装** - 可在设置页里安装或修复 Claude、Codex、Gemini CLI、OpenCode、Qoder、CodeBuddy、Copilot 等 hooks / 插件集成。
@@ -57,7 +71,6 @@ Hook / app-server 事件
 | <img src="docs/images/mascots/cursor.gif" width="28" alt="Cursor mascot"> | Cursor | Claude 兼容 hooks + 可选 IDE 扩展 | 项目窗口 + 对应终端 | IDE 路由与终端精准聚焦 |
 | <img src="docs/images/mascots/qoder.gif" width="28" alt="Qoder mascot"> | Qoder 家族 | Qoder、QoderWork、Qoder CLI、JetBrains 兼容路径 | Qoder / QoderWork 窗口、终端 | 会话跳转、审批、提醒 |
 | <img src="docs/images/mascots/codebuddy.gif" width="28" alt="CodeBuddy mascot"> | CodeBuddy | Hook 集成 + 可选 IDE 扩展 | 应用窗口 + 终端 | Claude 家族会话跟踪 |
-| <img src="docs/images/mascots/trae.gif" width="28" alt="Trae mascot"> | Trae | 兼容 Claude hooks | IDE / 宿主终端 | 作为 Claude 家族会话展示 |
 | <img src="docs/images/mascots/copilot.gif" width="28" alt="Copilot mascot"> | GitHub Copilot | Copilot hook 协议 | 兼容终端宿主 | Copilot CLI / Agent hooks 事件 |
 
 Ping Island 另外还提供 VS Code 兼容的聚焦扩展，可用于 VS Code、Cursor、CodeBuddy、Qoder 和 QoderWork。`QoderWork` 目前仍然以 hook 接入为主，只有在对应 IDE 宿主可用时才会走扩展路径。
@@ -138,7 +151,7 @@ Ping Island 当前提供 6 个设置分类：
 ## 工作原理
 
 ```text
-Claude / Codex / Gemini CLI / OpenCode / Cursor / Qoder / Copilot / ...
+Claude / Codex / Gemini CLI / OpenCode / Cursor / Qoder / CodeBuddy / Copilot / ...
   -> hook 或 app-server 事件
     -> Ping Island 监控与归一化层
       -> SessionStore

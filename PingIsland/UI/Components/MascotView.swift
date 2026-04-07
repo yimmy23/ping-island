@@ -271,26 +271,28 @@ struct MascotView: View {
     let kind: MascotKind
     let status: MascotStatus
     var size: CGFloat = 40
+    var animationTime: TimeInterval?
 
-    init(kind: MascotKind, status: MascotStatus, size: CGFloat = 40) {
+    init(kind: MascotKind, status: MascotStatus, size: CGFloat = 40, animationTime: TimeInterval? = nil) {
         self.kind = kind
         self.status = status
         self.size = size
+        self.animationTime = animationTime
     }
 
-    init(provider: SessionProvider, status: MascotStatus, size: CGFloat = 40) {
-        self.init(kind: MascotKind(provider: provider), status: status, size: size)
+    init(provider: SessionProvider, status: MascotStatus, size: CGFloat = 40, animationTime: TimeInterval? = nil) {
+        self.init(kind: MascotKind(provider: provider), status: status, size: size, animationTime: animationTime)
     }
 
     var body: some View {
         ZStack {
             switch status {
             case .idle:
-                idleScene
+                idleScene(time: animationTime)
             case .working:
-                workingScene
+                workingScene(time: animationTime)
             case .warning:
-                warningScene
+                warningScene(time: animationTime)
             }
         }
         .frame(width: size, height: size)
@@ -298,34 +300,47 @@ struct MascotView: View {
         .accessibilityLabel("\(kind.title) \(status.displayName)")
     }
 
-    private var idleScene: some View {
+    private func idleScene(time: TimeInterval?) -> some View {
         ZStack(alignment: .topTrailing) {
-            animatedCanvas(interval: 0.06, mode: .idle)
-            FloatingZOverlay(size: size)
+            canvasScene(interval: 0.06, mode: .idle, time: time)
+            FloatingZOverlay(size: size, time: time)
         }
     }
 
-    private var workingScene: some View {
-        animatedCanvas(interval: 0.03, mode: .working)
+    private func workingScene(time: TimeInterval?) -> some View {
+        canvasScene(interval: 0.03, mode: .working, time: time)
     }
 
-    private var warningScene: some View {
+    private func warningScene(time: TimeInterval?) -> some View {
         ZStack {
-            AlertHalo(tint: kind.alertColor, size: size)
-            animatedCanvas(interval: 0.03, mode: .warning)
+            AlertHalo(tint: kind.alertColor, size: size, time: time)
+            canvasScene(interval: 0.03, mode: .warning, time: time)
+        }
+    }
+
+    @ViewBuilder
+    private func canvasScene(interval: TimeInterval, mode: MascotRenderMode, time: TimeInterval?) -> some View {
+        if let time {
+            canvasFrame(time: time, mode: mode)
+        } else {
+            animatedCanvas(interval: interval, mode: mode)
         }
     }
 
     private func animatedCanvas(interval: TimeInterval, mode: MascotRenderMode) -> some View {
         TimelineView(.periodic(from: .now, by: interval)) { context in
-            Canvas { graphicsContext, canvasSize in
-                drawMascot(
-                    in: graphicsContext,
-                    canvasSize: canvasSize,
-                    time: context.date.timeIntervalSinceReferenceDate,
-                    mode: mode
-                )
-            }
+            canvasFrame(time: context.date.timeIntervalSinceReferenceDate, mode: mode)
+        }
+    }
+
+    private func canvasFrame(time: TimeInterval, mode: MascotRenderMode) -> some View {
+        Canvas { graphicsContext, canvasSize in
+            drawMascot(
+                in: graphicsContext,
+                canvasSize: canvasSize,
+                time: time,
+                mode: mode
+            )
         }
         .frame(width: size, height: size)
     }
@@ -756,7 +771,6 @@ struct MascotView: View {
         let belly = Color(red: 0.72, green: 0.97, blue: 0.80)
         let spike = Color(red: 0.36, green: 0.95, blue: 0.62)
         let eye = Color(red: 0.98, green: 0.95, blue: 0.76)
-        let outline = Color(red: 0.06, green: 0.10, blue: 0.09)
         let shadow = Color(red: 0.05, green: 0.32, blue: 0.18)
 
         drawShadow(in: context, space: space, centerX: 8.5, y: 15.5, width: 8.0 - abs(motion.bounce) * 0.25, opacity: 0.22)
@@ -1066,48 +1080,64 @@ private struct PixelSpace {
 
 private struct FloatingZOverlay: View {
     let size: CGFloat
+    var time: TimeInterval?
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.05)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-
-            ZStack(alignment: .top) {
-                ForEach(0..<3, id: \.self) { index in
-                    let cycle = 2.7 + Double(index) * 0.3
-                    let delay = Double(index) * 0.75
-                    let progress = max(0, ((time - delay).truncatingRemainder(dividingBy: cycle)) / cycle)
-                    let fontSize = max(6, size * CGFloat(0.16 + progress * 0.10))
-                    let opacity = progress < 0.82
-                        ? 0.72 - Double(index) * 0.12
-                        : max(0, (1.0 - progress) * (2.9 - Double(index) * 0.4))
-
-                    Text("z")
-                        .font(.system(size: fontSize, weight: .black, design: .rounded))
-                        .foregroundStyle(Color.white.opacity(opacity))
-                        .offset(
-                            x: size * CGFloat(-0.06 + Double(index) * 0.05 + sin(progress * .pi * 2) * 0.02),
-                            y: -size * CGFloat(0.03 + progress * 0.28)
-                        )
-                }
+        if let time {
+            overlayBody(time: time)
+        } else {
+            TimelineView(.periodic(from: .now, by: 0.05)) { context in
+                overlayBody(time: context.date.timeIntervalSinceReferenceDate)
             }
-            .frame(width: size, height: size, alignment: .top)
         }
+    }
+
+    private func overlayBody(time: TimeInterval) -> some View {
+        ZStack(alignment: .top) {
+            ForEach(0..<3, id: \.self) { index in
+                let cycle = 2.7 + Double(index) * 0.3
+                let delay = Double(index) * 0.75
+                let progress = max(0, ((time - delay).truncatingRemainder(dividingBy: cycle)) / cycle)
+                let fontSize = max(6, size * CGFloat(0.16 + progress * 0.10))
+                let opacity = progress < 0.82
+                    ? 0.72 - Double(index) * 0.12
+                    : max(0, (1.0 - progress) * (2.9 - Double(index) * 0.4))
+
+                Text("z")
+                    .font(.system(size: fontSize, weight: .black, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(opacity))
+                    .offset(
+                        x: size * CGFloat(-0.06 + Double(index) * 0.05 + sin(progress * .pi * 2) * 0.02),
+                        y: -size * CGFloat(0.03 + progress * 0.28)
+                    )
+            }
+        }
+        .frame(width: size, height: size, alignment: .top)
     }
 }
 
 private struct AlertHalo: View {
     let tint: Color
     let size: CGFloat
+    var time: TimeInterval?
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.08)) { context in
-            let pulse = CGFloat(sin(context.date.timeIntervalSinceReferenceDate * 6) * 0.5 + 0.5)
-
-            Circle()
-                .fill(tint.opacity(0.10 + pulse * 0.12))
-                .frame(width: size * (0.78 + pulse * 0.10))
-                .blur(radius: size * 0.07)
+        if let time {
+            haloBody(time: time)
+        } else {
+            TimelineView(.periodic(from: .now, by: 0.08)) { context in
+                haloBody(time: context.date.timeIntervalSinceReferenceDate)
+            }
         }
+    }
+
+    private func haloBody(time: TimeInterval) -> some View {
+        let pulse = CGFloat(sin(time * 6) * 0.5 + 0.5)
+
+        return Circle()
+            .fill(tint.opacity(0.10 + pulse * 0.12))
+            .frame(width: size * (0.78 + pulse * 0.10))
+            .blur(radius: size * 0.07)
     }
 }
 

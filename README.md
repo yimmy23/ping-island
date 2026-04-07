@@ -17,6 +17,20 @@
   <img src="docs/images/notch-panel.png" width="960" alt="Ping Island preview">
 </p>
 
+<p align="center">
+  <img src="PingIsland/Assets.xcassets/ClaudeLogo.imageset/claude-logo.png" width="28" alt="Claude Code icon" title="Claude Code">&nbsp;
+  <img src="PingIsland/Assets.xcassets/CodexLogo.imageset/codex-logo.png" width="28" alt="Codex icon" title="Codex">&nbsp;
+  <img src="PingIsland/Assets.xcassets/GeminiLogo.imageset/gemini-logo.png" width="28" alt="Gemini CLI icon" title="Gemini CLI">&nbsp;
+  <img src="docs/images/mascots/opencode.gif" width="28" alt="OpenCode icon" title="OpenCode">&nbsp;
+  <img src="docs/images/mascots/cursor.gif" width="28" alt="Cursor icon" title="Cursor">&nbsp;
+  <img src="PingIsland/Assets.xcassets/QoderLogo.imageset/qoder-logo.png" width="28" alt="Qoder icon" title="Qoder">&nbsp;
+  <img src="docs/images/mascots/codebuddy.gif" width="28" alt="CodeBuddy icon" title="CodeBuddy">&nbsp;
+  <img src="PingIsland/Assets.xcassets/CopilotLogo.imageset/copilot-logo.png" width="28" alt="GitHub Copilot icon" title="GitHub Copilot">
+</p>
+<p align="center">
+  <sub>Claude Code · Codex · Gemini CLI · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
+</p>
+
 ## What is Ping Island?
 
 Ping Island is a macOS menu bar app that expands into a Dynamic Island-style surface when your coding agents need attention. It listens to Claude-style hooks, Codex hooks, Gemini CLI hooks, the Codex app-server, OpenCode plugins, and compatible IDE integrations so approvals, input requests, completions, and session summaries show up without babysitting terminal tabs.
@@ -34,7 +48,7 @@ Hook / app-server event
 ## Features
 
 - **Notch-inspired menu bar UI** - compact by default, expands when a session needs attention, and works on notch Macs plus external displays.
-- **Cross-client session monitoring** - tracks Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Qoder, CodeBuddy, Trae, Copilot, and compatible hook-driven sessions.
+- **Cross-client session monitoring** - tracks Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Qoder, CodeBuddy, GitHub Copilot, and compatible hook-driven sessions.
 - **Approve, deny, and answer in place** - handle tool approvals and user-input prompts directly from the notch surface.
 - **Terminal and IDE jump** - route back to the matching iTerm2, Ghostty, Terminal.app, tmux pane, or VS Code-compatible IDE window when possible.
 - **Managed integrations** - install or repair Claude, Codex, Gemini CLI, OpenCode, Qoder, CodeBuddy, Copilot, and compatible hook/plugin integrations from Settings, including GitHub-style `.github/hooks/*.json` templates for Copilot.
@@ -51,15 +65,16 @@ Hook / app-server event
 |:---:|------|---------|------|----------|
 | <img src="docs/images/mascots/claude.gif" width="28" alt="Claude mascot"> | Claude Code | Claude hooks | Terminal, tmux, IDE-hosted terminal | approvals, questions, compacting, completion |
 | <img src="docs/images/mascots/codex.gif" width="28" alt="Codex mascot"> | Codex App + Codex CLI | Codex app-server, hooks, rollout parsing fallback | Codex app, terminal | approvals, input requests, thread sync |
-| <img src="PingIsland/Assets.xcassets/GeminiLogo.imageset/gemini-logo.png" width="28" alt="Gemini CLI logo"> | Gemini CLI | Gemini CLI hooks (`~/.gemini/settings.json`) | Compatible terminal host | session lifecycle, tool activity, notifications, compaction |
+| <img src="docs/images/mascots/gemini.gif" width="28" alt="Gemini CLI mascot"> | Gemini CLI | Gemini CLI hooks (`~/.gemini/settings.json`) | Compatible terminal host | session lifecycle, tool activity, notifications, compaction |
 | <img src="docs/images/mascots/opencode.gif" width="28" alt="OpenCode mascot"> | OpenCode | Managed plugin file | OpenCode app, terminal | forwarded plugin events into the same Island surface |
 | <img src="docs/images/mascots/cursor.gif" width="28" alt="Cursor mascot"> | Cursor | Claude-compatible hooks + optional IDE extension | Project window + matching terminal | IDE routing and terminal focus |
 | <img src="docs/images/mascots/qoder.gif" width="28" alt="Qoder mascot"> | Qoder family | Qoder, QoderWork, Qoder CLI, JetBrains-compatible paths | Qoder / QoderWork window, terminal | session jump, approvals, reminders |
 | <img src="docs/images/mascots/codebuddy.gif" width="28" alt="CodeBuddy mascot"> | CodeBuddy | Hook integration + optional IDE extension | App window + terminal | tracked Claude-family sessions |
-| <img src="docs/images/mascots/trae.gif" width="28" alt="Trae mascot"> | Trae | Compatible Claude hooks | Hosted terminal / IDE | surfaced as Claude-family sessions |
 | <img src="docs/images/mascots/copilot.gif" width="28" alt="Copilot mascot"> | GitHub Copilot | GitHub Copilot hooks (`.github/hooks/*.json`) | Compatible terminal host | Copilot CLI / agent hook events |
 
 Ping Island also ships VS Code-compatible focus extensions for VS Code, Cursor, CodeBuddy, Qoder, and QoderWork. `QoderWork` remains hook-first and is only treated as an IDE extension host when that environment is actually available.
+
+The mascot GIFs used in this table are generated from the live `MascotView` implementation via `./scripts/render-mascots.sh`.
 
 <a id="installation"></a>
 ## Installation
@@ -137,7 +152,7 @@ Ping Island currently ships a 6-category settings panel:
 ## How It Works
 
 ```text
-Claude / Codex / Gemini CLI / OpenCode / Cursor / Qoder / Copilot / ...
+Claude / Codex / Gemini CLI / OpenCode / Cursor / Qoder / CodeBuddy / Copilot / ...
   -> hook or app-server event
     -> Ping Island monitor + normalization layer
       -> SessionStore
