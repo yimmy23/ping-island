@@ -103,11 +103,10 @@ public enum HookPayloadMapper {
                     """
                 }
                 
-                // For PermissionRequest events, always use hookSpecificOutput format
-                // This ensures Claude receives the response in the expected format
-                let updatedInputJson = "{\"answers\":\(answersJson)}"
+                // For PermissionRequest events, use hookSpecificOutput format
+                // Note: Don't wrap answers in {"answers":...} as that breaks other clients
                 return """
-                {"hookSpecificOutput":{"hookEventName":"\(eventType)","decision":{"behavior":"allow","updatedInput":\(updatedInputJson)}}}
+                {"hookSpecificOutput":{"hookEventName":"\(eventType)","decision":{"behavior":"allow","updatedInput":\(answersJson)}}}
                 """
             }
         case .codex:
@@ -268,17 +267,6 @@ public enum HookPayloadMapper {
 
         if clientKind == "qoderwork",
            isQoderWorkPermissionQuestionEvent(eventType: eventType, payload: payload) {
-            return true
-        }
-
-        // For PermissionRequest and approval-related events, always expect a response
-        let loweredEventType = eventType.lowercased()
-        if loweredEventType.contains("permission") || loweredEventType.contains("approval") {
-            return true
-        }
-
-        // Check for question/user input events
-        if loweredEventType.contains("question") || loweredEventType.contains("userinput") {
             return true
         }
 
