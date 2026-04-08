@@ -11,7 +11,22 @@
   English | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/erha19/ping-island/releases">
+    <img src="https://img.shields.io/github/v/release/erha19/ping-island?display_name=tag&style=for-the-badge" alt="Latest release">
+  </a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 14 or later">
+  <img src="https://img.shields.io/badge/Swift-6.1-FA7343?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6.1">
+  <img src="https://img.shields.io/badge/Clients-8%2B-111827?style=for-the-badge" alt="Supports 8 plus client families">
+  <img src="https://img.shields.io/badge/License-Apache%202.0-4F46E5?style=for-the-badge" alt="Apache 2.0 license">
+</p>
+
 ---
+
+<p align="center">
+  <img src="docs/images/notch-panel.png" width="480" alt="Ping Island preview">
+</p>
+
 
 <p align="center">
   <sub>Watch active coding sessions, answer follow-up questions, and jump back to the right terminal or IDE window.</sub>
@@ -29,10 +44,6 @@
 </p>
 <p align="center">
   <sub>Claude Code · Codex · Gemini CLI · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/notch-panel.png" width="960" alt="Ping Island preview">
 </p>
 
 ## What is Ping Island?
@@ -53,15 +64,19 @@ Hook / app-server event
 
 ## Features
 
-- **Notch-inspired menu bar UI** - compact by default, expands when a session needs attention, and works on notch Macs plus external displays.
-- **Cross-client session monitoring** - tracks Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Qoder, CodeBuddy, GitHub Copilot, and compatible hook-driven sessions.
-- **Approve, deny, and answer in place** - handle tool approvals and user-input prompts directly from the notch surface.
-- **Terminal and IDE jump** - route back to the matching iTerm2, Ghostty, Terminal.app, tmux pane, or VS Code-compatible IDE window when possible.
-- **Managed integrations** - install or repair Claude, Codex, Gemini CLI, OpenCode, Qoder, CodeBuddy, Copilot, and compatible hook/plugin integrations from Settings, including GitHub-style `.github/hooks/*.json` templates for Copilot.
-- **Codex app coverage** - supports Codex CLI hooks plus live thread sync from the Codex app-server, with rollout parsing fallback for session context.
-- **Client mascot system** - every client family gets its own animated mascot, with per-client overrides and idle / working / warning states.
-- **Sound packs and event audio** - configure built-in sounds or import custom packs for start, attention, completion, failure, and limit events.
-- **Sparkle updates and markdown release notes** - supports in-app update checks and version notes sourced from the release pipeline.
+Ping Island is designed around the human-in-the-loop moments that actually break coding flow, then wraps them in a native macOS presentation that feels crisp instead of noisy.
+
+| Signal First | Act In Place | Jump Back Precisely |
+| --- | --- | --- |
+| Stay compact until a session needs approval, input, or review, then expand into a Dynamic Island-style control surface that works on notch Macs and external displays. | Approve tools, deny requests, and answer follow-up prompts directly from the notch instead of digging through terminal tabs. | Return to the matching iTerm2, Ghostty, Terminal.app, tmux pane, or VS Code-compatible IDE window with the right session in context. |
+| Multi-Client Coverage | Managed Integrations | Codex Beyond Hooks |
+| Track Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Qoder, CodeBuddy, GitHub Copilot, and compatible hook-driven sessions from one menu bar app. | Install or repair Claude, Codex, Gemini CLI, OpenCode, Qoder, CodeBuddy, Copilot, and related hook/plugin setups from Settings, including GitHub-style `.github/hooks/*.json` templates. | Support Codex CLI hooks plus live Codex app-server thread sync, with rollout parsing fallback when extra session context is needed. |
+
+Additional polish that rounds out the workflow:
+
+- **Client mascot system** - animated client mascots with per-client overrides and idle / working / warning states.
+- **Sound packs and event audio** - built-in event sounds plus support for importing custom sound packs.
+- **Sparkle updates and markdown release notes** - in-app update checks and version notes sourced from the release pipeline.
 - **Diagnostics export** - bundle recent logs and config into a zip when you need to debug a broken integration.
 
 <a id="supported-tools"></a>

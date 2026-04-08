@@ -35,7 +35,7 @@ struct SoundPickerRow: View {
                         .foregroundColor(textColor)
                         .frame(width: 16)
 
-                    Text("Completion Sound")
+                    Text(appLocalized: "Completion Sound")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(textColor)
 

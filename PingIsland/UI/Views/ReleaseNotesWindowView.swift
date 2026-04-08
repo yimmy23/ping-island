@@ -103,7 +103,7 @@ struct ReleaseNotesWindowView: View {
     private var fallbackSection: UpdateReleaseNotesSection {
         UpdateReleaseNotesSection(
             id: "fallback",
-            title: "更新内容",
+            title: AppLocalization.string("更新内容"),
             markdown: notes.markdown
         )
     }

@@ -9,6 +9,44 @@ import AppKit
 import Combine
 import Foundation
 
+enum AppLanguage: String, CaseIterable, Identifiable {
+    case system
+    case simplifiedChinese
+    case english
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system:
+            return "跟随系统"
+        case .simplifiedChinese:
+            return "简体中文"
+        case .english:
+            return "English"
+        }
+    }
+
+    func resolvedLanguageCode(preferredLanguages: [String] = Locale.preferredLanguages) -> String {
+        switch self {
+        case .system:
+            let preferredLanguage = preferredLanguages.first?.lowercased() ?? ""
+            if preferredLanguage.hasPrefix("zh") {
+                return "zh-Hans"
+            }
+            return "en"
+        case .simplifiedChinese:
+            return "zh-Hans"
+        case .english:
+            return "en"
+        }
+    }
+
+    func resolvedLocale(preferredLanguages: [String] = Locale.preferredLanguages) -> Locale {
+        Locale(identifier: resolvedLanguageCode(preferredLanguages: preferredLanguages))
+    }
+}
+
 /// Available notification sounds
 enum NotificationSound: String, CaseIterable {
     case none = "None"
@@ -149,6 +187,7 @@ final class AppSettingsStore: ObservableObject {
     // MARK: - Keys
 
     private enum Keys {
+        static let appLanguage = "appLanguage"
         static let notificationSound = "notificationSound"
         static let soundEnabled = "soundEnabled"
         static let soundVolume = "soundVolume"
@@ -180,6 +219,13 @@ final class AppSettingsStore: ObservableObject {
     }
 
     // MARK: - Published Settings
+
+    @Published var appLanguage: AppLanguage {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(appLanguage.rawValue, forKey: Keys.appLanguage)
+        }
+    }
 
     @Published var notificationSound: NotificationSound {
         didSet {
@@ -428,6 +474,10 @@ final class AppSettingsStore: ObservableObject {
         mascotOverrides.count
     }
 
+    var locale: Locale {
+        appLanguage.resolvedLocale()
+    }
+
     private static func sanitizedMascotOverrides(_ rawOverrides: [String: String]) -> [String: String] {
         rawOverrides.reduce(into: [:]) { result, entry in
             guard let client = MascotClient(rawValue: entry.key),
@@ -452,6 +502,7 @@ final class AppSettingsStore: ObservableObject {
     }
 
     private init() {
+        let appLanguageRaw = defaults.string(forKey: Keys.appLanguage)
         let legacyNotificationSound = NotificationSound(
             rawValue: defaults.string(forKey: Keys.notificationSound) ?? ""
         ) ?? .blow
@@ -464,6 +515,7 @@ final class AppSettingsStore: ObservableObject {
         let notchDisplayModeRaw = defaults.string(forKey: Keys.notchDisplayMode)
         let mascotOverrideRaw = defaults.dictionary(forKey: Keys.mascotOverrides) as? [String: String] ?? [:]
 
+        _appLanguage = Published(initialValue: AppLanguage(rawValue: appLanguageRaw ?? "") ?? .system)
         _notificationSound = Published(initialValue: legacyNotificationSound)
         _soundEnabled = Published(initialValue: defaults.object(forKey: Keys.soundEnabled) as? Bool ?? true)
         _soundVolume = Published(initialValue: defaults.object(forKey: Keys.soundVolume) as? Double ?? 0.9)

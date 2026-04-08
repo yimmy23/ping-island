@@ -24,10 +24,10 @@ struct MascotSettingsView: View {
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("客户端宠物")
+            Text(appLocalized: "客户端宠物")
                 .font(.title2.bold())
 
-            Text("每个客户端都有默认专属形象，你也可以在这里单独改成别的宠物。刘海、会话列表和 hover 预览都会同步使用这里的配置。")
+            Text(appLocalized: "每个客户端都有默认专属形象，你也可以在这里单独改成别的宠物。刘海、会话列表和 hover 预览都会同步使用这里的配置。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -57,12 +57,12 @@ struct MascotSettingsView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("状态预览")
+                Text(appLocalized: "状态预览")
                     .font(.headline)
 
                 Picker("状态", selection: $previewStatus) {
                     ForEach(MascotStatus.allCases, id: \.self) { status in
-                        Text(status.displayName).tag(status)
+                        Text(appLocalized: status.displayName).tag(status)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -72,7 +72,7 @@ struct MascotSettingsView: View {
 
     private var clientGridSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("客户端对应关系")
+            Text(appLocalized: "客户端对应关系")
                 .font(.headline)
 
             LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
@@ -87,7 +87,7 @@ struct MascotSettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Divider()
 
-            Text("状态说明")
+            Text(appLocalized: "状态说明")
                 .font(.headline)
 
             StatusRow(
@@ -118,10 +118,10 @@ struct MascotSettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(client.title)
+                    Text(appLocalized: client.title)
                         .font(.subheadline.bold())
                         .foregroundStyle(.primary)
-                    Text(client.subtitle)
+                    Text(appLocalized: client.subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -129,7 +129,7 @@ struct MascotSettingsView: View {
 
                 Spacer(minLength: 8)
 
-                Text(isCustomized ? "自定义" : "默认")
+                Text(appLocalized: isCustomized ? "自定义" : "默认")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(isCustomized ? Color.orange : Color.secondary)
                     .padding(.horizontal, 8)
@@ -153,15 +153,15 @@ struct MascotSettingsView: View {
             .frame(height: 122)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("所属客户端：\(client.title)")
+                Text(verbatim: AppLocalization.format("所属客户端：%@", client.title))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Picker("宠物形象", selection: selectionBinding(for: client)) {
-                Text("跟随 \(client.title) 默认 · \(client.defaultMascotKind.subtitle)").tag(automaticSelection)
+                Text(verbatim: AppLocalization.format("跟随 %@ 默认 · %@", client.title, client.defaultMascotKind.subtitle)).tag(automaticSelection)
                 ForEach(MascotKind.allCases) { kind in
-                    Text("\(kind.subtitle) · \(kind.title)").tag(kind.rawValue)
+                    Text(verbatim: AppLocalization.format("%@ · %@", kind.subtitle, kind.title)).tag(kind.rawValue)
                 }
             }
             .pickerStyle(.menu)
@@ -203,7 +203,7 @@ private struct StatChip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title)
+            Text(appLocalized: title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
@@ -232,9 +232,9 @@ private struct StatusRow: View {
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(status.displayName)
+                Text(appLocalized: status.displayName)
                     .font(.subheadline.bold())
-                Text(description)
+                Text(appLocalized: description)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

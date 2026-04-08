@@ -211,6 +211,12 @@ struct InstanceRow: View {
             } else {
                 VStack(alignment: .trailing, spacing: 6) {
                     HStack(spacing: 6) {
+                        metaBadge(
+                            timeLabel,
+                            tint: Color.white.opacity(0.1),
+                            foreground: .white.opacity(0.64),
+                            fontDesign: .monospaced
+                        )
                         metaBadge(providerLabel, tint: providerColor.opacity(0.2))
                         if let ideHostBadgeLabel = session.ideHostBadgeLabel {
                             metaBadge(
@@ -226,12 +232,6 @@ struct InstanceRow: View {
                                 foreground: .white.opacity(0.9)
                             )
                         }
-                        metaBadge(
-                            timeLabel,
-                            tint: Color.white.opacity(0.1),
-                            foreground: .white.opacity(0.64),
-                            fontDesign: .monospaced
-                        )
                     }
 
                     trailingActions
@@ -442,6 +442,14 @@ struct InstanceRow: View {
     private var compactMetaLine: some View {
         HStack(spacing: 5) {
             metaBadge(
+                timeLabel,
+                tint: Color.white.opacity(0.08),
+                foreground: .white.opacity(0.6),
+                fontDesign: .monospaced,
+                compact: true
+            )
+
+            metaBadge(
                 providerLabel,
                 tint: providerColor.opacity(0.18),
                 foreground: .white.opacity(0.86),
@@ -456,14 +464,6 @@ struct InstanceRow: View {
                     compact: true
                 )
             }
-
-            metaBadge(
-                timeLabel,
-                tint: Color.white.opacity(0.08),
-                foreground: .white.opacity(0.6),
-                fontDesign: .monospaced,
-                compact: true
-            )
         }
     }
 
@@ -494,7 +494,7 @@ struct InstanceRow: View {
             lines.append(
                 QueuePreviewLine(
                     id: "user",
-                    prefix: "你：",
+                    prefix: AppLocalization.string("你："),
                     prefixColor: .white.opacity(0.52),
                     text: userLine,
                     textColor: .white.opacity(0.62)
@@ -518,7 +518,7 @@ struct InstanceRow: View {
             lines.append(
                 QueuePreviewLine(
                     id: "fallback",
-                    prefix: "状态：",
+                    prefix: AppLocalization.string("状态："),
                     prefixColor: .white.opacity(0.48),
                     text: fallback,
                     textColor: .white.opacity(0.56)
@@ -573,29 +573,32 @@ struct InstanceRow: View {
 
     private var latestAssistantLine: String? {
         if session.needsQuestionResponse {
-            return sanitized(session.intervention?.summaryText) ?? "需要你的输入"
+            return sanitized(session.intervention?.summaryText) ?? AppLocalization.string("需要你的输入")
         }
 
         if isWaitingForApproval {
             if isInteractiveTool {
-                return "等待你补充输入"
+                return AppLocalization.string("等待你补充输入")
             }
             if let toolName = session.pendingToolName {
-                return "等待批准 " + MCPToolFormatter.formatToolName(toolName)
+                return AppLocalization.format(
+                    "等待批准 %@",
+                    MCPToolFormatter.formatToolName(toolName)
+                )
             }
-            return "等待批准"
+            return AppLocalization.string("等待批准")
         }
 
         if session.phase == .processing {
-            return sanitized(session.lastMessage) ?? "工作中..."
+            return sanitized(session.lastMessage) ?? AppLocalization.string("工作中...")
         }
 
         if session.phase == .compacting {
-            return "正在压缩上下文..."
+            return AppLocalization.string("正在压缩上下文...")
         }
 
         if session.phase == .waitingForInput, session.intervention == nil {
-            return sanitized(session.lastMessage) ?? "等待你的下一条消息"
+            return sanitized(session.lastMessage) ?? AppLocalization.string("等待你的下一条消息")
         }
 
         if let lastMessage = sanitized(session.lastMessage) {
@@ -666,15 +669,19 @@ struct InstanceRow: View {
     private var compactDetailSummary: String? {
         switch session.phase {
         case .processing:
-            return "工作中..."
+            return AppLocalization.string("工作中...")
         case .compacting:
-            return "正在压缩上下文..."
+            return AppLocalization.string("正在压缩上下文...")
         case .waitingForApproval:
-            return session.needsQuestionResponse ? "需要你的输入" : "等待批准"
+            return session.needsQuestionResponse
+                ? AppLocalization.string("需要你的输入")
+                : AppLocalization.string("等待批准")
         case .waitingForInput:
-            return session.needsQuestionResponse ? "需要你的输入" : "等待你的下一条消息"
+            return session.needsQuestionResponse
+                ? AppLocalization.string("需要你的输入")
+                : AppLocalization.string("等待你的下一条消息")
         case .ended:
-            return "会话已结束"
+            return AppLocalization.string("会话已结束")
         case .idle:
             return sanitized(session.lastMessage) ?? session.projectName
         }

@@ -41,8 +41,10 @@ final class ReleaseNotesWindowController: NSWindowController, NSWindowDelegate {
 
     func present(notes: UpdateReleaseNotes) {
         hostingController.rootView = AnyView(
-            ReleaseNotesWindowView(notes: notes) { [weak self] in
-                self?.dismiss()
+            AppLocalizedRootView {
+                ReleaseNotesWindowView(notes: notes) { [weak self] in
+                    self?.dismiss()
+                }
             }
         )
 

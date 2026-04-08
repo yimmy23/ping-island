@@ -68,16 +68,22 @@ struct SessionQuestionForm: View {
 
             HStack(spacing: 8) {
                 if let submitLabel {
-                    Button(submitLabel) {
+                    Button {
                         onSubmit(submissionPayload())
+                    }
+                    label: {
+                        Text(appLocalized: submitLabel)
                     }
                     .buttonStyle(SessionQuestionButtonStyle(background: Color.white.opacity(0.9), foreground: .black))
                     .disabled(!canSubmit || !isEditable)
                 }
 
                 if let secondaryActionTitle, let onSecondaryAction {
-                    Button(secondaryActionTitle) {
+                    Button {
                         onSecondaryAction()
+                    }
+                    label: {
+                        Text(verbatim: secondaryActionTitle)
                     }
                     .buttonStyle(SessionQuestionButtonStyle(background: Color.white.opacity(0.1)))
                 }

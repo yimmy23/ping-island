@@ -71,7 +71,7 @@ final class SettingsPanelViewModel: ObservableObject {
     @Published private(set) var ideExtensionInstallationStates: [String: Bool] = [:]
     @Published var accessibilityEnabled = false
     @Published var isExportingLogs = false
-    @Published var logExportStatus = "导出最近 6 小时的 Island 诊断日志与配置"
+    @Published var logExportStatus = AppLocalization.string("导出最近 6 小时的 Island 诊断日志与配置")
     @Published private(set) var reinstallingHookProfileID: String?
     @Published private(set) var hookReinstallFeedbacks: [String: HookReinstallFeedback] = [:]
 
@@ -104,6 +104,12 @@ final class SettingsPanelViewModel: ObservableObject {
         accessibilityEnabled = AXIsProcessTrusted()
         ScreenSelector.shared.refreshScreens()
         SoundPackCatalog.shared.refresh()
+        refreshLocalizedState()
+    }
+
+    func refreshLocalizedState() {
+        guard !isExportingLogs else { return }
+        logExportStatus = AppLocalization.string("导出最近 6 小时的 Island 诊断日志与配置")
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {
@@ -151,7 +157,9 @@ final class SettingsPanelViewModel: ObservableObject {
             refreshHookInstallationStates()
             reinstallingHookProfileID = nil
             hookReinstallFeedbacks[profile.id] = HookReinstallFeedback(
-                message: didInstall ? "重新安装成功" : "重新安装失败，请稍后重试",
+                message: didInstall
+                    ? AppLocalization.string("重新安装成功")
+                    : AppLocalization.string("重新安装失败，请稍后重试"),
                 isError: !didInstall
             )
 
@@ -223,22 +231,31 @@ final class SettingsPanelViewModel: ObservableObject {
         guard panel.runModal() == .OK, let destinationURL = panel.url else { return }
 
         isExportingLogs = true
-        logExportStatus = "正在导出日志…"
+        logExportStatus = AppLocalization.string("正在导出日志…")
 
         Task {
             do {
                 let result = try await DiagnosticsExporter.shared.exportArchive(to: destinationURL)
                 await MainActor.run {
                     if result.warnings.isEmpty {
-                        logExportStatus = "已导出到 \(result.archiveURL.lastPathComponent)"
+                        logExportStatus = AppLocalization.format(
+                            "已导出到 %@",
+                            result.archiveURL.lastPathComponent
+                        )
                     } else {
-                        logExportStatus = "已导出，附带 \(result.warnings.count) 条警告"
+                        logExportStatus = AppLocalization.format(
+                            "已导出，附带 %lld 条警告",
+                            result.warnings.count
+                        )
                     }
                     isExportingLogs = false
                 }
             } catch {
                 await MainActor.run {
-                    logExportStatus = "导出失败：\(error.localizedDescription)"
+                    logExportStatus = AppLocalization.format(
+                        "导出失败：%@",
+                        error.localizedDescription
+                    )
                     isExportingLogs = false
                 }
             }
@@ -375,6 +392,9 @@ private struct SettingsPanelContentView: View {
         .onChange(of: soundPacks.availablePacks) { _, _ in
             ensureValidSelectedSoundPack()
         }
+        .onChange(of: settings.appLanguage) { _, _ in
+            viewModel.refreshLocalizedState()
+        }
         .alert(
             "重新安装 Hooks？",
             isPresented: Binding(
@@ -474,7 +494,7 @@ private struct SettingsPanelContentView: View {
                 ForEach(sidebarSections) { section in
                     VStack(alignment: .leading, spacing: 8) {
                         if let title = section.title {
-                            Text(title)
+                            Text(appLocalized: title)
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(.white.opacity(0.32))
                                 .padding(.horizontal, 12)
@@ -681,6 +701,14 @@ private struct SettingsPanelContentView: View {
     private var generalContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             SettingsSectionCard(title: "系统") {
+                SettingsInfoLine(
+                    title: "语言",
+                    subtitle: "默认跟随系统语言，也可以单独固定为简体中文或 English。"
+                ) {
+                    appLanguagePicker
+                }
+                SettingsLineDivider()
+
                 SettingsToggleLine(
                     title: "登录时打开",
                     subtitle: "启动 macOS 后自动显示 Island",
@@ -754,7 +782,9 @@ private struct SettingsPanelContentView: View {
 
                 SettingsValueLine(
                     title: "选择策略",
-                    value: screenSelector.selectionMode == .automatic ? "自动" : "手动指定"
+                    value: screenSelector.selectionMode == .automatic
+                        ? AppLocalization.string("自动")
+                        : AppLocalization.string("手动指定")
                 )
             }
 
@@ -792,7 +822,9 @@ private struct SettingsPanelContentView: View {
             SettingsSectionCard(title: "客户端形象") {
                 SettingsValueLine(
                     title: "切换方式",
-                    value: settings.customizedMascotClientCount == 0 ? "按客户端自动切换" : "按客户端切换 + 自定义覆盖"
+                    value: settings.customizedMascotClientCount == 0
+                        ? AppLocalization.string("按客户端自动切换")
+                        : AppLocalization.string("按客户端切换 + 自定义覆盖")
                 )
 
                 SettingsLineDivider()
@@ -801,7 +833,11 @@ private struct SettingsPanelContentView: View {
                     title: "当前策略",
                     subtitle: "Claude Code、Codex、Gemini CLI、OpenCode、Cursor、Qoder、CodeBuddy、Trae 等客户端会显示各自独立的宠物形象与动作，并支持逐客户端改成别的宠物。"
                 ) {
-                    Text(settings.customizedMascotClientCount == 0 ? "自动" : "已自定义 \(settings.customizedMascotClientCount)")
+                    Text(
+                        settings.customizedMascotClientCount == 0
+                            ? AppLocalization.string("自动")
+                            : AppLocalization.format("已自定义 %lld", settings.customizedMascotClientCount)
+                    )
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white.opacity(0.72))
                 }
@@ -1057,7 +1093,7 @@ private struct SettingsPanelContentView: View {
 
     private var screenPicker: some View {
         Picker("显示器", selection: screenSelectionBinding) {
-            Text("自动").tag("automatic")
+            Text(appLocalized: "自动").tag("automatic")
             ForEach(screenSelector.availableScreens, id: \.self) { screen in
                 Text(screen.localizedName).tag(screenToken(for: screen))
             }
@@ -1069,7 +1105,17 @@ private struct SettingsPanelContentView: View {
     private var soundThemeModePicker: some View {
         Picker("声音模式", selection: $settings.soundThemeMode) {
             ForEach(SoundThemeMode.allCases) { mode in
-                Text(mode.title).tag(mode)
+                Text(appLocalized: mode.title).tag(mode)
+            }
+        }
+        .labelsHidden()
+        .settingsMenuPicker(width: 168)
+    }
+
+    private var appLanguagePicker: some View {
+        Picker("语言", selection: $settings.appLanguage) {
+            ForEach(AppLanguage.allCases) { language in
+                Text(appLocalized: language.title).tag(language)
             }
         }
         .labelsHidden()
@@ -1079,7 +1125,7 @@ private struct SettingsPanelContentView: View {
     private var soundPackPicker: some View {
         Picker("主题包", selection: $settings.selectedSoundPackPath) {
             if soundPacks.availablePacks.isEmpty {
-                Text("未发现").tag("")
+                Text(appLocalized: "未发现").tag("")
             } else {
                 ForEach(soundPacks.availablePacks) { pack in
                     Text(pack.displayName).tag(pack.rootURL.path)
@@ -1161,7 +1207,7 @@ private struct SettingsPanelContentView: View {
     private var versionMetadata: String {
         guard let metadata = HookInstaller.getVersionMetadata(),
               let installedAt = metadata["installedAt"] as? String else {
-            return "首次安装"
+            return AppLocalization.string("首次安装")
         }
 
         // Format the date
@@ -1180,7 +1226,7 @@ private struct SettingsPanelContentView: View {
         guard let metadata = HookInstaller.getVersionMetadata(),
               let previous = metadata["previousVersion"] as? String,
               !previous.isEmpty else {
-            return "无"
+            return AppLocalization.string("无")
         }
         return previous
     }
@@ -1188,44 +1234,46 @@ private struct SettingsPanelContentView: View {
     private var updateTitle: String {
         switch updateManager.state {
         case .idle, .upToDate:
-            return "检查更新"
+            return AppLocalization.string("检查更新")
         case .checking:
-            return "检查中..."
+            return AppLocalization.string("检查中...")
         case .found:
-            return "下载更新"
+            return AppLocalization.string("下载更新")
         case .downloading:
-            return "下载中..."
+            return AppLocalization.string("下载中...")
         case .extracting:
-            return "解压中..."
+            return AppLocalization.string("解压中...")
         case .readyToInstall:
-            return "安装并重启"
+            return AppLocalization.string("安装并重启")
         case .installing:
-            return "安装中..."
+            return AppLocalization.string("安装中...")
         case .error:
-            return "重试更新"
+            return AppLocalization.string("重试更新")
         }
     }
 
     private var updateSubtitle: String {
         switch updateManager.state {
         case .idle:
-            return updateManager.isConfigured ? "检查 Island 是否有新版本" : updateManager.configurationStatus.message
+            return updateManager.isConfigured
+                ? AppLocalization.string("检查 Island 是否有新版本")
+                : updateManager.configurationStatus.message
         case .upToDate:
-            return "当前已经是最新版本"
+            return AppLocalization.string("当前已经是最新版本")
         case .checking:
-            return "正在连接更新源"
+            return AppLocalization.string("正在连接更新源")
         case .found(let version, _):
-            return "发现新版本 v\(version)"
+            return AppLocalization.format("发现新版本 v%@", version)
         case .downloading(let progress):
-            return "下载进度 \(Int(progress * 100))%"
+            return AppLocalization.format("下载进度 %lld%%", Int(progress * 100))
         case .extracting(let progress):
-            return "解压进度 \(Int(progress * 100))%"
+            return AppLocalization.format("解压进度 %lld%%", Int(progress * 100))
         case .readyToInstall(let version):
-            return "已准备安装 v\(version)"
+            return AppLocalization.format("已准备安装 v%@", version)
         case .installing:
-            return "正在替换应用并准备重启"
+            return AppLocalization.string("正在替换应用并准备重启")
         case .error:
-            return "更新失败，点击后重新尝试"
+            return AppLocalization.string("更新失败，点击后重新尝试")
         }
     }
 
@@ -1236,7 +1284,7 @@ private struct SettingsPanelContentView: View {
             ProgressView()
                 .controlSize(.small)
         case .upToDate:
-            Text("最新")
+            Text(appLocalized: "最新")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(TerminalColors.green)
         case .found(let version, _), .readyToInstall(let version):
@@ -1278,19 +1326,23 @@ struct SettingsWindowView: View {
     var onMinimize: (() -> Void)? = nil
 
     var body: some View {
-        SettingsPanelContentView(
-            presentation: .window,
-            onClose: onClose,
-            onMinimize: onMinimize
-        )
-        .accessibilityIdentifier("settings.root")
+        AppLocalizedRootView {
+            SettingsPanelContentView(
+                presentation: .window,
+                onClose: onClose,
+                onMinimize: onMinimize
+            )
+            .accessibilityIdentifier("settings.root")
+        }
     }
 }
 
 struct NotchSettingsPopoverView: View {
     var body: some View {
-        SettingsPanelContentView(presentation: .popover)
-            .frame(width: SettingsPanelMetrics.popoverSize.width, height: SettingsPanelMetrics.popoverSize.height)
+        AppLocalizedRootView {
+            SettingsPanelContentView(presentation: .popover)
+                .frame(width: SettingsPanelMetrics.popoverSize.width, height: SettingsPanelMetrics.popoverSize.height)
+        }
     }
 }
 
@@ -1329,12 +1381,12 @@ private struct SidebarItemView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(category.title)
+                Text(appLocalized: category.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white.opacity(isSelected ? 0.94 : 0.80))
                     .lineLimit(1)
 
-                Text(category.subtitle)
+                Text(appLocalized: category.subtitle)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(.white.opacity(isSelected ? 0.60 : 0.42))
                     .lineLimit(1)
@@ -1382,7 +1434,7 @@ private struct SettingsSectionCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title)
+            Text(appLocalized: title)
                 .font(.system(size: 15, weight: .bold))
                 .foregroundColor(.white)
                 .padding(.bottom, 10)
@@ -1446,11 +1498,11 @@ private struct HookManagementLine: View {
                 HookManagementIcon(profile: profile)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
+                    Text(appLocalized: title)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
 
-                    Text(subtitle)
+                    Text(appLocalized: subtitle)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.58))
                         .fixedSize(horizontal: false, vertical: true)
@@ -1458,7 +1510,7 @@ private struct HookManagementLine: View {
 
                 Spacer(minLength: 12)
 
-                Text(isInstalled ? "已安装" : "未安装")
+                Text(appLocalized: isInstalled ? "已安装" : "未安装")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(isInstalled ? tint : .white.opacity(0.65))
                     .padding(.horizontal, 10)
@@ -1594,11 +1646,11 @@ private struct IDEExtensionManagementLine: View {
                 IDEExtensionManagementIcon(profile: profile)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(profile.title)
+                    Text(appLocalized: profile.title)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
 
-                    Text(profile.subtitle)
+                    Text(appLocalized: profile.subtitle)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.58))
                         .fixedSize(horizontal: false, vertical: true)
@@ -1606,7 +1658,7 @@ private struct IDEExtensionManagementLine: View {
 
                 Spacer(minLength: 12)
 
-                Text(isInstalled ? "已安装" : "未安装")
+                Text(appLocalized: isInstalled ? "已安装" : "未安装")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(isInstalled ? tint : .white.opacity(0.65))
                     .padding(.horizontal, 10)
@@ -1709,7 +1761,7 @@ private struct HookManagementButton: View {
                         .tint(.white.opacity(0.86))
                 }
 
-                Text(title)
+                Text(appLocalized: title)
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.white)
             }
@@ -1738,7 +1790,7 @@ private struct SettingsToggleLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 16) {
-                Text(title)
+                Text(appLocalized: title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
 
@@ -1750,7 +1802,7 @@ private struct SettingsToggleLine: View {
             }
 
             if let subtitle {
-                Text(subtitle)
+                Text(appLocalized: subtitle)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.58))
                     .fixedSize(horizontal: false, vertical: true)
@@ -1788,7 +1840,7 @@ private struct SettingsInfoLine<Accessory: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 16) {
-                Text(title)
+                Text(appLocalized: title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
 
@@ -1798,7 +1850,7 @@ private struct SettingsInfoLine<Accessory: View>: View {
             }
 
             if let subtitle {
-                Text(subtitle)
+                Text(appLocalized: subtitle)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.58))
                     .fixedSize(horizontal: false, vertical: true)
@@ -1821,7 +1873,7 @@ private struct SoundPackSourceInfoLine<Accessory: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 16) {
-                Text("当前主题包")
+                Text(appLocalized: "当前主题包")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
 
@@ -1830,7 +1882,7 @@ private struct SoundPackSourceInfoLine<Accessory: View>: View {
                 accessory
             }
 
-            Text("自动扫描以下目录，也支持手动导入本地目录。")
+            Text(appLocalized: "自动扫描以下目录，也支持手动导入本地目录。")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.white.opacity(0.58))
                 .fixedSize(horizontal: false, vertical: true)
@@ -1872,7 +1924,7 @@ private struct SoundPackImportActionLine<Accessory: View>: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .center, spacing: 16) {
-                    Text("导入本地主题包")
+                    Text(appLocalized: "导入本地主题包")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
 
@@ -1881,13 +1933,13 @@ private struct SoundPackImportActionLine<Accessory: View>: View {
                     accessory
                 }
 
-                Text("选择一个本地目录，导入后会加入可选列表。")
+                Text(appLocalized: "选择一个本地目录，导入后会加入可选列表。")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.58))
                     .fixedSize(horizontal: false, vertical: true)
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("目录内需要包含以下清单文件")
+                    Text(appLocalized: "目录内需要包含以下清单文件")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.white.opacity(0.42))
 
@@ -1939,7 +1991,7 @@ private struct SettingsValueLine: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            Text(title)
+            Text(appLocalized: title)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
 
@@ -1966,7 +2018,7 @@ private struct SettingsSliderLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
-                Text(title)
+                Text(appLocalized: title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
 
@@ -1978,7 +2030,7 @@ private struct SettingsSliderLine: View {
             }
 
             if let subtitle {
-                Text(subtitle)
+                Text(appLocalized: subtitle)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.58))
                     .fixedSize(horizontal: false, vertical: true)
@@ -1997,11 +2049,11 @@ private struct NotchDisplayModeSelector: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("刘海显示模式")
+            Text(appLocalized: "刘海显示模式")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
 
-            Text("直接预览刘海闭合态效果。简约模式只显示宠物和数量，详细模式会额外显示中间过程信息。")
+            Text(appLocalized: "直接预览刘海闭合态效果。简约模式只显示宠物和数量，详细模式会额外显示中间过程信息。")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.white.opacity(0.58))
                 .fixedSize(horizontal: false, vertical: true)
@@ -2047,11 +2099,11 @@ private struct NotchDisplayModeCard: View {
 
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(mode.title)
+                        Text(appLocalized: mode.title)
                             .font(.system(size: 13, weight: .bold))
                             .foregroundColor(.white)
 
-                        Text(mode.subtitle)
+                        Text(appLocalized: mode.subtitle)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.white.opacity(0.62))
                             .fixedSize(horizontal: false, vertical: true)
@@ -2143,7 +2195,7 @@ private struct NotchDisplayModeCard: View {
 
                     HStack {
                         Spacer()
-                        Text(mode == .compact ? "简约示意" : "详细示意")
+                        Text(appLocalized: mode == .compact ? "简约示意" : "详细示意")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(.white.opacity(0.42))
                     }
@@ -2234,14 +2286,14 @@ private struct SettingsStatusLine: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .center, spacing: 16) {
-                    Text(title)
+                    Text(appLocalized: title)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer(minLength: 12)
 
                     HStack(spacing: 10) {
-                        Text(status)
+                        Text(appLocalized: status)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(statusColor)
 
@@ -2252,7 +2304,7 @@ private struct SettingsStatusLine: View {
                 }
 
                 if let subtitle {
-                    Text(subtitle)
+                    Text(appLocalized: subtitle)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.58))
                         .fixedSize(horizontal: false, vertical: true)
@@ -2276,7 +2328,7 @@ private struct SoundEventSettingsLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 16) {
-                Text(event.title)
+                Text(appLocalized: event.title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -2315,7 +2367,7 @@ private struct SoundEventSettingsLine: View {
                 }
             }
 
-            Text(event.subtitle)
+            Text(appLocalized: event.subtitle)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.58))
                 .fixedSize(horizontal: false, vertical: true)
@@ -2338,7 +2390,7 @@ private struct SoundPackEventLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 16) {
-                Text(event.title)
+                Text(appLocalized: event.title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -2367,7 +2419,7 @@ private struct SoundPackEventLine: View {
                 }
             }
 
-            Text(event.subtitle)
+            Text(appLocalized: event.subtitle)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.58))
                 .fixedSize(horizontal: false, vertical: true)
@@ -2391,7 +2443,7 @@ private struct BundledThemeEventLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 16) {
-                Text(event.title)
+                Text(appLocalized: event.title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -2420,13 +2472,13 @@ private struct BundledThemeEventLine: View {
                 }
             }
 
-            Text(event.subtitle)
+            Text(appLocalized: event.subtitle)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.58))
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
 
-            Text("固定音效：\(soundLabel)")
+            Text(AppLocalization.format("固定音效：%@", soundLabel))
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundColor(.white.opacity(0.42))
         }

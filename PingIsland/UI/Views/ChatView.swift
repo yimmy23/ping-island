@@ -468,7 +468,7 @@ struct ChatView: View {
                     onSubmit: { payload in
                         sessionMonitor.answerIntervention(sessionId: sessionId, answers: payload)
                     },
-                    secondaryActionTitle: session.isInTmux ? "打开终端" : nil,
+                    secondaryActionTitle: session.isInTmux ? AppLocalization.string("打开终端") : nil,
                     onSecondaryAction: session.isInTmux ? { focusTerminal() } : nil
                 )
             } else if session.clientInfo.profileID == "qoderwork"
@@ -479,7 +479,7 @@ struct ChatView: View {
                         intervention: intervention,
                         initialAnswers: intervention.submittedAnswers,
                         onSubmit: { _ in },
-                        secondaryActionTitle: "打开 \(session.interactionDisplayName)",
+                        secondaryActionTitle: AppLocalization.format("打开 %@", session.interactionDisplayName),
                         onSecondaryAction: { openClientApplication() },
                         isEditable: false
                     )
@@ -493,8 +493,11 @@ struct ChatView: View {
                 }
             } else {
                 HStack(spacing: 8) {
-                    Button("打开 \(session.interactionDisplayName) 回答") {
+                    Button {
                         openClientApplication()
+                    }
+                    label: {
+                        Text(verbatim: AppLocalization.format("打开 %@ 回答", session.interactionDisplayName))
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .semibold))
@@ -504,8 +507,11 @@ struct ChatView: View {
                     .background(Capsule().fill(Color.white.opacity(0.9)))
 
                     if session.isInTmux {
-                        Button("打开终端") {
+                        Button {
                             focusTerminal()
+                        }
+                        label: {
+                            Text(appLocalized: "打开终端")
                         }
                         .buttonStyle(.plain)
                         .font(.system(size: 12, weight: .semibold))
@@ -733,7 +739,7 @@ struct ProcessingIndicatorView: View {
     init(turnId: String = "", color: Color = Color(red: 0.85, green: 0.47, blue: 0.34)) {
         // Use hash of turnId to pick base text consistently for this turn
         let index = abs(turnId.hashValue) % baseTexts.count
-        baseText = baseTexts[index]
+        baseText = AppLocalization.string(baseTexts[index])
         self.color = color
     }
 
@@ -836,8 +842,8 @@ struct ToolCallView: View {
                     .fixedSize()
 
                 if tool.name == "Task" && !tool.subagentTools.isEmpty {
-                    let taskDesc = tool.input["description"] ?? "Running agent..."
-                    Text("\(taskDesc) (\(tool.subagentTools.count) tools)")
+                    let taskDesc = tool.input["description"] ?? AppLocalization.string("Running agent...")
+                    Text(verbatim: AppLocalization.format("%@ (%lld tools)", taskDesc, tool.subagentTools.count))
                         .font(.system(size: 11))
                         .foregroundColor(textColor.opacity(0.7))
                         .lineLimit(1)
@@ -948,7 +954,7 @@ struct SubagentToolsList: View {
         VStack(alignment: .leading, spacing: 2) {
             // Show count of older hidden tools at top
             if hiddenCount > 0 {
-                Text("+\(hiddenCount) more tool uses")
+                Text(verbatim: AppLocalization.format("+%lld more tool uses", hiddenCount))
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.4))
             }
@@ -978,7 +984,7 @@ struct SubagentToolRow: View {
     /// Get status text using the same logic as regular tools
     private var statusText: String {
         if tool.status == .interrupted {
-            return "Interrupted"
+            return AppLocalization.string("Interrupted")
         } else if tool.status == .running {
             return ToolStatusDisplay.running(for: tool.name, input: tool.input).text
         } else {
@@ -1032,7 +1038,7 @@ struct SubagentToolsSummary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Subagent used \(tools.count) tools:")
+            Text(verbatim: AppLocalization.format("Subagent used %lld tools:", tools.count))
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.white.opacity(0.5))
 
@@ -1280,7 +1286,10 @@ struct NewMessagesIndicator: View {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
 
-                Text(count == 1 ? "1 new message" : "\(count) new messages")
+                Text(verbatim: count == 1
+                    ? AppLocalization.string("1 new message")
+                    : AppLocalization.format("%lld new messages", count)
+                )
                     .font(.system(size: 12, weight: .medium))
             }
             .foregroundColor(.white)

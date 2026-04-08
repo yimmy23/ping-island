@@ -233,7 +233,7 @@ private struct HoverApprovalCard: View {
     }
 
     private var toolLabel: String {
-        guard let toolName = session.pendingToolName else { return "当前操作" }
+        guard let toolName = session.pendingToolName else { return AppLocalization.string("当前操作") }
         if session.activePermission != nil {
             return MCPToolFormatter.formatToolName(toolName)
         }
@@ -247,13 +247,13 @@ private struct HoverApprovalCard: View {
         if let intervention = session.intervention, !intervention.message.isEmpty {
             return intervention.message
         }
-        return "批准后会继续执行当前会话。"
+        return AppLocalization.string("批准后会继续执行当前会话。")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("\(providerLabel) 请求批准")
+                Text(verbatim: AppLocalization.format("%@ 请求批准", providerLabel))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
 
@@ -322,7 +322,7 @@ private struct HoverQuestionInterventionCard: View {
                         intervention: intervention,
                         initialAnswers: intervention.submittedAnswers,
                         onSubmit: { _ in },
-                        secondaryActionTitle: "打开 \(session.interactionDisplayName)",
+                        secondaryActionTitle: AppLocalization.format("打开 %@", session.interactionDisplayName),
                         onSecondaryAction: {
                             Task {
                                 _ = await SessionLauncher.shared.activateClientApplication(session)
@@ -339,10 +339,13 @@ private struct HoverQuestionInterventionCard: View {
                     }
                 }
             } else {
-                Button("打开 \(session.interactionDisplayName) 回答") {
+                Button {
                     Task {
                         _ = await SessionLauncher.shared.activateClientApplication(session)
                     }
+                }
+                label: {
+                    Text(verbatim: AppLocalization.format("打开 %@ 回答", session.interactionDisplayName))
                 }
                 .buttonStyle(HoverApprovalButtonStyle(background: Color.white.opacity(0.9), foreground: .black))
             }
@@ -458,6 +461,12 @@ private struct HoverSessionBadges: View {
     var body: some View {
         HStack(spacing: 8) {
             previewBadge(
+                timeLabel,
+                tint: .white.opacity(0.08),
+                foreground: .white.opacity(0.72),
+                fontDesign: .monospaced
+            )
+            previewBadge(
                 HoverPreviewStyle.providerLabel(for: session),
                 tint: HoverPreviewStyle.providerBadgeFill(for: session),
                 foreground: .white.opacity(0.95)
@@ -476,12 +485,6 @@ private struct HoverSessionBadges: View {
                     foreground: .white.opacity(0.9)
                 )
             }
-            previewBadge(
-                timeLabel,
-                tint: .white.opacity(0.08),
-                foreground: .white.opacity(0.72),
-                fontDesign: .monospaced
-            )
         }
     }
 
@@ -629,7 +632,7 @@ private enum HoverPreviewLineBuilder {
             lines.append(
                 HoverPreviewLine(
                     id: "user",
-                    prefix: "你：",
+                    prefix: AppLocalization.string("你："),
                     prefixColor: .white.opacity(compact ? 0.44 : 0.52),
                     text: userLine,
                     color: .white.opacity(compact ? 0.68 : 0.76)
@@ -741,7 +744,7 @@ private enum HoverConversationSnapshotBuilder {
                 let label = MCPToolFormatter.formatToolName(tool.name)
                 return preview.map { "\(label) \($0)" } ?? label
             case .interrupted:
-                return "已中断"
+                return AppLocalization.string("已中断")
             case .user:
                 continue
             }

@@ -9,7 +9,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "IslandApp", targets: ["IslandApp"]),
-        .executable(name: "IslandBridge", targets: ["IslandBridge"]),
+        .executable(name: "PingIslandBridge", targets: ["PingIslandBridge"]),
         .library(name: "IslandShared", targets: ["IslandShared"])
     ],
     targets: [
@@ -22,7 +22,7 @@ let package = Package(
             path: "Sources/IslandApp"
         ),
         .executableTarget(
-            name: "IslandBridge",
+            name: "PingIslandBridge",
             dependencies: ["IslandShared"],
             path: "Sources/IslandBridge"
         ),

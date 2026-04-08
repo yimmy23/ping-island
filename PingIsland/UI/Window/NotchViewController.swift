@@ -24,7 +24,7 @@ class PassThroughHostingView<Content: View>: NSHostingView<Content> {
 
 class NotchViewController: NSViewController {
     private let viewModel: NotchViewModel
-    private var hostingView: PassThroughHostingView<NotchView>!
+    private var hostingView: PassThroughHostingView<AppLocalizedRootView<NotchView>>!
 
     init(viewModel: NotchViewModel) {
         self.viewModel = viewModel
@@ -36,7 +36,11 @@ class NotchViewController: NSViewController {
     }
 
     override func loadView() {
-        hostingView = PassThroughHostingView(rootView: NotchView(viewModel: viewModel))
+        hostingView = PassThroughHostingView(
+            rootView: AppLocalizedRootView {
+                NotchView(viewModel: viewModel)
+            }
+        )
 
         // Calculate the hit-test rect based on panel state
         hostingView.hitTestRect = { [weak self] in

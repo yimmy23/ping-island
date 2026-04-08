@@ -5,7 +5,7 @@ import Testing
 
 @Test
 func islandBridgeAllowsStateOnlyEventsWhenAppIsUnavailable() throws {
-    let executable = try TestRuntime.executableURL(named: "IslandBridge")
+    let executable = try TestRuntime.executableURL(named: "PingIslandBridge")
     let process = try RunningProcess(
         executableURL: executable,
         arguments: ["--source", "codex"],
@@ -47,7 +47,7 @@ func islandBridgeRoundTripsApprovalRequestsThroughSocketServer() async throws {
         try await server.start()
         defer { Task { await server.stop() } }
 
-        let executable = try TestRuntime.executableURL(named: "IslandBridge")
+        let executable = try TestRuntime.executableURL(named: "PingIslandBridge")
         let process = try RunningProcess(
             executableURL: executable,
             arguments: ["--source", "claude"],

@@ -297,7 +297,7 @@ struct MascotView: View {
         }
         .frame(width: size, height: size)
         .clipped()
-        .accessibilityLabel("\(kind.title) \(status.displayName)")
+        .accessibilityLabel(AppLocalization.format("%@ %@", kind.title, status.displayName))
     }
 
     private func idleScene(time: TimeInterval?) -> some View {

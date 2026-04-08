@@ -40,7 +40,7 @@ struct IslandBridgeMain {
                 FileHandle.standardOutput.write(Data(payload.utf8))
             }
         } catch {
-            FileHandle.standardError.write(Data("IslandBridge error: \(error.localizedDescription)\n".utf8))
+            FileHandle.standardError.write(Data("PingIslandBridge error: \(error.localizedDescription)\n".utf8))
             Foundation.exit(1)
         }
     }

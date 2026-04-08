@@ -235,8 +235,8 @@ final class SoundPackCatalog: NSObject, ObservableObject, NSSoundDelegate {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "导入"
-        panel.message = "选择包含 openpeon.json 的音效包目录。"
+        panel.prompt = AppLocalization.string("导入")
+        panel.message = AppLocalization.string("选择包含 openpeon.json 的音效包目录。")
 
         guard panel.runModal() == .OK, let url = panel.url?.standardizedFileURL else {
             return false
