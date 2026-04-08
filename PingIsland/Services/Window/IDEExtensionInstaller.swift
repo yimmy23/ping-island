@@ -4,7 +4,15 @@ import Foundation
 struct IDEExtensionInstaller {
     nonisolated private static let extensionPublisher = "ping-island"
     nonisolated private static let extensionName = "session-focus"
-    nonisolated private static let extensionVersion = "1.1.0"
+    nonisolated private static let extensionIconFilename = "icon.png"
+    nonisolated private static let extensionReadmeFilename = "README.md"
+    nonisolated private static let projectHomepage = "https://github.com/erha19/ping-island"
+    nonisolated private static let projectRepository = "https://github.com/erha19/ping-island.git"
+    nonisolated private static let projectIssues = "https://github.com/erha19/ping-island/issues"
+
+    nonisolated private static var extensionVersion: String {
+        applicationVersion()
+    }
 
     nonisolated static var extensionIdentifier: String {
         "\(extensionPublisher).\(extensionName)"
@@ -106,6 +114,16 @@ struct IDEExtensionInstaller {
             to: extensionURL.appendingPathComponent("extension.js"),
             options: .atomic
         )
+        try? Data(extensionReadme(for: profile).utf8).write(
+            to: extensionURL.appendingPathComponent(extensionReadmeFilename),
+            options: .atomic
+        )
+        if let iconData = extensionIconPNGData() {
+            try? iconData.write(
+                to: extensionURL.appendingPathComponent(extensionIconFilename),
+                options: .atomic
+            )
+        }
         try? Data(vsixManifest(for: profile).utf8).write(
             to: extensionURL.appendingPathComponent(".vsixmanifest"),
             options: .atomic
@@ -128,9 +146,7 @@ struct IDEExtensionInstaller {
     }
 
     private static func packageJSON(for profile: ManagedIDEExtensionProfile) -> String {
-        let description = profile.supportsSessionFocus
-            ? "Lets Ping Island focus the matching chat session or terminal tab"
-            : "Lets Ping Island focus the matching terminal tab"
+        let description = extensionDescription(for: profile)
 
         return """
         {
@@ -139,6 +155,16 @@ struct IDEExtensionInstaller {
           "description": "\(description)",
           "version": "\(extensionVersion)",
           "publisher": "\(extensionPublisher)",
+          "icon": "\(extensionIconFilename)",
+          "homepage": "\(projectHomepage)",
+          "license": "Apache-2.0",
+          "repository": {
+            "type": "git",
+            "url": "\(projectRepository)"
+          },
+          "bugs": {
+            "url": "\(projectIssues)"
+          },
           "engines": {
             "vscode": "^1.85.0"
           },
@@ -543,6 +569,66 @@ struct IDEExtensionInstaller {
         """
     }
 
+    private static func extensionReadme(for profile: ManagedIDEExtensionProfile) -> String {
+        let capabilityLine = profile.supportsSessionFocus
+            ? "It can reopen the matching chat session when the host IDE supports it, and otherwise falls back to the matching terminal tab."
+            : "It reopens the matching terminal tab from Ping Island's session context."
+
+        return """
+        # Ping Island
+
+        Ping Island installs this VS Code-compatible extension so the app can jump back into the right IDE window for your active coding session.
+
+        \(capabilityLine)
+
+        Manage installs, reinstalls, and authorization from Ping Island's **Settings -> Integration** panel.
+
+        Repository:
+        \(projectHomepage)
+
+        Releases:
+        \(projectHomepage)/releases
+        """
+    }
+
+    private static func extensionIconPNGData() -> Data? {
+        let icon = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
+        let size = NSSize(width: 128, height: 128)
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(size.width),
+            pixelsHigh: Int(size.height),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
+            return nil
+        }
+
+        icon.size = size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        icon.draw(in: NSRect(origin: .zero, size: size))
+        NSGraphicsContext.restoreGraphicsState()
+        return bitmap.representation(using: .png, properties: [:])
+    }
+
+    private static func extensionDescription(for profile: ManagedIDEExtensionProfile) -> String {
+        profile.supportsSessionFocus
+            ? "Lets Ping Island focus the matching chat session or terminal tab"
+            : "Lets Ping Island focus the matching terminal tab"
+    }
+
+    nonisolated private static func applicationVersion() -> String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let normalized = version?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (normalized?.isEmpty == false) ? normalized! : "1.0"
+    }
+
     private static func vsixManifest(for profile: ManagedIDEExtensionProfile) -> String {
         let description = profile.supportsSessionFocus
             ? "Lets Ping Island focus the matching chat session or terminal tab in VS Code compatible IDEs."
@@ -562,6 +648,8 @@ struct IDEExtensionInstaller {
           <Dependencies/>
           <Assets>
             <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="package.json" Addressable="true"/>
+            <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="\(extensionReadmeFilename)" Addressable="true"/>
+            <Asset Type="Microsoft.VisualStudio.Services.Icons.Default" Path="\(extensionIconFilename)" Addressable="true"/>
           </Assets>
         </PackageManifest>
         """

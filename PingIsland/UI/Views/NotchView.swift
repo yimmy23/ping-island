@@ -505,6 +505,8 @@ struct NotchView: View {
                 action: openSettingsWindow
             )
         }
+        .frame(maxWidth: .infinity)
+        .padding(.trailing, 12)
     }
 
     // MARK: - Content View (Opened State)

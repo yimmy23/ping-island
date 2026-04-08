@@ -7,7 +7,15 @@ private enum SessionFocusStrategy {
 struct IDEExtensionInstaller {
     let homeDirectory: URL
     static let extensionIdentifier = "ping-island.session-focus"
-    static let extensionVersion = "1.1.0"
+    private static let extensionIconFilename = "icon.png"
+    private static let extensionReadmeFilename = "README.md"
+    private static let projectHomepage = "https://github.com/erha19/ping-island"
+    private static let projectRepository = "https://github.com/erha19/ping-island.git"
+    private static let projectIssues = "https://github.com/erha19/ping-island/issues"
+
+    static var extensionVersion: String {
+        applicationVersion()
+    }
 
     init(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.homeDirectory = homeDirectory
@@ -46,6 +54,10 @@ struct IDEExtensionInstaller {
         try FileManager.default.createDirectory(at: extensionURL, withIntermediateDirectories: true)
         try Data(packageJSON(sessionFocusStrategy: sessionFocusStrategy).utf8).write(to: extensionURL.appending(path: "package.json"), options: .atomic)
         try Data(extensionJS(sessionFocusStrategy: sessionFocusStrategy).utf8).write(to: extensionURL.appending(path: "extension.js"), options: .atomic)
+        try Data(extensionReadme(sessionFocusStrategy: sessionFocusStrategy).utf8).write(to: extensionURL.appending(path: Self.extensionReadmeFilename), options: .atomic)
+        if let iconData = extensionIconPNGData() {
+            try iconData.write(to: extensionURL.appending(path: Self.extensionIconFilename), options: .atomic)
+        }
         try Data(vsixManifest(sessionFocusStrategy: sessionFocusStrategy).utf8).write(to: extensionURL.appending(path: ".vsixmanifest"), options: .atomic)
     }
 
@@ -69,9 +81,7 @@ struct IDEExtensionInstaller {
     }
 
     private func packageJSON(sessionFocusStrategy: SessionFocusStrategy?) -> String {
-        let description = sessionFocusStrategy == nil
-            ? "Lets Ping Island focus the matching terminal tab"
-            : "Lets Ping Island focus the matching chat session or terminal tab"
+        let description = extensionDescription(sessionFocusStrategy: sessionFocusStrategy)
 
         return """
         {
@@ -80,6 +90,16 @@ struct IDEExtensionInstaller {
           "description": "\(description)",
           "version": "\(Self.extensionVersion)",
           "publisher": "ping-island",
+          "icon": "\(Self.extensionIconFilename)",
+          "homepage": "\(Self.projectHomepage)",
+          "license": "Apache-2.0",
+          "repository": {
+            "type": "git",
+            "url": "\(Self.projectRepository)"
+          },
+          "bugs": {
+            "url": "\(Self.projectIssues)"
+          },
           "engines": {
             "vscode": "^1.85.0"
           },
@@ -477,6 +497,70 @@ struct IDEExtensionInstaller {
         """
     }
 
+    private func extensionReadme(sessionFocusStrategy: SessionFocusStrategy?) -> String {
+        let capabilityLine = sessionFocusStrategy == .qoderChatHistory
+            ? "It can reopen the matching chat session when the host IDE supports it, and otherwise falls back to the matching terminal tab."
+            : "It reopens the matching terminal tab from Ping Island's session context."
+
+        return """
+        # Ping Island
+
+        Ping Island installs this VS Code-compatible extension so the app can jump back into the right IDE window for your active coding session.
+
+        \(capabilityLine)
+
+        Manage installs, reinstalls, and authorization from Ping Island's **Settings -> Integration** panel.
+
+        Repository:
+        \(Self.projectHomepage)
+
+        Releases:
+        \(Self.projectHomepage)/releases
+        """
+    }
+
+    private func extensionIconPNGData() -> Data? {
+        try? Data(contentsOf: repositoryAppIconURL())
+    }
+
+    private static func applicationVersion() -> String {
+        let projectURL = repositoryRootURL().appending(path: "PingIsland.xcodeproj/project.pbxproj")
+        guard
+            let contents = try? String(contentsOf: projectURL, encoding: .utf8),
+            let regex = try? NSRegularExpression(pattern: #"MARKETING_VERSION = ([^;]+);"#),
+            let match = regex.firstMatch(
+                in: contents,
+                range: NSRange(contents.startIndex..., in: contents)
+            ),
+            let range = Range(match.range(at: 1), in: contents)
+        else {
+            return "1.0"
+        }
+
+        let version = contents[range].trimmingCharacters(in: .whitespacesAndNewlines)
+        return version.isEmpty ? "1.0" : version
+    }
+
+    private static func repositoryRootURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func repositoryAppIconURL() -> URL {
+        Self.repositoryRootURL()
+            .appending(path: "PingIsland/Assets.xcassets/AppIcon.appiconset/icon_128x128.png")
+    }
+
+    private func extensionDescription(sessionFocusStrategy: SessionFocusStrategy?) -> String {
+        sessionFocusStrategy == nil
+            ? "Lets Ping Island focus the matching terminal tab"
+            : "Lets Ping Island focus the matching chat session or terminal tab"
+    }
+
     private func vsixManifest(sessionFocusStrategy: SessionFocusStrategy?) -> String {
         let description = sessionFocusStrategy == nil
             ? "Lets Ping Island focus the matching terminal tab in VS Code compatible IDEs."
@@ -496,6 +580,8 @@ struct IDEExtensionInstaller {
       <Dependencies/>
       <Assets>
         <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="package.json" Addressable="true"/>
+        <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="\(Self.extensionReadmeFilename)" Addressable="true"/>
+        <Asset Type="Microsoft.VisualStudio.Services.Icons.Default" Path="\(Self.extensionIconFilename)" Addressable="true"/>
       </Assets>
     </PackageManifest>
     """
