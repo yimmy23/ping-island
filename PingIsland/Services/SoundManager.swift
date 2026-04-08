@@ -42,6 +42,7 @@ class SoundManager {
     /// Called from AppState.handleEvent() to trigger appropriate sounds
     func handleEvent(_ eventName: String) {
         guard defaults.bool(forKey: "soundEnabled") else { return }
+        guard !AppSettings.areReminderNotificationsSuppressed else { return }
         guard let entry = Self.eventSounds.first(where: { $0.event == eventName }) else { return }
         guard defaults.bool(forKey: entry.key) else { return }
         play(entry.sound)

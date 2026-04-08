@@ -28,6 +28,8 @@ struct OpenedPanelContentHeightPreferenceKey: PreferenceKey {
 }
 
 struct NotchView: View {
+    private static let temporaryReminderMuteDuration: TimeInterval = 10 * 60
+
     @ObservedObject var viewModel: NotchViewModel
     @StateObject private var sessionMonitor = SessionMonitor()
     @StateObject private var activityCoordinator = NotchActivityCoordinator.shared
@@ -158,6 +160,22 @@ struct NotchView: View {
         return settings.mascotKind(for: client)
     }
 
+    private var areReminderNotificationsSuppressed: Bool {
+        settings.areNotificationsMutedTemporarily
+    }
+
+    private var temporaryMuteButtonHelpText: String {
+        guard let mutedUntil = settings.temporarilyMuteNotificationsUntil,
+              AppSettings.isNotificationMuteActive(until: mutedUntil) else {
+            return AppLocalization.string("10 分钟静音通知和声音")
+        }
+
+        return AppLocalization.format(
+            "通知与声音已静音至 %@，点击恢复",
+            formattedTemporaryMuteTime(mutedUntil)
+        )
+    }
+
     private var closedMascotStatus: MascotStatus {
         MascotStatus.closedNotchStatus(
             representativePhase: representativeClosedSession?.phase,
@@ -169,6 +187,14 @@ struct NotchView: View {
     private func refreshLastVisibleMascotClient(from instances: [SessionState]) {
         guard let latest = instances.sorted(by: { $0.lastActivity > $1.lastActivity }).first else { return }
         lastVisibleMascotClient = latest.mascotClient
+    }
+
+    private func formattedTemporaryMuteTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = settings.locale
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter.string(from: date)
     }
 
     // MARK: - Sizing
@@ -294,6 +320,13 @@ struct NotchView: View {
         .onChange(of: settings.autoOpenCompletionPanel) { _, isEnabled in
             if !isEnabled {
                 clearCompletionNotifications(keepPanelOpen: true)
+            }
+        }
+        .onChange(of: settings.temporarilyMuteNotificationsUntil) { _, mutedUntil in
+            guard AppSettings.isNotificationMuteActive(until: mutedUntil) else { return }
+            clearCompletionNotifications(keepPanelOpen: true)
+            if viewModel.openReason == .notification {
+                viewModel.exitChat()
             }
         }
         .onChange(of: viewModel.contentType.id) { _, _ in
@@ -500,6 +533,12 @@ struct NotchView: View {
 
             Spacer()
 
+            NotchTemporaryMuteButton(
+                isActive: areReminderNotificationsSuppressed,
+                action: activateTemporaryReminderMute,
+                helpText: temporaryMuteButtonHelpText
+            )
+
             NotchSettingsButton(
                 hasUnseenUpdate: updateManager.hasUnseenUpdate,
                 action: openSettingsWindow
@@ -601,6 +640,11 @@ struct NotchView: View {
         let currentIds = Set(sessions.map { $0.stableId })
         let newPendingIds = currentIds.subtracting(previousPendingIds)
 
+        if areReminderNotificationsSuppressed {
+            previousPendingIds = currentIds
+            return
+        }
+
         let shouldSuppressAutoOpen = settings.smartSuppression &&
             TerminalVisibilityDetector.isTerminalVisibleOnCurrentSpace()
 
@@ -624,6 +668,11 @@ struct NotchView: View {
         let newApprovalIds = currentApprovalIds.subtracting(previousApprovalIds)
 
         guard !newApprovalIds.isEmpty else {
+            previousApprovalIds = currentApprovalIds
+            return
+        }
+
+        if areReminderNotificationsSuppressed {
             previousApprovalIds = currentApprovalIds
             return
         }
@@ -676,6 +725,12 @@ struct NotchView: View {
         let attentionQuestionIds = newQuestionIds.union(refreshedQuestionIds)
 
         guard !attentionQuestionIds.isEmpty else {
+            previousQuestionIds = currentQuestionIds
+            previousQuestionInterventionIDs = currentQuestionInterventionIDs
+            return
+        }
+
+        if areReminderNotificationsSuppressed {
             previousQuestionIds = currentQuestionIds
             previousQuestionInterventionIDs = currentQuestionInterventionIDs
             return
@@ -769,6 +824,17 @@ struct NotchView: View {
 
     private func handleCompletionNotificationChange(_ instances: [SessionState]) {
         synchronizeCompletionNotifications(with: instances)
+
+        if areReminderNotificationsSuppressed {
+            if activeCompletionNotification != nil || !completionNotificationQueue.isEmpty {
+                clearCompletionNotifications(keepPanelOpen: true)
+            }
+
+            previousCompletionNotificationPhases = Dictionary(
+                uniqueKeysWithValues: instances.map { ($0.stableId, $0.phase) }
+            )
+            return
+        }
 
         // Completion should stay as a lightweight status cue in the closed notch
         // instead of auto-opening a read-only notification panel that steals focus.
@@ -879,6 +945,7 @@ struct NotchView: View {
 
     private func maybePresentNextCompletionNotification() {
         guard settings.autoOpenCompletionPanel else { return }
+        guard !areReminderNotificationsSuppressed else { return }
         guard activeCompletionNotification == nil else { return }
         guard !completionNotificationQueue.isEmpty else { return }
         guard !viewModel.shouldSuppressAutomaticPresentation else { return }
@@ -1071,6 +1138,19 @@ struct NotchView: View {
         SettingsWindowController.shared.present()
     }
 
+    private func activateTemporaryReminderMute() {
+        if areReminderNotificationsSuppressed {
+            AppSettings.clearReminderNotificationMute()
+        } else {
+            AppSettings.muteReminderNotifications(for: Self.temporaryReminderMuteDuration)
+            clearCompletionNotifications(keepPanelOpen: true)
+
+            if viewModel.openReason == .notification {
+                viewModel.exitChat()
+            }
+        }
+    }
+
     /// Determine if notification sound should play for the given sessions
     /// Returns true if ANY session is not actively focused
     private func shouldPlayNotificationSound(for sessions: [SessionState]) async -> Bool {
@@ -1128,6 +1208,61 @@ private struct NotchSettingsButton: View {
                 isHovering = hovering
             }
         }
+    }
+}
+
+private struct NotchTemporaryMuteButton: View {
+    let isActive: Bool
+    let action: () -> Void
+    let helpText: String
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isActive ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(iconForegroundStyle)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(backgroundFillColor)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(borderColor, lineWidth: isActive ? 1 : 0)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(helpText)
+        .accessibilityLabel(helpText)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isHovering = hovering
+            }
+        }
+    }
+
+    private var iconForegroundStyle: AnyShapeStyle {
+        if isActive {
+            return AnyShapeStyle(Color.white.opacity(isHovering ? 0.8 : 0.6))
+        }
+        return AnyShapeStyle(isHovering ? Color.black : Color.white.opacity(0.92))
+    }
+
+    private var backgroundFillColor: Color {
+        if isActive {
+            return Color.white.opacity(isHovering ? 0.12 : 0.06)
+        }
+        return isHovering ? Color.white.opacity(0.95) : Color.white.opacity(0.1)
+    }
+
+    private var borderColor: Color {
+        if isActive {
+            return Color.white.opacity(isHovering ? 0.22 : 0.12)
+        }
+        return .clear
     }
 }
 

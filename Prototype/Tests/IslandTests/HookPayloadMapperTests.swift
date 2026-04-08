@@ -588,6 +588,55 @@ func qoderWorkPostToolUseResolvedQuestionDoesNotCreateNewIntervention() throws {
 }
 
 @Test
+func claudePostToolUseResolvedQuestionDoesNotKeepSocketOpen() throws {
+    let payload = """
+    {
+      "hook_event_name": "PostToolUse",
+      "session_id": "claude-resolved-question",
+      "tool_name": "AskUserQuestion",
+      "tool_input": {
+        "questions": [
+          {
+            "header": "任务",
+            "question": "你想先处理哪个部分？",
+            "options": [{"label": "SessionStore"}]
+          }
+        ],
+        "answers": {
+          "你想先处理哪个部分？": "SessionStore"
+        }
+      },
+      "tool_response": {
+        "questions": [
+          {
+            "header": "任务",
+            "question": "你想先处理哪个部分？",
+            "options": [{"label": "SessionStore"}]
+          }
+        ],
+        "answers": {
+          "你想先处理哪个部分？": "SessionStore"
+        }
+      },
+      "transcript_path": "/tmp/claude-resolved-question.jsonl"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: ["island-bridge", "--source", "claude"],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "PostToolUse")
+    #expect(envelope.status?.kind == .active)
+    #expect(envelope.expectsResponse == false)
+    #expect(envelope.intervention == nil)
+    #expect(envelope.metadata["tool_response"]?.contains("SessionStore") == true)
+}
+
+@Test
 func qoderWorkPermissionRequestQuestionStillMapsToQuestionIntervention() throws {
     let payload = """
     {

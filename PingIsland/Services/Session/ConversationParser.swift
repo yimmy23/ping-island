@@ -732,6 +732,10 @@ actor ConversationParser {
                     input[key] = String(intValue)
                 } else if let boolValue = value as? Bool {
                     input[key] = boolValue ? "true" : "false"
+                } else if JSONSerialization.isValidJSONObject(value),
+                          let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+                          let json = String(data: data, encoding: .utf8) {
+                    input[key] = json
                 }
             }
         }
@@ -1102,17 +1106,21 @@ actor ConversationParser {
                 seenToolIds.insert(toolId)
 
                 var input: [String: String] = [:]
-                if let inputDict = block["input"] as? [String: Any] {
-                    for (key, value) in inputDict {
-                        if let strValue = value as? String {
-                            input[key] = strValue
-                        } else if let intValue = value as? Int {
-                            input[key] = String(intValue)
-                        } else if let boolValue = value as? Bool {
-                            input[key] = boolValue ? "true" : "false"
-                        }
-                    }
+        if let inputDict = block["input"] as? [String: Any] {
+            for (key, value) in inputDict {
+                if let strValue = value as? String {
+                    input[key] = strValue
+                } else if let intValue = value as? Int {
+                    input[key] = String(intValue)
+                } else if let boolValue = value as? Bool {
+                    input[key] = boolValue ? "true" : "false"
+                } else if JSONSerialization.isValidJSONObject(value),
+                          let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+                          let json = String(data: data, encoding: .utf8) {
+                    input[key] = json
                 }
+            }
+        }
 
                 let isCompleted = completedToolIds.contains(toolId)
                 let timestamp = json["timestamp"] as? String

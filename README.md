@@ -15,6 +15,9 @@
   <a href="https://github.com/erha19/ping-island/releases">
     <img src="https://img.shields.io/github/v/release/erha19/ping-island?display_name=tag&style=flat-square" alt="Latest release">
   </a>
+  <a href="https://github.com/erha19/ping-island/releases">
+    <img src="https://img.shields.io/github/downloads/erha19/ping-island/total?style=flat-square" alt="Release downloads">
+  </a>
   <img src="https://img.shields.io/badge/macOS-14%2B-0A84FF?style=flat-square&logo=apple&logoColor=white" alt="macOS 14 or later">
   <img src="https://img.shields.io/badge/Swift-6.1-FA7343?style=flat-square&logo=swift&logoColor=white" alt="Swift 6.1">
   <img src="https://img.shields.io/badge/Clients-8%2B-111827?style=flat-square" alt="Supports 8 plus client families">
@@ -145,6 +148,79 @@ Ping Island currently ships a 4-category settings panel:
 - **Display** - notch display target and placement behavior
 - **Mascot** - client mascot previews, per-client overrides, animation states
 - **Sound** - event-specific sounds, sound pack mode, sound pack import
+
+## Custom Sounds
+
+Ping Island currently supports three sound modes under `Settings -> Sound`:
+
+- **System sounds** - choose a macOS sound for each event.
+- **Built-in 8-bit** - use Island's bundled retro sound set, including the fixed client startup sound.
+- **Sound pack** - load a local OpenPeon / CESP-compatible pack from disk.
+
+### Quick setup
+
+1. Open `Settings -> Sound`.
+2. Turn on `Enable sounds`.
+3. Pick the mode you want:
+   - `System sounds` if you just want a different macOS sound per event.
+   - `Sound pack` if you want fully custom audio files.
+4. Preview each event with the play button and leave only the event toggles you want enabled.
+
+### Import a local sound pack
+
+1. Switch `Sound mode` to `Sound pack`.
+2. Click `Import local sound pack`.
+3. Choose a folder that contains `openpeon.json`.
+4. Pick the imported pack from the `Sound pack` dropdown.
+
+Ping Island also auto-discovers packs placed under `~/.openpeon/packs` and `~/.claude/hooks/peon-ping/packs`.
+
+### Minimal sound pack layout
+
+```text
+my-pack/
+  openpeon.json
+  session-start.wav
+  attention.ogg
+  complete.mp3
+  error.wav
+  limit.wav
+```
+
+```json
+{
+  "cesp_version": "1.0",
+  "name": "my-pack",
+  "display_name": "My Pack",
+  "categories": {
+    "task.acknowledge": {
+      "sounds": [{ "file": "session-start.wav", "label": "Session Start" }]
+    },
+    "input.required": {
+      "sounds": [{ "file": "attention.ogg", "label": "Attention" }]
+    },
+    "task.complete": {
+      "sounds": [{ "file": "complete.mp3", "label": "Complete" }]
+    },
+    "task.error": {
+      "sounds": [{ "file": "error.wav", "label": "Error" }]
+    },
+    "resource.limit": {
+      "sounds": [{ "file": "limit.wav", "label": "Limit" }]
+    }
+  }
+}
+```
+
+### Event mapping
+
+- `Processing started` checks `task.acknowledge`, then `session.start`.
+- `Attention required` checks `input.required`.
+- `Task completed` checks `task.complete`.
+- `Task error` checks `task.error`.
+- `Resource limit` checks `resource.limit`.
+
+Sound packs can use `.wav`, `.mp3`, or `.ogg` files. If a selected pack does not provide a matching category for an event, Ping Island falls back to the macOS system sound selected for that event.
 
 ## How It Works
 

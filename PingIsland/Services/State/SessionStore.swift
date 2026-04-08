@@ -822,6 +822,7 @@ actor SessionStore {
         )
 
         await applyQoderFallbackIntervention(to: &session)
+        applyClaudeTranscriptQuestionFallback(to: &session)
 
         if payload.isIncremental,
            let continuationAnsweredAt = session.intervention?.externalContinuationAnsweredAt,
@@ -1221,6 +1222,7 @@ actor SessionStore {
         session.chatItems.sort { $0.timestamp < $1.timestamp }
 
         await applyQoderFallbackIntervention(to: &session)
+        applyClaudeTranscriptQuestionFallback(to: &session)
 
         sessions[sessionId] = session
     }
@@ -1774,6 +1776,138 @@ actor SessionStore {
         if session.phase == .waitingForInput {
             session.phase = .processing
         }
+    }
+
+    private func applyClaudeTranscriptQuestionFallback(to session: inout SessionState) {
+        guard session.provider == .claude, session.clientInfo.brand == .claude else { return }
+
+        let fallbackSource = "claudeTranscriptQuestion"
+        let currentSource = session.intervention?.metadata["source"]
+        if let currentSource, currentSource != fallbackSource {
+            return
+        }
+
+        guard let pendingQuestionTool = session.chatItems.reversed().compactMap({ item -> (id: String, tool: ToolCallItem)? in
+            guard case .toolCall(let tool) = item.type else { return nil }
+            let normalizedName = tool.name
+                .lowercased()
+                .replacingOccurrences(of: "_", with: "")
+                .replacingOccurrences(of: "-", with: "")
+            guard normalizedName == "askuserquestion" else { return nil }
+            guard tool.status == .running || tool.status == .waitingForApproval else { return nil }
+            return (item.id, tool)
+        }).first else {
+            if currentSource == fallbackSource {
+                session.intervention = nil
+                if session.phase == .waitingForInput {
+                    session.phase = .processing
+                }
+            }
+            return
+        }
+
+        guard let intervention = claudeTranscriptQuestionIntervention(
+            toolUseId: pendingQuestionTool.id,
+            tool: pendingQuestionTool.tool,
+            session: session
+        ) else {
+            return
+        }
+
+        session.intervention = intervention
+        session.phase = .waitingForInput
+        session.lastActivity = Date()
+    }
+
+    private func claudeTranscriptQuestionIntervention(
+        toolUseId: String,
+        tool: ToolCallItem,
+        session: SessionState
+    ) -> SessionIntervention? {
+        guard let rawQuestions = tool.input["questions"],
+              let data = rawQuestions.data(using: .utf8),
+              let questions = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+              !questions.isEmpty else {
+            return nil
+        }
+
+        let parsedQuestions = questions.enumerated().compactMap { index, question -> SessionInterventionQuestion? in
+            let prompt = (question["question"] as? String)
+                ?? (question["prompt"] as? String)
+                ?? (question["label"] as? String)
+            guard let prompt, !prompt.isEmpty else { return nil }
+
+            let objectOptions = (question["options"] as? [[String: Any]] ?? []).enumerated().compactMap { optionIndex, option -> SessionInterventionOption? in
+                guard let label = option["label"] as? String, !label.isEmpty else { return nil }
+                return SessionInterventionOption(
+                    id: option["id"] as? String ?? "\(index)-option-\(optionIndex)",
+                    title: label,
+                    detail: option["description"] as? String
+                )
+            }
+
+            let normalizedOptions: [SessionInterventionOption]
+            if !objectOptions.isEmpty {
+                normalizedOptions = objectOptions
+            } else if let stringOptions = question["options"] as? [String], !stringOptions.isEmpty {
+                normalizedOptions = stringOptions.enumerated().map { optionIndex, label in
+                    SessionInterventionOption(
+                        id: "\(index)-option-\(optionIndex)",
+                        title: label,
+                        detail: nil
+                    )
+                }
+            } else {
+                normalizedOptions = []
+            }
+
+            return SessionInterventionQuestion(
+                id: question["id"] as? String ?? prompt,
+                header: question["header"] as? String ?? "\(index + 1).",
+                prompt: prompt,
+                detail: question["description"] as? String,
+                options: normalizedOptions,
+                allowsMultiple: question["isMultiple"] as? Bool
+                    ?? question["allowsMultiple"] as? Bool
+                    ?? question["multiSelect"] as? Bool
+                    ?? question["multiple"] as? Bool
+                    ?? false,
+                allowsOther: question["isOther"] as? Bool
+                    ?? question["allowsOther"] as? Bool
+                    ?? false,
+                isSecret: question["isSecret"] as? Bool
+                    ?? question["secret"] as? Bool
+                    ?? false
+            )
+        }
+
+        guard !parsedQuestions.isEmpty else { return nil }
+
+        let actorName = session.interactionDisplayName
+        let title = parsedQuestions.count == 1
+            ? "\(actorName) 的提问"
+            : "\(actorName) 的提问（\(parsedQuestions.count) 个问题）"
+        let payload: [String: Any] = ["questions": questions]
+        guard let payloadData = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+              let payloadJSON = String(data: payloadData, encoding: .utf8) else {
+            return nil
+        }
+
+        return SessionIntervention(
+            id: toolUseId,
+            kind: .question,
+            title: title,
+            message: "\(actorName) 需要你补充回答，提交后会继续执行当前会话。",
+            options: [],
+            questions: parsedQuestions,
+            supportsSessionScope: false,
+            metadata: [
+                "toolName": "AskUserQuestion",
+                "toolInputJSON": payloadJSON,
+                "originalToolUseId": toolUseId,
+                "source": "claudeTranscriptQuestion"
+            ]
+        )
     }
 
     private func qoderTranscriptQuestionIntervention(for session: SessionState) -> SessionIntervention? {

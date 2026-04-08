@@ -15,6 +15,9 @@
   <a href="https://github.com/erha19/ping-island/releases">
     <img src="https://img.shields.io/github/v/release/erha19/ping-island?display_name=tag&style=flat-square" alt="最新版本">
   </a>
+  <a href="https://github.com/erha19/ping-island/releases">
+    <img src="https://img.shields.io/github/downloads/erha19/ping-island/total?style=flat-square" alt="Release 下载次数">
+  </a>
   <img src="https://img.shields.io/badge/macOS-14%2B-0A84FF?style=flat-square&logo=apple&logoColor=white" alt="macOS 14 或更高">
   <img src="https://img.shields.io/badge/Swift-6.1-FA7343?style=flat-square&logo=swift&logoColor=white" alt="Swift 6.1">
   <img src="https://img.shields.io/badge/Clients-8%2B-111827?style=flat-square" alt="支持 8 个以上客户端家族">
@@ -157,6 +160,79 @@ Ping Island 当前提供 4 个设置分类：
 - **Display** - 显示器选择与位置行为
 - **Mascot** - 宠物预览、客户端覆盖、动作状态
 - **Sound** - 事件声音、声音包模式、声音包导入
+
+## 自定义音效
+
+Ping Island 在 `设置 -> Sound` 里提供三种声音模式：
+
+- **系统音** - 为每个事件单独选择一个 macOS 系统音。
+- **内置 8-bit** - 使用 Island 自带的复古音效集，并包含固定的客户端启动音。
+- **主题包** - 从本地导入兼容 OpenPeon / CESP 的音效包。
+
+### 快速配置
+
+1. 打开 `设置 -> Sound`。
+2. 开启 `启用提示音`。
+3. 选择你需要的模式：
+   - 如果只是想给不同事件换系统提示音，选 `系统音`。
+   - 如果想使用自己的音频文件，选 `主题包`。
+4. 用每一行右侧的试听按钮确认效果，并只保留你需要的事件开关。
+
+### 导入本地主题包
+
+1. 将 `声音模式` 切到 `主题包`。
+2. 点击 `导入本地主题包`。
+3. 选择一个包含 `openpeon.json` 的目录。
+4. 在 `主题包` 下拉框里选中刚导入的包。
+
+Ping Island 也会自动发现放在 `~/.openpeon/packs` 和 `~/.claude/hooks/peon-ping/packs` 下面的主题包。
+
+### 最小目录结构
+
+```text
+my-pack/
+  openpeon.json
+  session-start.wav
+  attention.ogg
+  complete.mp3
+  error.wav
+  limit.wav
+```
+
+```json
+{
+  "cesp_version": "1.0",
+  "name": "my-pack",
+  "display_name": "My Pack",
+  "categories": {
+    "task.acknowledge": {
+      "sounds": [{ "file": "session-start.wav", "label": "Session Start" }]
+    },
+    "input.required": {
+      "sounds": [{ "file": "attention.ogg", "label": "Attention" }]
+    },
+    "task.complete": {
+      "sounds": [{ "file": "complete.mp3", "label": "Complete" }]
+    },
+    "task.error": {
+      "sounds": [{ "file": "error.wav", "label": "Error" }]
+    },
+    "resource.limit": {
+      "sounds": [{ "file": "limit.wav", "label": "Limit" }]
+    }
+  }
+}
+```
+
+### 事件映射
+
+- `开始处理` 会依次检查 `task.acknowledge`、`session.start`。
+- `需要介入` 会检查 `input.required`。
+- `完成` 会检查 `task.complete`。
+- `任务失败` 会检查 `task.error`。
+- `资源受限` 会检查 `resource.limit`。
+
+主题包里的音频文件支持 `.wav`、`.mp3`、`.ogg`。如果当前主题包没有提供某个事件对应的分类，Ping Island 会回退到该事件当前选中的 macOS 系统音。
 
 ## 工作原理
 

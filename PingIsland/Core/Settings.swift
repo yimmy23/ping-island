@@ -191,6 +191,7 @@ final class AppSettingsStore: ObservableObject {
         static let notificationSound = "notificationSound"
         static let soundEnabled = "soundEnabled"
         static let soundVolume = "soundVolume"
+        static let temporarilyMuteNotificationsUntil = "temporarilyMuteNotificationsUntil"
         static let processingStartSound = "processingStartSound"
         static let attentionRequiredSound = "attentionRequiredSound"
         static let taskCompletedSound = "taskCompletedSound"
@@ -252,6 +253,21 @@ final class AppSettingsStore: ObservableObject {
             }
             guard !isBootstrapping else { return }
             defaults.set(soundVolume, forKey: Keys.soundVolume)
+        }
+    }
+
+    @Published var temporarilyMuteNotificationsUntil: Date? {
+        didSet {
+            guard !isBootstrapping else { return }
+
+            if let temporarilyMuteNotificationsUntil {
+                defaults.set(
+                    temporarilyMuteNotificationsUntil.timeIntervalSince1970,
+                    forKey: Keys.temporarilyMuteNotificationsUntil
+                )
+            } else {
+                defaults.removeObject(forKey: Keys.temporarilyMuteNotificationsUntil)
+            }
         }
     }
 
@@ -486,6 +502,19 @@ final class AppSettingsStore: ObservableObject {
         appLanguage.resolvedLocale()
     }
 
+    var areNotificationsMutedTemporarily: Bool {
+        Self.isNotificationMuteActive(until: temporarilyMuteNotificationsUntil)
+    }
+
+    func muteNotifications(for duration: TimeInterval, now: Date = Date()) {
+        temporarilyMuteNotificationsUntil = now.addingTimeInterval(duration)
+    }
+
+    nonisolated static func isNotificationMuteActive(until date: Date?, now: Date = Date()) -> Bool {
+        guard let date else { return false }
+        return date > now
+    }
+
     private static func sanitizedMascotOverrides(_ rawOverrides: [String: String]) -> [String: String] {
         rawOverrides.reduce(into: [:]) { result, entry in
             guard let client = MascotClient(rawValue: entry.key),
@@ -519,14 +548,24 @@ final class AppSettingsStore: ObservableObject {
         let resolvedSoundThemeMode = SoundThemeMode(
             rawValue: soundThemeModeRaw ?? ""
         ) ?? .island8Bit
+        let temporarilyMuteNotificationsUntilTimestamp =
+            defaults.object(forKey: Keys.temporarilyMuteNotificationsUntil) as? Double
         let notchPetStyleRaw = defaults.string(forKey: Keys.notchPetStyle)
         let notchDisplayModeRaw = defaults.string(forKey: Keys.notchDisplayMode)
         let mascotOverrideRaw = defaults.dictionary(forKey: Keys.mascotOverrides) as? [String: String] ?? [:]
+        let temporarilyMuteNotificationsUntil = temporarilyMuteNotificationsUntilTimestamp.map {
+            Date(timeIntervalSince1970: $0)
+        }
+        let activeTemporaryMute =
+            Self.isNotificationMuteActive(until: temporarilyMuteNotificationsUntil)
+            ? temporarilyMuteNotificationsUntil
+            : nil
 
         _appLanguage = Published(initialValue: AppLanguage(rawValue: appLanguageRaw ?? "") ?? .system)
         _notificationSound = Published(initialValue: legacyNotificationSound)
         _soundEnabled = Published(initialValue: defaults.object(forKey: Keys.soundEnabled) as? Bool ?? true)
         _soundVolume = Published(initialValue: defaults.object(forKey: Keys.soundVolume) as? Double ?? 0.9)
+        _temporarilyMuteNotificationsUntil = Published(initialValue: activeTemporaryMute)
         _processingStartSound = Published(initialValue: NotificationSound(
             rawValue: defaults.string(forKey: Keys.processingStartSound) ?? ""
         ) ?? .tink)
@@ -566,6 +605,9 @@ final class AppSettingsStore: ObservableObject {
         if defaults.string(forKey: Keys.soundThemeMode) == nil {
             defaults.set(resolvedSoundThemeMode.rawValue, forKey: Keys.soundThemeMode)
         }
+        if activeTemporaryMute == nil {
+            defaults.removeObject(forKey: Keys.temporarilyMuteNotificationsUntil)
+        }
         if defaults.object(forKey: Keys.processingStartSoundEnabled) == nil {
             defaults.set(true, forKey: Keys.processingStartSoundEnabled)
         }
@@ -593,6 +635,15 @@ enum AppSettings {
     static var soundVolume: Double {
         get { shared.soundVolume }
         set { shared.soundVolume = newValue }
+    }
+
+    static var temporarilyMuteNotificationsUntil: Date? {
+        get { shared.temporarilyMuteNotificationsUntil }
+        set { shared.temporarilyMuteNotificationsUntil = newValue }
+    }
+
+    static var areReminderNotificationsSuppressed: Bool {
+        shared.areNotificationsMutedTemporarily
     }
 
     static var soundThemeMode: SoundThemeMode {
@@ -628,6 +679,18 @@ enum AppSettings {
     static var autoOpenCompletionPanel: Bool {
         get { shared.autoOpenCompletionPanel }
         set { shared.autoOpenCompletionPanel = newValue }
+    }
+
+    static func muteReminderNotifications(for duration: TimeInterval, now: Date = Date()) {
+        shared.muteNotifications(for: duration, now: now)
+    }
+
+    static func clearReminderNotificationMute() {
+        shared.temporarilyMuteNotificationsUntil = nil
+    }
+
+    nonisolated static func isNotificationMuteActive(until date: Date?, now: Date = Date()) -> Bool {
+        AppSettingsStore.isNotificationMuteActive(until: date, now: now)
     }
 
     static var showAgentDetail: Bool {
@@ -743,6 +806,7 @@ enum AppSettings {
 
     static func playSound(for event: NotificationEvent) {
         guard soundEnabled, isSoundEnabled(for: event) else { return }
+        guard !areReminderNotificationsSuppressed else { return }
 
         switch soundThemeMode {
         case .builtIn:

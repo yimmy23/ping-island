@@ -307,9 +307,17 @@ public enum HookPayloadMapper {
             return false
         }
 
-        // If we have an intervention, always expect a response
-        if intervention != nil {
-            return true
+        if let intervention {
+            switch intervention.kind {
+            case .approval:
+                return true
+            case .question:
+                return shouldSurfaceQuestionIntervention(
+                    eventType: eventType,
+                    payload: payload,
+                    clientKind: clientKind
+                )
+            }
         }
 
         // Check for qoderwork specific question events
@@ -552,6 +560,13 @@ public enum HookPayloadMapper {
         }
 
         if let questions = questionPayloads(from: payload), !questions.isEmpty {
+            guard shouldSurfaceQuestionIntervention(
+                eventType: eventType,
+                payload: payload,
+                clientKind: clientKind
+            ) else {
+                return nil
+            }
             if clientKind == "qoder",
                isQoderQuestionToolEvent(eventType: eventType, payload: payload) {
                 return nil
@@ -995,6 +1010,19 @@ public enum HookPayloadMapper {
             return false
         }
         return true
+    }
+
+    private static func shouldSurfaceQuestionIntervention(
+        eventType: String,
+        payload: [String: Any],
+        clientKind: String?
+    ) -> Bool {
+        if clientKind == "qoderwork" {
+            return isQoderWorkPreToolQuestionEvent(eventType: eventType, payload: payload)
+                || isQoderWorkPermissionQuestionEvent(eventType: eventType, payload: payload)
+        }
+
+        return eventType == "PreToolUse" || eventType == "UserInputRequest"
     }
 
     private static func normalizedPermissionMode(from payload: [String: Any]) -> String? {

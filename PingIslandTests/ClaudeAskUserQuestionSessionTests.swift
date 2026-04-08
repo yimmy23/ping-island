@@ -68,6 +68,67 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testHistoryLoadedQuestionToolSynthesizesClaudeIntervention() async {
+        let sessionId = "claude-history-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(makeClaudePromptSubmitEvent(sessionId: sessionId)))
+        await store.process(
+            .historyLoaded(
+                sessionId: sessionId,
+                messages: [
+                    ChatMessage(
+                        id: "assistant-tool-message",
+                        role: .assistant,
+                        timestamp: Date(),
+                        content: [
+                            .toolUse(
+                                ToolUseBlock(
+                                    id: "toolu_\(sessionId)",
+                                    name: "AskUserQuestion",
+                                    input: [
+                                        "questions": """
+                                        [
+                                          {
+                                            "id":"project",
+                                            "header":"方向",
+                                            "question":"你想先处理哪个模块？",
+                                            "options":[
+                                              {"label":"会话层"},
+                                              {"label":"UI 层"}
+                                            ]
+                                          }
+                                        ]
+                                        """
+                                    ]
+                                )
+                            )
+                        ]
+                    )
+                ],
+                completedTools: [],
+                toolResults: [:],
+                structuredResults: [:],
+                conversationInfo: ConversationInfo(
+                    summary: nil,
+                    lastMessage: nil,
+                    lastMessageRole: nil,
+                    lastToolName: nil,
+                    firstUserMessage: "使用工具问我一个问题",
+                    lastUserMessageDate: Date()
+                )
+            )
+        )
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertEqual(session?.intervention?.kind, .question)
+        XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.prompt, "你想先处理哪个模块？")
+        XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["会话层", "UI 层"])
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     private func makeClaudeQuestionEvent(sessionId: String) -> HookEvent {
         HookEvent(
             sessionId: sessionId,
@@ -170,6 +231,30 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
             toolUseId: nil,
             notificationType: nil,
             message: nil
+        )
+    }
+
+    private func makeClaudePromptSubmitEvent(sessionId: String) -> HookEvent {
+        HookEvent(
+            sessionId: sessionId,
+            cwd: "/tmp/project",
+            event: "UserPromptSubmit",
+            status: "processing",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .claudeCode,
+                profileID: "claude_code",
+                name: "Claude Code",
+                bundleIdentifier: "com.anthropic.claudecode",
+                sessionFilePath: "/tmp/\(sessionId).jsonl"
+            ),
+            pid: nil,
+            tty: nil,
+            tool: nil,
+            toolInput: nil,
+            toolUseId: nil,
+            notificationType: nil,
+            message: "使用工具问我一个问题"
         )
     }
 }

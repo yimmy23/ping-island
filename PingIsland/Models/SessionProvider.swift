@@ -186,7 +186,19 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
     }
 
     nonisolated func interactionLabel(for provider: SessionProvider) -> String {
-        interactionOriginDisplayName ?? badgeLabel(for: provider)
+        if let interactionOriginDisplayName {
+            return interactionOriginDisplayName
+        }
+
+        // Codex CLI follow-up actions reopen the owning terminal surface rather than
+        // a separate client app, so label those actions with the terminal host.
+        if provider == .codex,
+           kind == .codexCLI,
+           let terminalSourceDisplayName {
+            return terminalSourceDisplayName
+        }
+
+        return badgeLabel(for: provider)
     }
 
     nonisolated var isQoderFamily: Bool {

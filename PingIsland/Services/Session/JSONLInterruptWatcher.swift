@@ -20,9 +20,13 @@ protocol JSONLInterruptWatcherDelegate: AnyObject {
 /// Watches a session's JSONL file for interrupt patterns in real-time
 /// Uses DispatchSource for immediate detection when new lines are written
 class JSONLInterruptWatcher {
+    private static let retryDelay: DispatchTimeInterval = .milliseconds(250)
+
     private var fileHandle: FileHandle?
     private var source: DispatchSourceFileSystemObject?
+    private var retryWorkItem: DispatchWorkItem?
     private var lastOffset: UInt64 = 0
+    private var waitingForFile = false
     private let sessionId: String
     private let filePath: String
     private let queue = DispatchQueue(label: "com.wudanwu.pingisland.interruptwatcher", qos: .userInteractive)
@@ -67,20 +71,29 @@ class JSONLInterruptWatcher {
     }
 
     private func startWatching() {
+        retryWorkItem?.cancel()
+        retryWorkItem = nil
         stopInternal()
 
         guard FileManager.default.fileExists(atPath: filePath),
               let handle = FileHandle(forReadingAtPath: filePath) else {
             logger.warning("Failed to open file: \(self.filePath, privacy: .public)")
+            waitingForFile = true
+            scheduleRetry()
             return
         }
 
         fileHandle = handle
+        let needsInitialSync = waitingForFile
+        waitingForFile = false
 
         do {
             lastOffset = try handle.seekToEnd()
         } catch {
             logger.error("Failed to seek to end: \(error.localizedDescription, privacy: .public)")
+            try? handle.close()
+            fileHandle = nil
+            scheduleRetry()
             return
         }
 
@@ -104,6 +117,13 @@ class JSONLInterruptWatcher {
         newSource.resume()
 
         logger.debug("Started watching: \(self.sessionId.prefix(8), privacy: .public)...")
+
+        if needsInitialSync {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.delegate?.didObserveFileChange(sessionId: self.sessionId)
+            }
+        }
     }
 
     private func checkForInterrupt() {
@@ -180,12 +200,26 @@ class JSONLInterruptWatcher {
     }
 
     private func stopInternal() {
+        retryWorkItem?.cancel()
+        retryWorkItem = nil
         if source != nil {
             logger.debug("Stopped watching: \(self.sessionId.prefix(8), privacy: .public)...")
         }
         source?.cancel()
         source = nil
-        // fileHandle closed by cancel handler
+        if fileHandle != nil {
+            try? fileHandle?.close()
+            fileHandle = nil
+        }
+    }
+
+    private func scheduleRetry() {
+        retryWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.startWatching()
+        }
+        retryWorkItem = workItem
+        queue.asyncAfter(deadline: .now() + Self.retryDelay, execute: workItem)
     }
 
     deinit {
