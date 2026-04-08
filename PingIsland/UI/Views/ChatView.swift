@@ -63,7 +63,14 @@ struct ChatView: View {
         activeQuestionIntervention != nil
     }
 
-    
+    /// Initial AskUserQuestion popups usually have only a few history rows.
+    /// Cap the transcript region so the panel hugs the content instead of
+    /// reserving a large empty column above the question form.
+    private var compactTranscriptMaxHeight: CGFloat? {
+        guard activeQuestionIntervention != nil else { return nil }
+        return 300
+    }
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -77,6 +84,7 @@ struct ChatView: View {
                     emptyState
                 } else {
                     messageList
+                        .frame(maxHeight: compactTranscriptMaxHeight, alignment: .top)
                 }
 
                 // Approval bar, question form, or Input bar
@@ -331,8 +339,8 @@ struct ChatView: View {
                                 ))
                         }
                     }
-                    .padding(.top, 20)
-                    .padding(.bottom, 20)
+                    .padding(.top, shouldTopAlignMessages ? 10 : 20)
+                    .padding(.bottom, shouldTopAlignMessages ? 12 : 20)
                     .frame(
                         maxWidth: .infinity,
                         minHeight: geometry.size.height,
