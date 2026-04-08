@@ -321,7 +321,7 @@ extension UpdateManager: SPUUpdaterDelegate {
     }
 }
 
-extension UpdateManager: SPUStandardUserDriverDelegate {
+extension UpdateManager: @preconcurrency SPUStandardUserDriverDelegate {
     func standardUserDriverShouldShowVersionHistory(for item: SUAppcastItem) -> Bool {
         true
     }

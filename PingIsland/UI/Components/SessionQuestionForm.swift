@@ -11,6 +11,10 @@ struct SessionQuestionForm: View {
     @State private var answers: [String: [String]] = [:]
     @State private var otherAnswers: [String: String] = [:]
 
+    private var displayQuestions: [SessionInterventionQuestion] {
+        intervention.resolvedQuestions
+    }
+
     init(
         intervention: SessionIntervention,
         submitLabel: String? = nil,
@@ -31,7 +35,7 @@ struct SessionQuestionForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(intervention.questions) { question in
+            ForEach(displayQuestions) { question in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Text(question.header)
@@ -190,7 +194,7 @@ struct SessionQuestionForm: View {
     }
 
     private var canSubmit: Bool {
-        !intervention.questions.contains { finalAnswers(for: $0).isEmpty }
+        !displayQuestions.contains { finalAnswers(for: $0).isEmpty }
     }
 
     private func isSelected(_ title: String, for question: SessionInterventionQuestion) -> Bool {
@@ -222,7 +226,7 @@ struct SessionQuestionForm: View {
     }
 
     private func submissionPayload() -> [String: [String]] {
-        intervention.questions.reduce(into: [String: [String]]()) { partial, question in
+        displayQuestions.reduce(into: [String: [String]]()) { partial, question in
             let resolved = finalAnswers(for: question)
             if !resolved.isEmpty {
                 partial[question.id] = resolved

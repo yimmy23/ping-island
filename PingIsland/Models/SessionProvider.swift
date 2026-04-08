@@ -648,6 +648,72 @@ struct SessionIntervention: Equatable, Identifiable, Sendable {
         metadata["responseMode"] != "external_only"
     }
 
+    nonisolated var resolvedQuestions: [SessionInterventionQuestion] {
+        if !questions.isEmpty {
+            return questions
+        }
+
+        guard let rawJSON = metadata["toolInputJSON"] ?? metadata["tool_input_json"],
+              let data = rawJSON.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rawQuestions = payload["questions"] as? [[String: Any]] else {
+            return []
+        }
+
+        return rawQuestions.indices.compactMap { index -> SessionInterventionQuestion? in
+            let question = rawQuestions[index]
+            let prompt = (question["question"] as? String)
+                ?? (question["prompt"] as? String)
+                ?? (question["label"] as? String)
+            guard let prompt, !prompt.isEmpty else { return nil }
+
+            let rawOptionObjects = question["options"] as? [[String: Any]] ?? []
+            let objectOptions = rawOptionObjects.indices.compactMap { optionIndex -> SessionInterventionOption? in
+                let option = rawOptionObjects[optionIndex]
+                guard let label = option["label"] as? String, !label.isEmpty else { return nil }
+                return SessionInterventionOption(
+                    id: option["id"] as? String ?? "\(index)-option-\(optionIndex)",
+                    title: label,
+                    detail: option["description"] as? String
+                )
+            }
+
+            let normalizedOptions: [SessionInterventionOption]
+            if !objectOptions.isEmpty {
+                normalizedOptions = objectOptions
+            } else if let stringOptions = question["options"] as? [String], !stringOptions.isEmpty {
+                normalizedOptions = stringOptions.enumerated().map { optionIndex, label in
+                    SessionInterventionOption(
+                        id: "\(index)-option-\(optionIndex)",
+                        title: label,
+                        detail: nil
+                    )
+                }
+            } else {
+                normalizedOptions = []
+            }
+
+            return SessionInterventionQuestion(
+                id: question["id"] as? String ?? prompt,
+                header: question["header"] as? String ?? "\(index + 1).",
+                prompt: prompt,
+                detail: question["description"] as? String,
+                options: normalizedOptions,
+                allowsMultiple: question["isMultiple"] as? Bool
+                    ?? question["allowsMultiple"] as? Bool
+                    ?? question["multiSelect"] as? Bool
+                    ?? question["multiple"] as? Bool
+                    ?? false,
+                allowsOther: question["isOther"] as? Bool
+                    ?? question["allowsOther"] as? Bool
+                    ?? false,
+                isSecret: question["isSecret"] as? Bool
+                    ?? question["secret"] as? Bool
+                    ?? false
+            )
+        }
+    }
+
     nonisolated var awaitsExternalContinuation: Bool {
         metadata["continuationState"] == "awaiting_client_followup"
     }
@@ -727,13 +793,13 @@ struct SessionIntervention: Equatable, Identifiable, Sendable {
     }
 
     nonisolated var summaryText: String {
-        if kind == .question, let firstQuestion = questions.first {
+        if kind == .question, let firstQuestion = resolvedQuestions.first {
             return firstQuestion.prompt
         }
         if !message.isEmpty {
             return message
         }
-        if let firstQuestion = questions.first {
+        if let firstQuestion = resolvedQuestions.first {
             return firstQuestion.prompt
         }
         if let firstOption = options.first {

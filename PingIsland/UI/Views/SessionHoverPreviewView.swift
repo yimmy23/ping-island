@@ -623,6 +623,7 @@ private enum HoverPreviewStyle {
     }
 }
 
+@MainActor
 private enum HoverPreviewLineBuilder {
     static func previewLines(for session: SessionState, compact: Bool, detailsEnabled: Bool) -> [HoverPreviewLine] {
         var lines: [HoverPreviewLine] = []
@@ -714,6 +715,7 @@ private enum HoverPreviewLineBuilder {
     }
 }
 
+@MainActor
 private enum HoverConversationSnapshotBuilder {
     static func snapshot(for session: SessionState) -> HoverConversationSnapshot {
         HoverConversationSnapshot(
