@@ -62,7 +62,7 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
 
         let session = await store.session(for: sessionId)
         XCTAssertEqual(session?.intervention?.kind, .question)
-        XCTAssertEqual(session?.phase, .idle)
+        XCTAssertEqual(session?.phase, .waitingForInput)
         XCTAssertFalse(session?.needsApprovalResponse ?? true)
 
         await store.process(.sessionArchived(sessionId: sessionId))
