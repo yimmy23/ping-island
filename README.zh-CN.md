@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="PingIsland/Assets.xcassets/AppIcon.appiconset/icon_128x128.png" width="64" height="64" alt="Ping Island 应用图标" valign="middle">&nbsp;
+  <img src="docs/images/ping-island-icon.svg" width="64" height="64" alt="Ping Island 应用图标" valign="middle">&nbsp;
   Ping Island
 </h1>
 <p align="center">
@@ -38,6 +38,8 @@
 ## Ping Island 是什么？
 
 Ping Island 是一个 macOS 菜单栏应用。当你的编码 Agent 需要你处理审批、输入或查看结果时，它会展开成一个类似 Dynamic Island 的悬浮界面。它能接 Claude 风格 hooks、Codex hooks、Gemini CLI hooks、Codex app-server、OpenCode 插件，以及兼容 IDE 的集成层，所以你不用一直盯着终端标签页，也能看到会话状态。
+
+如果你了解过 [Vibe Island](https://vibeisland.app/)，可以把 Ping Island 理解成同一产品方向下的独立开源替代方案：它同样是一个原生 macOS 刘海区 / 菜单栏界面，用来监控和控制 AI 编码会话。
 
 项目当前的主运行链路很直接：
 

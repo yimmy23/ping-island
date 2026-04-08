@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="PingIsland/Assets.xcassets/AppIcon.appiconset/icon_128x128.png" width="64" height="64" alt="Ping Island app icon" valign="middle">&nbsp;
+  <img src="docs/images/ping-island-icon.svg" width="64" height="64" alt="Ping Island app icon" valign="middle">&nbsp;
   Ping Island
 </h1>
 <p align="center">
@@ -13,9 +13,6 @@
 
 ---
 
-<p align="center">
-  <img src="docs/images/notch-panel.png" width="960" alt="Ping Island preview">
-</p>
 <p align="center">
   <sub>Watch active coding sessions, answer follow-up questions, and jump back to the right terminal or IDE window.</sub>
 </p>
@@ -34,9 +31,15 @@
   <sub>Claude Code · Codex · Gemini CLI · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
 </p>
 
+<p align="center">
+  <img src="docs/images/notch-panel.png" width="960" alt="Ping Island preview">
+</p>
+
 ## What is Ping Island?
 
 Ping Island is a macOS menu bar app that expands into a Dynamic Island-style surface when your coding agents need attention. It listens to Claude-style hooks, Codex hooks, Gemini CLI hooks, the Codex app-server, OpenCode plugins, and compatible IDE integrations so approvals, input requests, completions, and session summaries show up without babysitting terminal tabs.
+
+If you have seen [Vibe Island](https://vibeisland.app/), Ping Island is positioned as an independent open-source alternative in the same category: a native macOS notch/menu bar surface for monitoring and controlling AI coding sessions.
 
 The app is built around a simple runtime flow:
 
