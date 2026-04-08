@@ -6,7 +6,6 @@
   <b>Dynamic Island-style AI coding session monitor for the macOS menu bar</b><br>
   <a href="#installation">Install</a> •
   <a href="#features">Features</a> •
-  <a href="#question-flow">Question Flow</a> •
   <a href="#supported-tools">Supported Tools</a> •
   <a href="#build-from-source">Build</a><br>
   English | <a href="README.zh-CN.md">简体中文</a>
@@ -22,14 +21,14 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/product-icons/claude-app-icon.png" width="28" alt="Claude Code icon" title="Claude Code">&nbsp;
-  <img src="PingIsland/Assets.xcassets/CodexLogo.imageset/codex-logo.png" width="28" alt="Codex icon" title="Codex">&nbsp;
-  <img src="PingIsland/Assets.xcassets/GeminiLogo.imageset/gemini-logo.png" width="28" alt="Gemini CLI icon" title="Gemini CLI">&nbsp;
-  <img src="docs/images/product-icons/opencode-app-icon.png" width="28" alt="OpenCode icon" title="OpenCode">&nbsp;
-  <img src="docs/images/product-icons/cursor-app-icon.png" width="28" alt="Cursor icon" title="Cursor">&nbsp;
-  <img src="PingIsland/Assets.xcassets/QoderLogo.imageset/qoder-logo.png" width="28" alt="Qoder icon" title="Qoder">&nbsp;
-  <img src="docs/images/product-icons/codebuddy-app-icon.png" width="28" alt="CodeBuddy icon" title="CodeBuddy">&nbsp;
-  <img src="PingIsland/Assets.xcassets/CopilotLogo.imageset/copilot-logo.png" width="28" alt="GitHub Copilot icon" title="GitHub Copilot">
+  <img src="docs/images/mascots/claude.gif" width="36" alt="Claude mascot" title="Claude Code">&nbsp;
+  <img src="docs/images/mascots/codex.gif" width="36" alt="Codex mascot" title="Codex">&nbsp;
+  <img src="docs/images/mascots/gemini.gif" width="36" alt="Gemini CLI mascot" title="Gemini CLI">&nbsp;
+  <img src="docs/images/mascots/opencode.gif" width="36" alt="OpenCode mascot" title="OpenCode">&nbsp;
+  <img src="docs/images/mascots/cursor.gif" width="36" alt="Cursor mascot" title="Cursor">&nbsp;
+  <img src="docs/images/mascots/qoder.gif" width="36" alt="Qoder mascot" title="Qoder">&nbsp;
+  <img src="docs/images/mascots/codebuddy.gif" width="36" alt="CodeBuddy mascot" title="CodeBuddy">&nbsp;
+  <img src="docs/images/mascots/copilot.gif" width="36" alt="GitHub Copilot mascot" title="GitHub Copilot">
 </p>
 <p align="center">
   <sub>Claude Code · Codex · Gemini CLI · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
@@ -62,15 +61,6 @@ Hook / app-server event
 - **Sparkle updates and markdown release notes** - supports in-app update checks and version notes sourced from the release pipeline.
 - **Diagnostics export** - bundle recent logs and config into a zip when you need to debug a broken integration.
 
-<a id="question-flow"></a>
-## Answer Questions Without Leaving the Notch
-
-When Claude Code, Codex, or another supported client needs more context, Ping Island can surface the question, answer choices, and pending sessions directly in the menu bar. You can reply inline, submit, and let the original session continue without hunting for the right terminal tab.
-
-<p align="center">
-  <img src="docs/images/question-panel.png" width="860" alt="Ping Island inline question prompt UI">
-</p>
-
 <a id="supported-tools"></a>
 ## Supported Tools
 
@@ -87,7 +77,7 @@ When Claude Code, Codex, or another supported client needs more context, Ping Is
 
 Ping Island also ships VS Code-compatible focus extensions for VS Code, Cursor, CodeBuddy, Qoder, and QoderWork. `QoderWork` remains hook-first and is only treated as an IDE extension host when that environment is actually available.
 
-The mascot GIFs used in this table are generated from the live `MascotView` implementation via `./scripts/render-mascots.sh`.
+The mascot GIFs used throughout this README are generated from the live `MascotView` implementation via `./scripts/render-mascots.sh`.
 
 <a id="installation"></a>
 ## Installation
