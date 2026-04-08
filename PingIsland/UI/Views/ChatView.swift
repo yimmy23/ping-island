@@ -461,19 +461,8 @@ struct ChatView: View {
                 Spacer(minLength: 0)
             }
 
-            if intervention.supportsInlineResponse {
-                SessionQuestionForm(
-                    intervention: intervention,
-                    submitLabel: "提交所有回答",
-                    onSubmit: { payload in
-                        sessionMonitor.answerIntervention(sessionId: sessionId, answers: payload)
-                    },
-                    secondaryActionTitle: session.isInTmux ? AppLocalization.string("打开终端") : nil,
-                    onSecondaryAction: session.isInTmux ? { focusTerminal() } : nil
-                )
-            } else if session.clientInfo.profileID == "qoderwork"
-                || session.clientInfo.bundleIdentifier == "com.qoder.work",
-                intervention.awaitsExternalContinuation {
+            if intervention.awaitsExternalContinuation,
+               session.clientInfo.prefersAnsweredQuestionFollowupAction {
                 VStack(alignment: .leading, spacing: 10) {
                     SessionQuestionForm(
                         intervention: intervention,
@@ -491,6 +480,16 @@ struct ChatView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+            } else if intervention.supportsInlineResponse {
+                SessionQuestionForm(
+                    intervention: intervention,
+                    submitLabel: "提交所有回答",
+                    onSubmit: { payload in
+                        sessionMonitor.answerIntervention(sessionId: sessionId, answers: payload)
+                    },
+                    secondaryActionTitle: session.isInTmux ? AppLocalization.string("打开终端") : nil,
+                    onSecondaryAction: session.isInTmux ? { focusTerminal() } : nil
+                )
             } else {
                 HStack(spacing: 8) {
                     Button {

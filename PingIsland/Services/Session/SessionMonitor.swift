@@ -390,13 +390,18 @@ class SessionMonitor: ObservableObject {
     nonisolated static func defaultQoderAutoAnswer(
         for event: HookEvent
     ) -> (toolUseId: String, answers: [String: [String]], updatedInput: [String: Any])? {
-        let isQoderManagedQuestion =
+        let isManagedQuestion =
             event.clientInfo.profileID == "qoder"
             || event.clientInfo.profileID == "qoderwork"
+            || event.clientInfo.profileID == "codebuddy"
+            || event.clientInfo.profileID == "workbuddy"
             || event.clientInfo.bundleIdentifier == "com.qoder.ide"
             || event.clientInfo.bundleIdentifier == "com.qoder.work"
+            || event.clientInfo.bundleIdentifier == "com.tencent.codebuddy"
+            || event.clientInfo.bundleIdentifier == "com.codebuddy.app"
+            || event.clientInfo.bundleIdentifier == "com.workbuddy.workbuddy"
 
-        guard isQoderManagedQuestion,
+        guard isManagedQuestion,
               let toolUseId = event.toolUseId,
               let intervention = event.intervention,
               intervention.kind == .question,

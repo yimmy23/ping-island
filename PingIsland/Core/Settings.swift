@@ -208,6 +208,7 @@ final class AppSettingsStore: ObservableObject {
         static let autoHideWhenIdle = "autoHideWhenIdle"
         static let autoCollapseOnLeave = "autoCollapseOnLeave"
         static let smartSuppression = "smartSuppression"
+        static let autoOpenCompletionPanel = "autoOpenCompletionPanel"
         static let showAgentDetail = "showAgentDetail"
         static let showUsage = "showUsage"
         static let usageValueMode = "usageValueMode"
@@ -367,6 +368,13 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(smartSuppression, forKey: Keys.smartSuppression)
+        }
+    }
+
+    @Published var autoOpenCompletionPanel: Bool {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(autoOpenCompletionPanel, forKey: Keys.autoOpenCompletionPanel)
         }
     }
 
@@ -545,6 +553,7 @@ final class AppSettingsStore: ObservableObject {
         _autoHideWhenIdle = Published(initialValue: defaults.object(forKey: Keys.autoHideWhenIdle) as? Bool ?? false)
         _autoCollapseOnLeave = Published(initialValue: defaults.object(forKey: Keys.autoCollapseOnLeave) as? Bool ?? true)
         _smartSuppression = Published(initialValue: defaults.object(forKey: Keys.smartSuppression) as? Bool ?? true)
+        _autoOpenCompletionPanel = Published(initialValue: defaults.object(forKey: Keys.autoOpenCompletionPanel) as? Bool ?? true)
         _showAgentDetail = Published(initialValue: defaults.object(forKey: Keys.showAgentDetail) as? Bool ?? true)
         _showUsage = Published(initialValue: defaults.object(forKey: Keys.showUsage) as? Bool ?? false)
         _usageValueMode = Published(initialValue: UsageValueMode(rawValue: usageValueModeRaw ?? "") ?? .used)
@@ -614,6 +623,11 @@ enum AppSettings {
     static var smartSuppression: Bool {
         get { shared.smartSuppression }
         set { shared.smartSuppression = newValue }
+    }
+
+    static var autoOpenCompletionPanel: Bool {
+        get { shared.autoOpenCompletionPanel }
+        set { shared.autoOpenCompletionPanel = newValue }
     }
 
     static var showAgentDetail: Bool {

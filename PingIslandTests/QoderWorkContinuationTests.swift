@@ -7,7 +7,14 @@ final class QoderWorkContinuationTests: XCTestCase {
         let sessionId = "qoderwork-cont-\(UUID().uuidString)"
         let store = SessionStore.shared
 
-        await store.process(.hookReceived(makeQoderWorkQuestionEvent(sessionId: sessionId)))
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "qoderwork",
+                name: "QoderWork",
+                bundleIdentifier: "com.qoder.work"
+            )
+        ))
         await store.process(
             .interventionResolved(
                 sessionId: sessionId,
@@ -26,11 +33,76 @@ final class QoderWorkContinuationTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testCodeBuddyResolvedInterventionWaitsForClientContinuation() async {
+        let sessionId = "codebuddy-cont-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "codebuddy",
+                name: "CodeBuddy",
+                bundleIdentifier: "com.tencent.codebuddy"
+            )
+        ))
+        await store.process(
+            .interventionResolved(
+                sessionId: sessionId,
+                nextPhase: .processing,
+                submittedAnswers: ["topic": ["A 方案"]]
+            )
+        )
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertTrue(session?.intervention?.awaitsExternalContinuation ?? false)
+        XCTAssertTrue(session?.intervention?.supportsInlineResponse ?? false)
+        XCTAssertEqual(session?.intervention?.submittedAnswers["topic"], ["A 方案"])
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
+    func testWorkBuddyResolvedInterventionWaitsForClientContinuation() async {
+        let sessionId = "workbuddy-cont-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "workbuddy",
+                name: "WorkBuddy",
+                bundleIdentifier: "com.workbuddy.workbuddy"
+            )
+        ))
+        await store.process(
+            .interventionResolved(
+                sessionId: sessionId,
+                nextPhase: .processing,
+                submittedAnswers: ["topic": ["A 方案"]]
+            )
+        )
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertTrue(session?.intervention?.awaitsExternalContinuation ?? false)
+        XCTAssertTrue(session?.intervention?.supportsInlineResponse ?? false)
+        XCTAssertEqual(session?.intervention?.submittedAnswers["topic"], ["A 方案"])
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     func testQoderWorkContinuationClearsAfterNewMessageArrives() async {
         let sessionId = "qoderwork-msg-\(UUID().uuidString)"
         let store = SessionStore.shared
 
-        await store.process(.hookReceived(makeQoderWorkQuestionEvent(sessionId: sessionId)))
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "qoderwork",
+                name: "QoderWork",
+                bundleIdentifier: "com.qoder.work"
+            )
+        ))
         await store.process(
             .interventionResolved(
                 sessionId: sessionId,
@@ -68,7 +140,14 @@ final class QoderWorkContinuationTests: XCTestCase {
         let sessionId = "qoderwork-fullsync-\(UUID().uuidString)"
         let store = SessionStore.shared
 
-        await store.process(.hookReceived(makeQoderWorkQuestionEvent(sessionId: sessionId)))
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "qoderwork",
+                name: "QoderWork",
+                bundleIdentifier: "com.qoder.work"
+            )
+        ))
         await store.process(
             .interventionResolved(
                 sessionId: sessionId,
@@ -110,7 +189,14 @@ final class QoderWorkContinuationTests: XCTestCase {
         let sessionId = "qoderwork-posttool-\(UUID().uuidString)"
         let store = SessionStore.shared
 
-        await store.process(.hookReceived(makeQoderWorkQuestionEvent(sessionId: sessionId)))
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "qoderwork",
+                name: "QoderWork",
+                bundleIdentifier: "com.qoder.work"
+            )
+        ))
         await store.process(
             .interventionResolved(
                 sessionId: sessionId,
@@ -153,7 +239,14 @@ final class QoderWorkContinuationTests: XCTestCase {
         let sessionId = "qoderwork-timeout-\(UUID().uuidString)"
         let store = SessionStore.shared
 
-        await store.process(.hookReceived(makeQoderWorkQuestionEvent(sessionId: sessionId)))
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "qoderwork",
+                name: "QoderWork",
+                bundleIdentifier: "com.qoder.work"
+            )
+        ))
         await store.process(
             .interventionResolved(
                 sessionId: sessionId,
@@ -178,7 +271,12 @@ final class QoderWorkContinuationTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
-    private func makeQoderWorkQuestionEvent(sessionId: String) -> HookEvent {
+    private func makeQuestionEvent(
+        sessionId: String,
+        profileID: String,
+        name: String,
+        bundleIdentifier: String
+    ) -> HookEvent {
         HookEvent(
             sessionId: sessionId,
             cwd: "/tmp/project",
@@ -186,10 +284,10 @@ final class QoderWorkContinuationTests: XCTestCase {
             status: "waiting_for_input",
             provider: .claude,
             clientInfo: SessionClientInfo(
-                kind: .qoder,
-                profileID: "qoderwork",
-                name: "QoderWork",
-                bundleIdentifier: "com.qoder.work"
+                kind: profileID == "qoderwork" ? .qoder : .claudeCode,
+                profileID: profileID,
+                name: name,
+                bundleIdentifier: bundleIdentifier
             ),
             pid: nil,
             tty: nil,

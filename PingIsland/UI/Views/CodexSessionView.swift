@@ -186,10 +186,6 @@ struct CodexThreadInspectorView: View {
     @State private var snapshot: CodexThreadSnapshot?
     @State private var isLoading = false
     @State private var loadError: String?
-    @State private var inputText = ""
-    @State private var isSending = false
-    @State private var sendError: String?
-    @FocusState private var isInputFocused: Bool
 
     private var primaryResultText: String? {
         snapshot?.displayResultText ?? session.previewText ?? session.lastMessage
@@ -206,24 +202,6 @@ struct CodexThreadInspectorView: View {
             }
         }
         return Array(filtered.suffix(mode.historyLimit))
-    }
-
-    private var canSendMessages: Bool {
-        snapshot?.latestTurnId != nil && session.intervention == nil && session.phase != .ended
-    }
-
-    private var isInputDisabled: Bool {
-        isSending || session.phase == .processing || !canSendMessages
-    }
-
-    private var inputPlaceholder: String {
-        if session.phase == .processing {
-            return "Codex is still working..."
-        }
-        if canSendMessages {
-            return "Continue this thread..."
-        }
-        return "Thread is not ready for input"
     }
 
     private var bodyFontSize: CGFloat {
@@ -273,14 +251,6 @@ struct CodexThreadInspectorView: View {
                     .font(.system(size: max(10, bodyFontSize - 2), weight: .medium))
                     .foregroundColor(TerminalColors.amber.opacity(0.95))
             }
-
-            if let sendError {
-                Text(sendError)
-                    .font(.system(size: max(10, bodyFontSize - 2), weight: .medium))
-                    .foregroundColor(TerminalColors.amber.opacity(0.95))
-            }
-
-            composer
         }
         .padding(mode == .hover ? 0 : 14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -336,50 +306,6 @@ struct CodexThreadInspectorView: View {
         }
     }
 
-    private var composer: some View {
-        HStack(spacing: 10) {
-            TextField(inputPlaceholder, text: $inputText)
-                .textFieldStyle(.plain)
-                .font(.system(size: bodyFontSize))
-                .foregroundColor(isInputDisabled ? .white.opacity(0.4) : .white)
-                .focused($isInputFocused)
-                .disabled(isInputDisabled)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.white.opacity(isInputDisabled ? 0.04 : 0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
-                        )
-                )
-                .onSubmit {
-                    sendMessage()
-                }
-
-            Button {
-                sendMessage()
-            } label: {
-                Image(systemName: isSending ? "ellipsis.circle.fill" : "arrow.up.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(sendButtonColor)
-            }
-            .buttonStyle(.plain)
-            .disabled(isInputDisabled || inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-    }
-
-    private var sendButtonColor: Color {
-        if isSending {
-            return TerminalColors.blue.opacity(0.95)
-        }
-        if isInputDisabled || inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return .white.opacity(0.2)
-        }
-        return .white.opacity(0.9)
-    }
-
     private func rowContent(for item: ChatHistoryItem) -> (prefix: String, prefixColor: Color, text: String, textColor: Color) {
         switch item.type {
         case .user(let text):
@@ -406,40 +332,6 @@ struct CodexThreadInspectorView: View {
         }
 
         isLoading = false
-    }
-
-    private func sendMessage() {
-        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              let expectedTurnId = snapshot?.latestTurnId else {
-            return
-        }
-
-        sendError = nil
-        isSending = true
-
-        Task {
-            do {
-                try await sessionMonitor.continueCodexThread(
-                    sessionId: session.sessionId,
-                    expectedTurnId: expectedTurnId,
-                    text: trimmed
-                )
-
-                await MainActor.run {
-                    inputText = ""
-                    isSending = false
-                }
-
-                try? await Task.sleep(for: .milliseconds(350))
-                await reloadThread()
-            } catch {
-                await MainActor.run {
-                    sendError = error.localizedDescription
-                    isSending = false
-                }
-            }
-        }
     }
 }
 

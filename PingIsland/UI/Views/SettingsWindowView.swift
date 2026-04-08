@@ -740,6 +740,13 @@ private struct SettingsPanelContentView: View {
                 SettingsLineDivider()
 
                 SettingsToggleLine(
+                    title: "完成时自动展开会话",
+                    subtitle: "消息完成后自动弹出结果面板；关闭后只保留刘海状态提示和提示音",
+                    isOn: $settings.autoOpenCompletionPanel
+                )
+                SettingsLineDivider()
+
+                SettingsToggleLine(
                     title: "鼠标离开时自动收起",
                     subtitle: "hover 展开的预览面板会在鼠标离开后自动关闭",
                     isOn: $settings.autoCollapseOnLeave

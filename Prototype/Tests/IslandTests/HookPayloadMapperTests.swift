@@ -104,6 +104,59 @@ func mapsClaudeIDEAndRemoteContextFromEnvironment() throws {
 }
 
 @Test
+func mapsQoderIDEContextAheadOfGenericVSCodeDetection() throws {
+    let payload = """
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "qoder-ide-1"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoder", "--client-name", "Qoder", "--client-originator", "Qoder"],
+        environment: [
+            "TERM_PROGRAM": "vscode",
+            "__CFBundleIdentifier": "com.qoder.ide",
+            "VSCODE_GIT_IPC_HANDLE": "/Applications/Qoder.app/Contents/Resources/app/out/vs/workbench",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.terminalContext.terminalProgram == "vscode")
+    #expect(envelope.terminalContext.terminalBundleID == "com.qoder.ide")
+    #expect(envelope.terminalContext.ideName == "Qoder")
+    #expect(envelope.terminalContext.ideBundleID == "com.qoder.ide")
+    #expect(envelope.metadata["client_originator"] == "Qoder")
+    #expect(envelope.metadata["terminal_bundle_id"] == "com.qoder.ide")
+}
+
+@Test
+func explicitBridgeOriginatorOverridesGenericVSCodeInference() throws {
+    let payload = """
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "qoder-override-1"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoder", "--client-name", "Qoder", "--client-originator", "Qoder"],
+        environment: [
+            "TERM_PROGRAM": "vscode",
+            "VSCODE_GIT_IPC_HANDLE": "/tmp/vscode-ipc",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.terminalContext.ideName == "VS Code")
+    #expect(envelope.metadata["client_originator"] == "Qoder")
+}
+
+@Test
 func mapsQuestionEventOptions() throws {
     let payload = """
     {
@@ -145,6 +198,110 @@ func claudePermissionPayloadUsesHookSpecificOutput() throws {
     #expect(hookSpecificOutput["hookEventName"] as? String == "PermissionRequest")
     let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
     #expect(decision["behavior"] as? String == "allow")
+}
+
+@Test
+func claudeQuestionAnswerPayloadPreservesFullUpdatedInputForPermissionRequests() throws {
+    let response = BridgeResponse(
+        requestID: UUID(),
+        decision: .answer([:]),
+        updatedInput: [
+            "questions": .array([
+                .object([
+                    "id": .string("terminal_scope"),
+                    "question": .string("Which terminal?"),
+                    "options": .array([
+                        .object(["label": .string("iTerm2")]),
+                        .object(["label": .string("Terminal")])
+                    ])
+                ])
+            ]),
+            "answers": .object([
+                "Which terminal?": .string("iTerm2")
+            ])
+        ]
+    )
+
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: response,
+        eventType: "PermissionRequest",
+        metadata: [:]
+    )
+
+    let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
+
+    let updatedInput = try #require(decision["updatedInput"] as? [String: Any])
+    let questions = try #require(updatedInput["questions"] as? [[String: Any]])
+    let answers = try #require(updatedInput["answers"] as? [String: String])
+    #expect(questions.first?["question"] as? String == "Which terminal?")
+    #expect(answers["Which terminal?"] == "iTerm2")
+}
+
+@Test
+func claudeUserInputAnswerPayloadPreservesFullUpdatedInput() throws {
+    let response = BridgeResponse(
+        requestID: UUID(),
+        decision: .answer([:]),
+        updatedInput: [
+            "questions": .array([
+                .object([
+                    "question": .string("Which terminal?")
+                ])
+            ]),
+            "answers": .object([
+                "Which terminal?": .string("iTerm2")
+            ])
+        ]
+    )
+
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: response,
+        eventType: "UserInputRequest",
+        metadata: [:]
+    )
+
+    let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    #expect(hookSpecificOutput["permissionDecision"] as? String == "allow")
+
+    let updatedInput = try #require(hookSpecificOutput["updatedInput"] as? [String: Any])
+    let questions = try #require(updatedInput["questions"] as? [[String: Any]])
+    let answers = try #require(updatedInput["answers"] as? [String: String])
+    #expect(questions.first?["question"] as? String == "Which terminal?")
+    #expect(answers["Which terminal?"] == "iTerm2")
+}
+
+@Test
+func claudeNonQuestionAnswerPayloadKeepsLegacyFlattenedShape() throws {
+    let response = BridgeResponse(
+        requestID: UUID(),
+        decision: .answer([
+            "terminal_scope": "iTerm2"
+        ]),
+        updatedInput: [
+            "answers": .object([
+                "terminal_scope": .string("iTerm2")
+            ])
+        ]
+    )
+
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: response,
+        eventType: "PermissionRequest",
+        metadata: ["tool_name": "Bash"]
+    )
+
+    let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    let updatedInput = try #require(decision["updatedInput"] as? [String: String])
+    #expect(updatedInput["terminal_scope"] == "iTerm2")
 }
 
 @Test
@@ -288,7 +445,7 @@ func qoderClientMetadataCanBeInjectedFromBridgeArguments() throws {
 
     let envelope = HookPayloadMapper.makeEnvelope(
         source: .claude,
-        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoder", "--client-name", "Qoder"],
+        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoder", "--client-name", "Qoder", "--client-originator", "Qoder"],
         environment: ["PWD": "/tmp/demo"],
         stdinData: payload
     )
@@ -296,6 +453,7 @@ func qoderClientMetadataCanBeInjectedFromBridgeArguments() throws {
     #expect(envelope.provider == .claude)
     #expect(envelope.metadata["client_kind"] == "qoder")
     #expect(envelope.metadata["client_name"] == "Qoder")
+    #expect(envelope.metadata["client_originator"] == "Qoder")
     #expect(envelope.sessionKey == "claude:qoder-123")
 }
 
@@ -349,7 +507,7 @@ func qoderWorkClientMetadataCanBeInjectedFromBridgeArguments() throws {
 
     let envelope = HookPayloadMapper.makeEnvelope(
         source: .claude,
-        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoderwork", "--client-name", "QoderWork"],
+        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoderwork", "--client-name", "QoderWork", "--client-originator", "QoderWork"],
         environment: ["PWD": "/tmp/demo"],
         stdinData: payload
     )
@@ -357,6 +515,7 @@ func qoderWorkClientMetadataCanBeInjectedFromBridgeArguments() throws {
     #expect(envelope.provider == .claude)
     #expect(envelope.metadata["client_kind"] == "qoderwork")
     #expect(envelope.metadata["client_name"] == "QoderWork")
+    #expect(envelope.metadata["client_originator"] == "QoderWork")
     #expect(envelope.sessionKey == "claude:qoderwork-123")
 }
 

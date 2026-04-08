@@ -135,7 +135,9 @@ class NotchViewModel: ObservableObject {
     private let events: EventMonitors?
     private let fullscreenActivityProvider: @MainActor (CGRect) -> Bool
     private var hoverTimer: DispatchWorkItem?
-    private let defaultHoverActivationDelay: TimeInterval = 0.45
+    // Keep hover previews feeling responsive without making incidental cursor
+    // passes over the notch expand it too aggressively.
+    private let defaultHoverActivationDelay: TimeInterval = 0.24
     private let fullscreenHoverActivationDelay: TimeInterval = 0.18
     private let fullscreenRevealZoneHeight: CGFloat = 8
     private let fullscreenRevealZoneHorizontalInset: CGFloat = 36

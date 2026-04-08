@@ -306,17 +306,8 @@ private struct HoverQuestionInterventionCard: View {
                 Spacer(minLength: 0)
             }
 
-            if intervention.supportsInlineResponse {
-                SessionQuestionForm(
-                    intervention: intervention,
-                    submitLabel: "提交所有回答",
-                    onSubmit: { payload in
-                        sessionMonitor.answerIntervention(sessionId: session.sessionId, answers: payload)
-                    }
-                )
-            } else if session.clientInfo.profileID == "qoderwork"
-                || session.clientInfo.bundleIdentifier == "com.qoder.work",
-                intervention.awaitsExternalContinuation {
+            if intervention.awaitsExternalContinuation,
+               session.clientInfo.prefersAnsweredQuestionFollowupAction {
                 VStack(alignment: .leading, spacing: 10) {
                     SessionQuestionForm(
                         intervention: intervention,
@@ -338,6 +329,14 @@ private struct HoverQuestionInterventionCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+            } else if intervention.supportsInlineResponse {
+                SessionQuestionForm(
+                    intervention: intervention,
+                    submitLabel: "提交所有回答",
+                    onSubmit: { payload in
+                        sessionMonitor.answerIntervention(sessionId: session.sessionId, answers: payload)
+                    }
+                )
             } else {
                 Button {
                     Task {

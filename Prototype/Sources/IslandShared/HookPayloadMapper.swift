@@ -68,7 +68,7 @@ public enum HookPayloadMapper {
         switch provider {
         case .claude:
             let clientKind = normalizedClientKind(from: metadata)
-            if clientKind == "codebuddy" {
+            if isCodeBuddyFamilyHookClient(clientKind) {
                 return codeBuddyStdoutPayload(response: response, decision: decision)
             }
             switch decision {
@@ -92,23 +92,28 @@ public enum HookPayloadMapper {
                         answers: answers
                     )
                 }
-                // Serialize answers to JSON string
-                guard let answersJson = String(data: (try? JSONSerialization.data(withJSONObject: answers, options: [.sortedKeys])) ?? Data("{}".utf8), encoding: .utf8) else {
+                let usesFullUpdatedInput = shouldPreserveFullUpdatedInputForClaudeAnswer(
+                    response: response,
+                    metadata: metadata
+                )
+                let payloadObject: Any = usesFullUpdatedInput
+                    ? (response.updatedInput?.mapValues(\.foundationObject) ?? answers)
+                    : answers
+
+                guard JSONSerialization.isValidJSONObject(payloadObject),
+                      let payloadData = try? JSONSerialization.data(withJSONObject: payloadObject, options: [.sortedKeys]),
+                      let payloadJson = String(data: payloadData, encoding: .utf8) else {
                     return "{}"
                 }
-                
-                // For question/user input events, return format expected by Claude
-                // Use hookSpecificOutput with permissionDecision for question events
+
                 if eventType.contains("Question") || eventType == "UserInputRequest" || eventType == "UserPromptSubmit" {
                     return """
-                    {"hookSpecificOutput":{"hookEventName":"\(eventType)","permissionDecision":"allow","updatedInput":\(answersJson)}}
+                    {"hookSpecificOutput":{"hookEventName":"\(eventType)","permissionDecision":"allow","updatedInput":\(payloadJson)}}
                     """
                 }
-                
-                // For PermissionRequest events, use hookSpecificOutput format
-                // Note: Don't wrap answers in {"answers":...} as that breaks other clients
+
                 return """
-                {"hookSpecificOutput":{"hookEventName":"\(eventType)","decision":{"behavior":"allow","updatedInput":\(answersJson)}}}
+                {"hookSpecificOutput":{"hookEventName":"\(eventType)","decision":{"behavior":"allow","updatedInput":\(payloadJson)}}}
                 """
             }
         case .codex:
@@ -159,6 +164,27 @@ public enum HookPayloadMapper {
         "task",
         "todowrite"
     ]
+
+    private static func shouldPreserveFullUpdatedInputForClaudeAnswer(
+        response: BridgeResponse,
+        metadata: [String: String]
+    ) -> Bool {
+        guard let updatedInput = response.updatedInput else {
+            return false
+        }
+
+        if updatedInput["questions"] != nil {
+            return true
+        }
+
+        let normalizedToolName = metadata["tool_name"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .lowercased()
+
+        return normalizedToolName.map(questionToolNames.contains) ?? false
+    }
 
     private static let codeBuddyReadOnlyTools: Set<String> = [
         "read",
@@ -418,9 +444,13 @@ public enum HookPayloadMapper {
 
     private static func detectIDEContext(environment: [String: String]) -> (name: String?, bundleID: String?) {
         let terminalProgram = (environment["TERM_PROGRAM"] ?? "").lowercased()
+        let bundleIdentifier = environment["__CFBundleIdentifier"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
         let hintKeys = [
             "TERM_PROGRAM",
             "TERM_PROGRAM_VERSION",
+            "__CFBundleIdentifier",
             "VSCODE_GIT_IPC_HANDLE",
             "VSCODE_IPC_HOOK_CLI",
             "VSCODE_GIT_ASKPASS_MAIN",
@@ -439,6 +469,18 @@ public enum HookPayloadMapper {
             .compactMap { environment[$0]?.lowercased() }
             .joined(separator: " ")
 
+        if bundleIdentifier == "com.qoder.work"
+            || hints.contains("qoderwork.app")
+            || hints.contains("com.qoder.work")
+            || environment.keys.contains(where: { $0.hasPrefix("QODERWORK_") }) {
+            return ("QoderWork", "com.qoder.work")
+        }
+        if bundleIdentifier == "com.qoder.ide"
+            || hints.contains("qoder.app")
+            || hints.contains("com.qoder.ide")
+            || environment.keys.contains(where: { $0.hasPrefix("QODER_") }) {
+            return ("Qoder", "com.qoder.ide")
+        }
         if hints.contains("cursor") || environment.keys.contains(where: { $0.hasPrefix("CURSOR_") }) {
             return ("Cursor", "com.todesktop.230313mzl4w4u92")
         }
@@ -447,6 +489,12 @@ public enum HookPayloadMapper {
         }
         if hints.contains("trae") || environment.keys.contains(where: { $0.hasPrefix("TRAE_") }) {
             return ("Trae", "com.trae.app")
+        }
+        if bundleIdentifier == "com.workbuddy.workbuddy"
+            || hints.contains("workbuddy.app")
+            || hints.contains("com.workbuddy.workbuddy")
+            || environment.keys.contains(where: { $0.hasPrefix("WORKBUDDY_") }) {
+            return ("WorkBuddy", "com.workbuddy.workbuddy")
         }
         if hints.contains("codebuddy") || environment.keys.contains(where: { $0.hasPrefix("CODEBUDDY_") }) {
             return ("CodeBuddy", "com.tencent.codebuddy")
@@ -599,6 +647,9 @@ public enum HookPayloadMapper {
         terminalContext: TerminalContext
     ) -> [String: String] {
         var metadata = flattenMetadata(payload: payload)
+        for (key, value) in argumentMetadata(arguments: arguments) {
+            metadata[key] = value
+        }
         if let toolInput = payload["tool_input"] as? [String: Any],
            JSONSerialization.isValidJSONObject(toolInput),
            let data = try? JSONSerialization.data(withJSONObject: toolInput, options: [.sortedKeys]),
@@ -622,9 +673,6 @@ public enum HookPayloadMapper {
         }
         if let processName = detectedSourceProcessName(), metadata["source_process_name"] == nil {
             metadata["source_process_name"] = processName
-        }
-        for (key, value) in argumentMetadata(arguments: arguments) where metadata[key] == nil {
-            metadata[key] = value
         }
         return metadata
     }
@@ -788,9 +836,64 @@ public enum HookPayloadMapper {
     }
 
     private static func normalizedClientKind(from metadata: [String: String]) -> String? {
-        metadata["client_kind"]?
+        if let explicitClientKind = metadata["client_kind"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+           !explicitClientKind.isEmpty {
+            return explicitClientKind
+        }
+
+        let bundleIdentifier = metadata["client_bundle_id"]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
+            ?? metadata["terminal_bundle_id"]?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+        switch bundleIdentifier {
+        case "com.qoder.work":
+            return "qoderwork"
+        case "com.qoder.ide":
+            return "qoder"
+        case "com.tencent.codebuddy", "com.codebuddy.app":
+            return "codebuddy"
+        case "com.workbuddy.workbuddy":
+            return "workbuddy"
+        default:
+            break
+        }
+
+        let nameHint = metadata["client_name"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            ?? metadata["client_originator"]?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+        if let nameHint {
+            if nameHint.contains("qoderwork") || nameHint.contains("qoder work") {
+                return "qoderwork"
+            }
+            if nameHint.contains("qoder") {
+                return "qoder"
+            }
+            if nameHint.contains("workbuddy") || nameHint.contains("work buddy") {
+                return "workbuddy"
+            }
+            if nameHint.contains("codebuddy") || nameHint.contains("code buddy") {
+                return "codebuddy"
+            }
+        }
+
+        return nil
+    }
+
+    private static func isCodeBuddyFamilyHookClient(_ clientKind: String?) -> Bool {
+        guard let clientKind else { return false }
+        switch clientKind {
+        case "codebuddy", "workbuddy":
+            return true
+        default:
+            return false
+        }
     }
 
     private static func isGeminiHookClient(_ clientKind: String?) -> Bool {
@@ -906,7 +1009,7 @@ public enum HookPayloadMapper {
         payload: [String: Any],
         clientKind: String?
     ) -> Bool {
-        guard clientKind == "codebuddy", eventType == "PreToolUse" else {
+        guard isCodeBuddyFamilyHookClient(clientKind), eventType == "PreToolUse" else {
             return false
         }
 

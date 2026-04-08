@@ -27,6 +27,8 @@
 "无刘海屏会在全屏时收起到顶部中央触发区；刘海屏会收缩为空白系统刘海，hover 后再展示 Island 内容" = "On displays without a notch, Island collapses into a top-center trigger in fullscreen. On notched displays, it shrinks back into the system notch until you hover.";
 "智能抑制" = "Smart suppression";
 "当前正在看终端时，不自动弹出通知面板" = "Do not auto-open the notification panel while you are already looking at the terminal";
+"完成时自动展开会话" = "Auto-open completed sessions";
+"消息完成后自动弹出结果面板；关闭后只保留刘海状态提示和提示音" = "Automatically open the result panel when a reply is finished. When off, keep only the notch status cue and sound.";
 "鼠标离开时自动收起" = "Auto-collapse on mouse leave";
 "hover 展开的预览面板会在鼠标离开后自动关闭" = "Automatically close the hover preview panel when the mouse leaves";
 "应用" = "App";

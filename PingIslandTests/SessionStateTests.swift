@@ -508,6 +508,45 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(profile?.showsInSettings, false)
     }
 
+    func testWorkBuddyRuntimeProfileMatchesBundleAndName() {
+        let bundleProfile = ClientProfileRegistry.matchRuntimeProfile(
+            provider: .claude,
+            explicitKind: nil,
+            explicitName: "WorkBuddy",
+            explicitBundleIdentifier: "com.workbuddy.workbuddy",
+            terminalBundleIdentifier: nil,
+            origin: nil,
+            originator: nil,
+            threadSource: nil,
+            processName: nil
+        )
+        let nameOnlyProfile = ClientProfileRegistry.matchRuntimeProfile(
+            provider: .claude,
+            explicitKind: nil,
+            explicitName: "WorkBuddy",
+            explicitBundleIdentifier: nil,
+            terminalBundleIdentifier: nil,
+            origin: nil,
+            originator: nil,
+            threadSource: nil,
+            processName: nil
+        )
+
+        XCTAssertEqual(bundleProfile?.id, "workbuddy")
+        XCTAssertEqual(nameOnlyProfile?.id, "workbuddy")
+        XCTAssertEqual(ClientProfileRegistry.ideExtensionProfile(bundleIdentifier: "com.workbuddy.workbuddy", appName: "WorkBuddy")?.id, "workbuddy-extension")
+    }
+
+    func testWorkBuddyWorkspaceLaunchURLUsesNativeScheme() {
+        XCTAssertEqual(
+            SessionClientInfo.appLaunchURL(
+                bundleIdentifier: "com.workbuddy.workbuddy",
+                workspacePath: "/tmp/project"
+            ),
+            "workbuddy://file/tmp/project"
+        )
+    }
+
     func testCodexAppPrefersDirectLaunchURLBeforeWorkspaceRouting() {
         XCTAssertTrue(
             SessionLauncher.shouldPrioritizeDirectLaunchURL(

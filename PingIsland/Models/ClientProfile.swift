@@ -573,6 +573,7 @@ enum ClientProfileRegistry {
             subtitle: "管理 ~/.config/opencode/plugins/ping-island.js，按 OpenCode 官方插件 hooks 接入 Island",
             installationKind: .pluginFile,
             alwaysVisibleInSettings: true,
+            logoAssetName: "OpenCodeLogo",
             localAppBundleIdentifiers: ["ai.opencode.desktop"],
             iconSymbolName: "waveform.path.ecg.text",
             configurationRelativePath: ".config/opencode/plugins/ping-island.js",
@@ -665,6 +666,21 @@ enum ClientProfileRegistry {
             exactAliases: ["codebuddy", "code-buddy", "codebuddy-client", "codebuddy client"],
             keywordAliases: ["codebuddy", "code buddy"],
             bundleIdentifiers: ["com.tencent.codebuddy", "com.codebuddy.app"]
+        ),
+        SessionClientProfile(
+            id: "workbuddy",
+            provider: .claude,
+            family: .claudeHooks,
+            kind: .claudeCode,
+            displayName: "WorkBuddy",
+            assistantLabelMode: .badgeLabel,
+            brand: .codebuddy,
+            defaultBundleIdentifier: nil,
+            defaultOrigin: nil,
+            recognizedKinds: ["workbuddy", "work-buddy", "workbuddy-client", "workbuddy client"],
+            exactAliases: ["workbuddy", "work-buddy", "workbuddy-client", "workbuddy client"],
+            keywordAliases: ["workbuddy", "work buddy"],
+            bundleIdentifiers: ["com.workbuddy.workbuddy"]
         ),
         SessionClientProfile(
             id: "trae",
@@ -827,6 +843,19 @@ enum ClientProfileRegistry {
             exactBundleIdentifiers: ["com.tencent.codebuddy", "com.codebuddy.app"],
             bundleIdentifierKeywords: ["codebuddy", "tencent"],
             appNameKeywords: ["codebuddy"]
+        ),
+        ManagedIDEExtensionProfile(
+            id: "workbuddy-extension",
+            title: "WorkBuddy",
+            subtitle: "安装 Ping Island，支持终端精准聚焦",
+            showsInSettings: false,
+            localAppBundleIdentifiers: ["com.workbuddy.workbuddy"],
+            iconSymbolName: "bubble.left.and.bubble.right.fill",
+            extensionRootRelativePath: ".workbuddy/extensions",
+            uriScheme: "workbuddy",
+            exactBundleIdentifiers: ["com.workbuddy.workbuddy"],
+            bundleIdentifierKeywords: ["workbuddy"],
+            appNameKeywords: ["workbuddy"]
         ),
         ManagedIDEExtensionProfile(
             id: "qoder-extension",

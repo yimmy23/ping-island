@@ -49,6 +49,7 @@ struct TerminalAppRegistry: Sendable {
         "com.trae.app",
         "com.codebuddy.app",
         "com.tencent.codebuddy",
+        "com.workbuddy.workbuddy",
         "com.qoder.ide",
         "com.qoder.work"
     ]
@@ -62,6 +63,7 @@ struct TerminalAppRegistry: Sendable {
         "com.trae.app.helper": "com.trae.app",
         "com.codebuddy.app.helper": "com.codebuddy.app",
         "com.tencent.codebuddy.helper": "com.tencent.codebuddy",
+        "com.workbuddy.workbuddy.helper": "com.workbuddy.workbuddy",
         "com.qoder.ide.helper": "com.qoder.ide",
         "com.qoder.work.helper": "com.qoder.work",
         "com.openai.codex.helper": "com.openai.codex"
@@ -92,6 +94,7 @@ struct TerminalAppRegistry: Sendable {
         "Windsurf",
         "Trae",
         "CodeBuddy",
+        "WorkBuddy",
         "Qoder",
         "QoderWork",
         "zed"
@@ -116,6 +119,7 @@ struct TerminalAppRegistry: Sendable {
         "com.trae.app",
         "com.codebuddy.app",
         "com.tencent.codebuddy",
+        "com.workbuddy.workbuddy",
         "com.qoder.ide",
         "com.qoder.work",
         "dev.zed.Zed"

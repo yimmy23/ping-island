@@ -21,3 +21,14 @@ func approvalCoordinatorReturnsResolvedDecision() async throws {
 
     #expect(resolved == .approveForSession)
 }
+
+@Test
+func approvalCoordinatorReturnsDecisionResolvedBeforeWaiting() async {
+    let coordinator = ApprovalCoordinator()
+    let requestID = UUID()
+
+    await coordinator.resolve(requestID: requestID, decision: .approve)
+    let resolved = await coordinator.waitForDecision(requestID: requestID)
+
+    #expect(resolved == .approve)
+}

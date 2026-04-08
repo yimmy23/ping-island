@@ -647,8 +647,7 @@ actor SessionStore {
         guard var session = sessions[sessionId] else { return }
         if let intervention = session.intervention,
            intervention.kind == .question,
-           (session.clientInfo.profileID == "qoderwork" || session.clientInfo.bundleIdentifier == "com.qoder.work"),
-           intervention.supportsInlineResponse == false {
+           session.clientInfo.prefersAnsweredQuestionFollowupAction {
             session.intervention = intervention.markingAwaitingExternalContinuation(
                 actorName: session.interactionDisplayName,
                 selectedAnswers: submittedAnswers

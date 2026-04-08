@@ -193,6 +193,27 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
         brand == .qoder
     }
 
+    nonisolated var prefersAnsweredQuestionFollowupAction: Bool {
+        let normalizedProfileID = profileID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if normalizedProfileID == "qoderwork"
+            || normalizedProfileID == "codebuddy"
+            || normalizedProfileID == "workbuddy" {
+            return true
+        }
+
+        let normalizedHostBundleIdentifier = (terminalBundleIdentifier ?? bundleIdentifier)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        switch normalizedHostBundleIdentifier {
+        case "com.qoder.work", "com.tencent.codebuddy", "com.codebuddy.app", "com.workbuddy.workbuddy":
+            return true
+        default:
+            return false
+        }
+    }
+
     nonisolated var ideHostProfile: ManagedIDEExtensionProfile? {
         let detectedBundleIdentifier = terminalBundleIdentifier ?? bundleIdentifier
         let appName: String?
@@ -531,12 +552,17 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
             return workspacePath.flatMap { workspaceURL(scheme: "qoder-work", path: $0) }
         case "com.qoder.ide":
             return workspacePath.flatMap { workspaceURL(scheme: "qoder", path: $0) }
+        case "com.workbuddy.workbuddy":
+            return workspacePath.flatMap { workspaceURL(scheme: "workbuddy", path: $0) }
         default:
             if normalizedBundleIdentifier.contains("qoder") {
                 return workspacePath.flatMap { workspaceURL(scheme: "qoder", path: $0) }
             }
             if normalizedBundleIdentifier.contains("trae") {
                 return workspacePath.flatMap { workspaceURL(scheme: "trae", path: $0) }
+            }
+            if normalizedBundleIdentifier.contains("workbuddy") {
+                return workspacePath.flatMap { workspaceURL(scheme: "workbuddy", path: $0) }
             }
             if normalizedBundleIdentifier.contains("codebuddy") {
                 return workspacePath.flatMap { workspaceURL(scheme: "codebuddy", path: $0) }

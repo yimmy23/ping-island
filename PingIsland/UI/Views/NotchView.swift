@@ -291,6 +291,11 @@ struct NotchView: View {
         .onChange(of: viewModel.status) { oldStatus, newStatus in
             handleStatusChange(from: oldStatus, to: newStatus)
         }
+        .onChange(of: settings.autoOpenCompletionPanel) { _, isEnabled in
+            if !isEnabled {
+                clearCompletionNotifications(keepPanelOpen: true)
+            }
+        }
         .onChange(of: viewModel.contentType.id) { _, _ in
             maybePresentNextCompletionNotification()
         }
@@ -753,13 +758,52 @@ struct NotchView: View {
 
         // Completion should stay as a lightweight status cue in the closed notch
         // instead of auto-opening a read-only notification panel that steals focus.
-        if activeCompletionNotification != nil || !completionNotificationQueue.isEmpty {
-            clearCompletionNotifications(keepPanelOpen: true)
+        guard settings.autoOpenCompletionPanel else {
+            if activeCompletionNotification != nil || !completionNotificationQueue.isEmpty {
+                clearCompletionNotifications(keepPanelOpen: true)
+            }
+
+            previousCompletionNotificationPhases = Dictionary(
+                uniqueKeysWithValues: instances.map { ($0.stableId, $0.phase) }
+            )
+            return
         }
 
-        previousCompletionNotificationPhases = Dictionary(
+        let currentPhases = Dictionary(
             uniqueKeysWithValues: instances.map { ($0.stableId, $0.phase) }
         )
+
+        // Completion popups are one-shot ambient notifications. If the notch is already
+        // expanded for some other reason, drop new completion popups instead of queueing
+        // them to appear later on top of the normal expanded UI.
+        if viewModel.status == .opened && activeCompletionNotification == nil {
+            previousCompletionNotificationPhases = currentPhases
+            completionNotificationQueue.removeAll()
+            return
+        }
+
+        let newNotifications = instances
+            .compactMap { session -> SessionCompletionNotification? in
+                let previousPhase = previousCompletionNotificationPhases[session.stableId]
+
+                if shouldQueueCompletedNotification(for: session, previousPhase: previousPhase) {
+                    return SessionCompletionNotification(session: session, kind: .completed)
+                }
+
+                if shouldQueueEndedNotification(for: session, previousPhase: previousPhase) {
+                    return SessionCompletionNotification(session: session, kind: .ended)
+                }
+
+                return nil
+            }
+            .sorted { $0.session.lastActivity < $1.session.lastActivity }
+
+        for notification in newNotifications {
+            enqueueCompletionNotification(notification)
+        }
+
+        previousCompletionNotificationPhases = currentPhases
+        maybePresentNextCompletionNotification()
     }
 
     private func shouldQueueCompletedNotification(
@@ -820,6 +864,7 @@ struct NotchView: View {
     }
 
     private func maybePresentNextCompletionNotification() {
+        guard settings.autoOpenCompletionPanel else { return }
         guard activeCompletionNotification == nil else { return }
         guard !completionNotificationQueue.isEmpty else { return }
         guard !viewModel.shouldSuppressAutomaticPresentation else { return }
@@ -838,7 +883,6 @@ struct NotchView: View {
             viewModel.notchOpen(reason: .notification)
         }
 
-        playEventSoundIfNeeded(.taskCompleted, sessions: [nextNotification.session])
         scheduleCompletionNotificationDismissal(for: nextNotification.id)
     }
 

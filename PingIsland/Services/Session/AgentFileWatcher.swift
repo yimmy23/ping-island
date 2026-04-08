@@ -13,6 +13,7 @@ import os.log
 private let logger = Logger(subsystem: "com.wudanwu.pingisland", category: "AgentFileWatcher")
 
 /// Protocol for receiving agent file update notifications
+@MainActor
 protocol AgentFileWatcherDelegate: AnyObject {
     func didUpdateAgentTools(sessionId: String, taskToolId: String, tools: [SubagentToolInfo])
 }
@@ -103,7 +104,7 @@ class AgentFileWatcher {
         seenToolIds = Set(tools.map { $0.id })
         logger.debug("Agent \(self.agentId.prefix(8), privacy: .public) has \(tools.count) tools")
 
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self = self else { return }
             self.delegate?.didUpdateAgentTools(
                 sessionId: self.sessionId,
