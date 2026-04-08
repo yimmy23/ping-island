@@ -1023,8 +1023,8 @@ private struct SettingsPanelContentView: View {
             }
 
             SettingsSectionCard(title: "链接") {
-                SettingsActionLine(title: "GitHub", subtitle: "查看项目主页并反馈问题") {
-                    if let url = URL(string: "https://github.com/wudanwu/Island") {
+                SettingsActionLine(title: "GitHub", subtitle: "打开 Issues 页面反馈问题") {
+                    if let url = URL(string: "https://github.com/erha19/ping-island/issues") {
                         NSWorkspace.shared.open(url)
                     }
                 } accessory: {
