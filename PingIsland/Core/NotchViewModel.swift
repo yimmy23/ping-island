@@ -276,8 +276,7 @@ class NotchViewModel: ObservableObject {
         // Start hover timer to auto-expand after a short dwell
         if isHovering && (status == .closed || status == .popping) {
             let workItem = DispatchWorkItem { [weak self] in
-                guard let self = self, self.isHovering else { return }
-                self.notchOpen(reason: .hover)
+                self?.performDeferredHoverOpenIfNeeded()
             }
             hoverTimer = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + hoverActivationDelay, execute: workItem)
@@ -353,6 +352,9 @@ class NotchViewModel: ObservableObject {
     // MARK: - Actions
 
     func notchOpen(reason: NotchOpenReason = .unknown) {
+        hoverTimer?.cancel()
+        hoverTimer = nil
+
         if reason == .notification && shouldSuppressAutomaticPresentation {
             return
         }
@@ -382,6 +384,12 @@ class NotchViewModel: ObservableObject {
             }
             contentType = .chat(chatSession)
         }
+    }
+
+    func performDeferredHoverOpenIfNeeded() {
+        guard isHovering else { return }
+        guard status == .closed || status == .popping else { return }
+        notchOpen(reason: .hover)
     }
 
     func notchClose() {
@@ -417,6 +425,13 @@ class NotchViewModel: ObservableObject {
             return
         }
         contentType = .chat(session)
+    }
+
+    /// Surface a session from an automatic notification without collapsing first.
+    /// This keeps attention-driven panel refreshes stable when the notch is already open.
+    func presentNotificationChat(for session: SessionState) {
+        notchOpen(reason: .notification)
+        showChat(for: session)
     }
 
     /// Go back to instances list and clear saved chat state

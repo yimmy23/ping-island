@@ -1,0 +1,68 @@
+import CoreGraphics
+import XCTest
+@testable import Ping_Island
+
+final class NotchViewModelTests: XCTestCase {
+    func testPresentNotificationChatOpensClosedNotchAndShowsTargetSession() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+            let session = makeSession(id: "approval-session")
+
+            viewModel.presentNotificationChat(for: session)
+
+            XCTAssertEqual(viewModel.status, .opened)
+            XCTAssertEqual(viewModel.openReason, .notification)
+            XCTAssertEqual(viewModel.contentType, .chat(session))
+        }
+    }
+
+    func testPresentNotificationChatKeepsOpenedNotchExpandedWhileSwitchingSessions() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+            let originalSession = makeSession(id: "original-session")
+            let refreshedSession = makeSession(id: "refreshed-session")
+
+            viewModel.notchOpen(reason: .notification)
+            viewModel.showChat(for: originalSession)
+
+            viewModel.presentNotificationChat(for: refreshedSession)
+
+            XCTAssertEqual(viewModel.status, .opened)
+            XCTAssertEqual(viewModel.openReason, .notification)
+            XCTAssertEqual(viewModel.contentType, .chat(refreshedSession))
+        }
+    }
+
+    func testDeferredHoverOpenDoesNotOverrideActiveNotificationPresentation() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+
+            viewModel.isHovering = true
+            viewModel.notchOpen(reason: .notification)
+            viewModel.performDeferredHoverOpenIfNeeded()
+
+            XCTAssertEqual(viewModel.status, .opened)
+            XCTAssertEqual(viewModel.openReason, .notification)
+            XCTAssertEqual(viewModel.contentType, .instances)
+        }
+    }
+
+    private func makeViewModel() -> NotchViewModel {
+        NotchViewModel(
+            deviceNotchRect: .zero,
+            screenRect: CGRect(x: 0, y: 0, width: 1440, height: 900),
+            windowHeight: 320,
+            hasPhysicalNotch: false,
+            enableEventMonitoring: false,
+            observeSystemEnvironment: false,
+            fullscreenActivityProvider: { _ in false }
+        )
+    }
+
+    private func makeSession(id: String) -> SessionState {
+        SessionState(
+            sessionId: id,
+            cwd: "/tmp/\(id)"
+        )
+    }
+}
