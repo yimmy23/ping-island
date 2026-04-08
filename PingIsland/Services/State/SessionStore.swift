@@ -239,6 +239,10 @@ actor SessionStore {
             } else {
                 session.intervention = intervention
             }
+
+            if intervention.kind == .question {
+                session.phase = .waitingForInput
+            }
         } else if shouldClearIntervention(for: event, newPhase: newPhase, currentIntervention: session.intervention) {
             session.intervention = nil
         }
@@ -1022,7 +1026,7 @@ actor SessionStore {
     private func shouldClearIntervention(for event: HookEvent, newPhase: SessionPhase, currentIntervention: SessionIntervention?) -> Bool {
         guard currentIntervention?.kind == .question else { return false }
         if currentIntervention?.awaitsExternalContinuation == true,
-           (event.clientInfo.profileID == "qoderwork" || event.clientInfo.bundleIdentifier == "com.qoder.work") {
+           event.clientInfo.prefersAnsweredQuestionFollowupAction {
             if event.event == "SessionEnd" {
                 return true
             }

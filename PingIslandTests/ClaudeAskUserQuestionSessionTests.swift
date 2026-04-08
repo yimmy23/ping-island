@@ -2,6 +2,20 @@ import XCTest
 @testable import Ping_Island
 
 final class ClaudeAskUserQuestionSessionTests: XCTestCase {
+    func testPreToolUseQuestionImmediatelyEntersWaitingForInput() async {
+        let sessionId = "claude-question-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(makeClaudeQuestionEvent(sessionId: sessionId)))
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertEqual(session?.intervention?.kind, .question)
+        XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["会话层", "UI 层"])
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     func testDuplicatePermissionRequestKeepsClaudeQuestionInWaitingForInput() async {
         let sessionId = "claude-ask-\(UUID().uuidString)"
         let store = SessionStore.shared
@@ -10,7 +24,7 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         await store.process(.hookReceived(makeClaudePermissionRequest(sessionId: sessionId)))
 
         let session = await store.session(for: sessionId)
-        XCTAssertEqual(session?.phase, .idle)
+        XCTAssertEqual(session?.phase, .waitingForInput)
         XCTAssertEqual(session?.intervention?.kind, .question)
         XCTAssertNil(session?.activePermission)
         XCTAssertFalse(session?.needsApprovalResponse ?? true)

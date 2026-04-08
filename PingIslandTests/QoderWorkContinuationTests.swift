@@ -235,6 +235,106 @@ final class QoderWorkContinuationTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testCodeBuddyContinuationDoesNotClearOnPostToolUseHook() async {
+        let sessionId = "codebuddy-posttool-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "codebuddy",
+                name: "CodeBuddy",
+                bundleIdentifier: "com.tencent.codebuddy"
+            )
+        ))
+        await store.process(
+            .interventionResolved(
+                sessionId: sessionId,
+                nextPhase: .processing,
+                submittedAnswers: ["topic": ["A 方案"]]
+            )
+        )
+
+        await store.process(.hookReceived(
+            HookEvent(
+                sessionId: sessionId,
+                cwd: "/tmp/project",
+                event: "PostToolUse",
+                status: "processing",
+                provider: .claude,
+                clientInfo: SessionClientInfo(
+                    kind: .claudeCode,
+                    profileID: "codebuddy",
+                    name: "CodeBuddy",
+                    bundleIdentifier: "com.tencent.codebuddy"
+                ),
+                pid: nil,
+                tty: nil,
+                tool: "AskUserQuestion",
+                toolInput: nil,
+                toolUseId: "call_\(sessionId)",
+                notificationType: nil,
+                message: nil
+            )
+        ))
+
+        let session = await store.session(for: sessionId)
+        XCTAssertTrue(session?.intervention?.awaitsExternalContinuation ?? false)
+        XCTAssertEqual(session?.intervention?.submittedAnswers["topic"], ["A 方案"])
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
+    func testWorkBuddyContinuationDoesNotClearOnPostToolUseHook() async {
+        let sessionId = "workbuddy-posttool-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "workbuddy",
+                name: "WorkBuddy",
+                bundleIdentifier: "com.workbuddy.workbuddy"
+            )
+        ))
+        await store.process(
+            .interventionResolved(
+                sessionId: sessionId,
+                nextPhase: .processing,
+                submittedAnswers: ["topic": ["A 方案"]]
+            )
+        )
+
+        await store.process(.hookReceived(
+            HookEvent(
+                sessionId: sessionId,
+                cwd: "/tmp/project",
+                event: "PostToolUse",
+                status: "processing",
+                provider: .claude,
+                clientInfo: SessionClientInfo(
+                    kind: .claudeCode,
+                    profileID: "workbuddy",
+                    name: "WorkBuddy",
+                    bundleIdentifier: "com.workbuddy.workbuddy"
+                ),
+                pid: nil,
+                tty: nil,
+                tool: "AskUserQuestion",
+                toolInput: nil,
+                toolUseId: "call_\(sessionId)",
+                notificationType: nil,
+                message: nil
+            )
+        ))
+
+        let session = await store.session(for: sessionId)
+        XCTAssertTrue(session?.intervention?.awaitsExternalContinuation ?? false)
+        XCTAssertEqual(session?.intervention?.submittedAnswers["topic"], ["A 方案"])
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     func testQoderWorkContinuationClearsAfterFiveMinuteTimeout() async {
         let sessionId = "qoderwork-timeout-\(UUID().uuidString)"
         let store = SessionStore.shared

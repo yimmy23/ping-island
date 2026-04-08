@@ -734,7 +734,7 @@ struct SessionIntervention: Equatable, Identifiable, Sendable {
     nonisolated var externalContinuationStatusMessage: String? {
         guard awaitsExternalContinuation else { return nil }
         let actorName = metadata["continuationActorName"] ?? "客户端"
-        return "\(actorName) 需要你进行后续操作，可通过上方按钮快速响应"
+        return "\(actorName) 有问题需要介入处理，可通过上方按钮快速打开并继续操作"
     }
 
     nonisolated var submittedAnswers: [String: [String]] {

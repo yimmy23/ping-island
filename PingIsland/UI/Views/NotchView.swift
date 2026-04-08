@@ -643,7 +643,10 @@ struct NotchView: View {
             .first
 
         if let targetSession {
-            viewModel.presentNotificationChat(for: targetSession)
+            if viewModel.status != .opened {
+                viewModel.notchOpen(reason: .notification)
+            }
+            viewModel.showChat(for: targetSession)
         }
 
         previousApprovalIds = currentApprovalIds
@@ -694,7 +697,16 @@ struct NotchView: View {
             .first
 
         if let targetSession {
-            viewModel.presentNotificationChat(for: targetSession)
+            if viewModel.status == .opened {
+                viewModel.notchClose()
+                DispatchQueue.main.async {
+                    viewModel.notchOpen(reason: .notification)
+                    viewModel.showChat(for: targetSession)
+                }
+            } else {
+                viewModel.notchOpen(reason: .notification)
+                viewModel.showChat(for: targetSession)
+            }
         }
 
         previousQuestionIds = currentQuestionIds
