@@ -13,12 +13,12 @@
 
 <p align="center">
   <a href="https://github.com/erha19/ping-island/releases">
-    <img src="https://img.shields.io/github/v/release/erha19/ping-island?display_name=tag&style=for-the-badge" alt="Latest release">
+    <img src="https://img.shields.io/github/v/release/erha19/ping-island?display_name=tag&style=flat-square" alt="Latest release">
   </a>
-  <img src="https://img.shields.io/badge/macOS-14%2B-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 14 or later">
-  <img src="https://img.shields.io/badge/Swift-6.1-FA7343?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6.1">
-  <img src="https://img.shields.io/badge/Clients-8%2B-111827?style=for-the-badge" alt="Supports 8 plus client families">
-  <img src="https://img.shields.io/badge/License-Apache%202.0-4F46E5?style=for-the-badge" alt="Apache 2.0 license">
+  <img src="https://img.shields.io/badge/macOS-14%2B-0A84FF?style=flat-square&logo=apple&logoColor=white" alt="macOS 14 or later">
+  <img src="https://img.shields.io/badge/Swift-6.1-FA7343?style=flat-square&logo=swift&logoColor=white" alt="Swift 6.1">
+  <img src="https://img.shields.io/badge/Clients-8%2B-111827?style=flat-square" alt="Supports 8 plus client families">
+  <img src="https://img.shields.io/badge/License-Apache%202.0-4F46E5?style=flat-square" alt="Apache 2.0 license">
 </p>
 
 ---
