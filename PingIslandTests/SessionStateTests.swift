@@ -395,6 +395,24 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(clientInfo.terminalContextSummary, "Ghostty · ssh-remote@devbox")
     }
 
+    func testCodexCLIInteractionLabelPrefersTerminalHost() {
+        let session = SessionState(
+            sessionId: "codex-ghostty-interaction",
+            cwd: "/tmp/project",
+            provider: .codex,
+            clientInfo: SessionClientInfo(
+                kind: .codexCLI,
+                profileID: "codex-cli",
+                name: "Codex",
+                terminalBundleIdentifier: "com.mitchellh.ghostty",
+                terminalProgram: "ghostty"
+            )
+        )
+
+        XCTAssertEqual(session.clientDisplayName, "Codex")
+        XCTAssertEqual(session.interactionDisplayName, "Ghostty")
+    }
+
     func testCodexAppMessageBadgeUsesProviderName() {
         let appSession = SessionState(
             sessionId: "codex-app-session",
