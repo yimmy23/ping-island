@@ -818,6 +818,7 @@ actor SessionStore {
         if payload.isIncremental,
            let continuationAnsweredAt = session.intervention?.externalContinuationAnsweredAt,
            session.intervention?.awaitsExternalContinuation == true,
+           session.clientInfo.retainsAnsweredQuestionFollowupActionOnTranscriptUpdates == false,
            payload.messages.contains(where: { $0.timestamp >= continuationAnsweredAt }) {
             session.intervention = nil
             if session.phase == .waitingForInput {

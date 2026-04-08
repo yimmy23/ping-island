@@ -136,6 +136,98 @@ final class QoderWorkContinuationTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testCodeBuddyContinuationStaysVisibleAfterNewMessageArrives() async {
+        let sessionId = "codebuddy-msg-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "codebuddy",
+                name: "CodeBuddy",
+                bundleIdentifier: "com.tencent.codebuddy"
+            )
+        ))
+        await store.process(
+            .interventionResolved(
+                sessionId: sessionId,
+                nextPhase: .processing,
+                submittedAnswers: ["topic": ["A 方案"]]
+            )
+        )
+        await store.process(.fileUpdated(
+            FileUpdatePayload(
+                sessionId: sessionId,
+                cwd: "/tmp/project",
+                messages: [
+                    ChatMessage(
+                        id: "assistant-next",
+                        role: .assistant,
+                        timestamp: Date(),
+                        content: [.text("继续处理后续任务")]
+                    )
+                ],
+                isIncremental: true,
+                completedToolIds: [],
+                toolResults: [:],
+                structuredResults: [:]
+            )
+        ))
+
+        let session = await store.session(for: sessionId)
+        XCTAssertTrue(session?.intervention?.awaitsExternalContinuation ?? false)
+        XCTAssertEqual(session?.intervention?.submittedAnswers["topic"], ["A 方案"])
+        XCTAssertEqual(session?.phase, .waitingForInput)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
+    func testWorkBuddyContinuationStaysVisibleAfterNewMessageArrives() async {
+        let sessionId = "workbuddy-msg-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(
+            makeQuestionEvent(
+                sessionId: sessionId,
+                profileID: "workbuddy",
+                name: "WorkBuddy",
+                bundleIdentifier: "com.workbuddy.workbuddy"
+            )
+        ))
+        await store.process(
+            .interventionResolved(
+                sessionId: sessionId,
+                nextPhase: .processing,
+                submittedAnswers: ["topic": ["A 方案"]]
+            )
+        )
+        await store.process(.fileUpdated(
+            FileUpdatePayload(
+                sessionId: sessionId,
+                cwd: "/tmp/project",
+                messages: [
+                    ChatMessage(
+                        id: "assistant-next",
+                        role: .assistant,
+                        timestamp: Date(),
+                        content: [.text("继续处理后续任务")]
+                    )
+                ],
+                isIncremental: true,
+                completedToolIds: [],
+                toolResults: [:],
+                structuredResults: [:]
+            )
+        ))
+
+        let session = await store.session(for: sessionId)
+        XCTAssertTrue(session?.intervention?.awaitsExternalContinuation ?? false)
+        XCTAssertEqual(session?.intervention?.submittedAnswers["topic"], ["A 方案"])
+        XCTAssertEqual(session?.phase, .waitingForInput)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     func testQoderWorkContinuationDoesNotClearOnFullSyncOfExistingMessages() async {
         let sessionId = "qoderwork-fullsync-\(UUID().uuidString)"
         let store = SessionStore.shared

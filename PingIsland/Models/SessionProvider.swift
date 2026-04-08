@@ -214,6 +214,25 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
         }
     }
 
+    nonisolated var retainsAnsweredQuestionFollowupActionOnTranscriptUpdates: Bool {
+        let normalizedProfileID = profileID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if normalizedProfileID == "codebuddy" || normalizedProfileID == "workbuddy" {
+            return true
+        }
+
+        let normalizedHostBundleIdentifier = (terminalBundleIdentifier ?? bundleIdentifier)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        switch normalizedHostBundleIdentifier {
+        case "com.tencent.codebuddy", "com.codebuddy.app", "com.workbuddy.workbuddy":
+            return true
+        default:
+            return false
+        }
+    }
+
     nonisolated var ideHostProfile: ManagedIDEExtensionProfile? {
         let detectedBundleIdentifier = terminalBundleIdentifier ?? bundleIdentifier
         let appName: String?
