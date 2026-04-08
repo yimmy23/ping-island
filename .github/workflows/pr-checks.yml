@@ -21,8 +21,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build prototype test bundle
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/prototype-ci"
+          swift build --package-path Prototype --build-tests --verbose \
+            2>&1 | tee "$RUNNER_TEMP/prototype-ci/01-build-tests.log"
+
+      - name: List prototype tests
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/prototype-ci"
+          swift test --package-path Prototype list \
+            2>&1 | tee "$RUNNER_TEMP/prototype-ci/02-list-tests.log"
+
       - name: Run prototype tests
-        run: swift test --package-path Prototype
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/prototype-ci"
+          swift test --package-path Prototype --skip-build --verbose \
+            2>&1 | tee "$RUNNER_TEMP/prototype-ci/03-run-tests.log"
 
       - name: Run Xcode unit tests
         run: >
@@ -36,6 +60,14 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
           test
           -only-testing:PingIslandTests
+
+      - name: Upload prototype diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Prototype-ci-logs
+          path: ${{ runner.temp }}/prototype-ci
+          if-no-files-found: ignore
 
       - name: Upload unit test results
         if: failure()
