@@ -1,7 +1,6 @@
 :root {
   --background: #0a0a0f;
   --foreground: #fafafa;
-  --muted: #1a1a24;
   --muted-foreground: #71717a;
   --accent: #f59e0b;
   --accent-foreground: #0a0a0f;
@@ -147,7 +146,8 @@ code {
 .feature-card h3,
 .install-card h3,
 .mascot-card strong,
-.stats-item strong {
+.stats-item strong,
+.demo-session-card strong {
   font-family: "Space Grotesk", system-ui, sans-serif;
 }
 
@@ -253,6 +253,10 @@ code {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.github-button {
+  gap: 0.55rem;
+}
+
 .github-icon {
   width: 1.05rem;
   height: 1.05rem;
@@ -275,11 +279,13 @@ code {
 }
 
 .hero {
-  padding: 1rem 0 1.5rem;
+  display: grid;
+  gap: 1.5rem;
+  padding: 1rem 0 1rem;
 }
 
-.hero-copy {
-  max-width: 42rem;
+.hero-intro {
+  max-width: 44rem;
 }
 
 .badge-row,
@@ -324,6 +330,10 @@ code {
   border-color: rgba(245, 158, 11, 0.18);
 }
 
+.signal-chip-subtle {
+  color: rgba(245, 158, 11, 0.85);
+}
+
 .pulse-dot {
   position: relative;
   width: 0.55rem;
@@ -366,7 +376,6 @@ code {
   padding-top: 0;
 }
 
-.hero-demo-card,
 .glass-card,
 .panel {
   border-radius: 1rem;
@@ -374,7 +383,6 @@ code {
   transition: all 300ms ease-out;
 }
 
-.hero-demo-card,
 .glass-card {
   background: var(--card);
   backdrop-filter: blur(8px);
@@ -385,18 +393,16 @@ code {
   background: var(--card-solid);
 }
 
-.hero-demo-card,
-.preview-card,
-.workflow-card,
-.star-callout {
-  padding: 1rem;
-}
-
 .glass-card:hover,
 .panel:hover {
   transform: scale(1.01);
   border-color: var(--border-hover);
   box-shadow: var(--shadow-card), var(--shadow-glow-sm);
+}
+
+.hero-demo-card,
+.star-callout {
+  padding: 1rem;
 }
 
 .card-head {
@@ -413,7 +419,7 @@ code {
 
 .demo-screen {
   position: relative;
-  min-height: 30rem;
+  min-height: 32rem;
   padding: 1rem;
   border-radius: 1.5rem;
   background:
@@ -538,7 +544,7 @@ code {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   gap: 1rem;
 }
 
@@ -551,7 +557,7 @@ code {
 .demo-session-card,
 .demo-card,
 .demo-subcard,
-.demo-preview-panel {
+.demo-secondary-panel {
   border-radius: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.03);
@@ -595,7 +601,8 @@ code {
 }
 
 .demo-card,
-.demo-subcard {
+.demo-subcard,
+.demo-secondary-panel {
   padding: 1rem;
 }
 
@@ -625,14 +632,22 @@ code {
   gap: 0.9rem;
 }
 
-.demo-preview-panel {
-  padding: 0.8rem;
+.demo-secondary-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
 }
 
-.demo-preview-image {
-  width: 100%;
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+.demo-panel-body strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.demo-panel-body p {
+  margin: 0.4rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.88rem;
 }
 
 .stats-panel {

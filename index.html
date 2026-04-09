@@ -14,7 +14,6 @@
       content="A premium dark control surface for Claude Code, Codex, Gemini CLI, and other AI coding clients on macOS."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="./assets/notch-panel.png" />
     <link rel="icon" href="./assets/ping-island-icon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -64,7 +63,7 @@
 
     <main id="top" class="page-shell">
       <section class="hero">
-        <div class="hero-copy">
+        <div class="hero-intro">
           <div class="badge-row">
             <span class="status-badge">
               <span class="pulse-dot"></span>
@@ -75,7 +74,7 @@
           </div>
 
           <h1 class="hero-title">
-            Catch the exact moment your agents
+            A Dynamic Island for the moments your agents
             <span class="gradient-text">need you</span>.
           </h1>
 
@@ -98,9 +97,7 @@
             </a>
           </div>
         </div>
-      </section>
 
-      <section class="content-section hero-demo-section">
         <article class="glass-card hero-demo-card">
           <div class="card-head">
             <span class="mono-label">Interactive Notch Demo</span>
@@ -146,7 +143,7 @@
 
               <div class="wide-demo-content">
                 <div class="demo-session-column">
-                  <article class="demo-session-card is-active">
+                  <article class="demo-session-card is-active" data-session="codex">
                     <img src="./assets/mascots/codex.gif" alt="" class="demo-session-mascot" />
                     <div>
                       <span>Codex</span>
@@ -154,7 +151,7 @@
                     </div>
                     <em data-demo-event>Quiet state</em>
                   </article>
-                  <article class="demo-session-card">
+                  <article class="demo-session-card" data-session="claude">
                     <img src="./assets/mascots/claude.gif" alt="" class="demo-session-mascot" />
                     <div>
                       <span>Claude Code</span>
@@ -162,7 +159,7 @@
                     </div>
                     <em>Standby</em>
                   </article>
-                  <article class="demo-session-card">
+                  <article class="demo-session-card" data-session="gemini">
                     <img src="./assets/mascots/gemini.gif" alt="" class="demo-session-mascot" />
                     <div>
                       <span>Gemini CLI</span>
@@ -173,19 +170,32 @@
                 </div>
 
                 <div class="demo-preview-column">
-                  <div class="demo-card">
+                  <div class="demo-card demo-detail-card">
                     <span>Focus return</span>
                     <strong data-demo-focus>Ghostty / tmux / Cursor</strong>
                     <p data-demo-copy>Ping Island stays small until the run actually needs you.</p>
                   </div>
 
-                  <div class="demo-preview-panel">
-                    <img
-                      src="./assets/notch-panel.png"
-                      alt="Ping Island product preview"
-                      class="demo-preview-image"
-                      data-demo-image
-                    />
+                  <div class="demo-grid">
+                    <div class="demo-subcard">
+                      <span>Current view</span>
+                      <strong data-demo-surface>Compact island</strong>
+                    </div>
+                    <div class="demo-subcard">
+                      <span>Active interrupt</span>
+                      <strong data-demo-interrupt>None</strong>
+                    </div>
+                  </div>
+
+                  <div class="demo-secondary-panel">
+                    <div class="demo-secondary-head">
+                      <span class="mono-label">Live panel</span>
+                      <span class="signal-chip signal-chip-subtle" data-demo-panel-chip>stable</span>
+                    </div>
+                    <div class="demo-panel-body">
+                      <strong data-demo-panel-title>Monitoring all sessions</strong>
+                      <p data-demo-panel-copy>When a session changes state, the island expands and gives you the next action immediately.</p>
+                    </div>
                   </div>
                 </div>
               </div>

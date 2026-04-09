@@ -15,8 +15,13 @@ const demoConfig = {
     copy: "Ping Island stays small until the run actually needs you.",
     focus: "Ghostty / tmux / Cursor",
     event: "Quiet state",
-    image: "./assets/notch-panel.png",
-    actions: []
+    surface: "Compact island",
+    interrupt: "None",
+    panelChip: "stable",
+    panelTitle: "Monitoring all sessions",
+    panelCopy: "When a session changes state, the island expands and gives you the next action immediately.",
+    actions: [],
+    activeSession: "codex"
   },
   approval: {
     expanded: true,
@@ -28,8 +33,13 @@ const demoConfig = {
     copy: "Approve from the notch, then jump back only if the full workspace matters.",
     focus: "iTerm2 / tmux pane 2",
     event: "Shell approval waiting",
-    image: "./assets/question-panel.png",
-    actions: ["Approve", "Deny"]
+    surface: "Expanded island",
+    interrupt: "Tool approval",
+    panelChip: "approval",
+    panelTitle: "Shell command pending",
+    panelCopy: "Approve or deny directly from the notch, then route back to the originating terminal if you want deeper context.",
+    actions: ["Approve", "Deny"],
+    activeSession: "claude"
   },
   question: {
     expanded: true,
@@ -41,8 +51,13 @@ const demoConfig = {
     copy: "Reply inline and keep the run moving without leaving the notch.",
     focus: "Cursor / project window",
     event: "User input requested",
-    image: "./assets/question-panel.png",
-    actions: ["Reply", "Open session"]
+    surface: "Expanded island",
+    interrupt: "Question",
+    panelChip: "reply",
+    panelTitle: "Need a fast answer",
+    panelCopy: "The island holds the question, suggested responses, and a direct path back to the active workspace.",
+    actions: ["Reply", "Open session"],
+    activeSession: "codex"
   },
   complete: {
     expanded: true,
@@ -51,16 +66,23 @@ const demoConfig = {
     title: "Session completed",
     subtitle: "Gemini CLI finished and is ready for review.",
     thread: "Gemini CLI / completed task",
-    copy: "The notch can hold the summary long enough for you to decide what to do next.",
+    copy: "The island can hold the summary long enough for you to decide what to do next.",
     focus: "Ghostty / latest session",
     event: "Completion summary ready",
-    image: "./assets/notch-panel.png",
-    actions: ["View summary", "Jump back"]
+    surface: "Expanded island",
+    interrupt: "Completion",
+    panelChip: "summary",
+    panelTitle: "Review is ready",
+    panelCopy: "Open the summary, jump back into the session, or stay in flow and leave the result parked in the notch.",
+    actions: ["View summary", "Jump back"],
+    activeSession: "gemini"
   }
 };
 
 const chips = Array.from(document.querySelectorAll("[data-demo-state]"));
 const notch = document.querySelector("[data-demo-notch]");
+const sessionRows = Array.from(document.querySelectorAll("[data-session]"));
+
 const fields = {
   mini: document.querySelector("[data-demo-mini]"),
   title: document.querySelector("[data-demo-title]"),
@@ -70,7 +92,11 @@ const fields = {
   copy: document.querySelector("[data-demo-copy]"),
   focus: document.querySelector("[data-demo-focus]"),
   event: document.querySelector("[data-demo-event]"),
-  image: document.querySelector("[data-demo-image]"),
+  surface: document.querySelector("[data-demo-surface]"),
+  interrupt: document.querySelector("[data-demo-interrupt]"),
+  panelChip: document.querySelector("[data-demo-panel-chip]"),
+  panelTitle: document.querySelector("[data-demo-panel-title]"),
+  panelCopy: document.querySelector("[data-demo-panel-copy]"),
   actions: document.querySelector("[data-demo-actions]")
 };
 
@@ -91,8 +117,11 @@ function renderDemo(stateKey) {
   fields.copy.textContent = state.copy;
   fields.focus.textContent = state.focus;
   fields.event.textContent = state.event;
-  fields.image.src = state.image;
-
+  fields.surface.textContent = state.surface;
+  fields.interrupt.textContent = state.interrupt;
+  fields.panelChip.textContent = state.panelChip;
+  fields.panelTitle.textContent = state.panelTitle;
+  fields.panelCopy.textContent = state.panelCopy;
   fields.actions.innerHTML = state.actions
     .map((action) => `<span class="demo-action-pill">${action}</span>`)
     .join("");
@@ -101,6 +130,10 @@ function renderDemo(stateKey) {
     const active = chip.dataset.demoState === stateKey;
     chip.classList.toggle("is-active", active);
     chip.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+
+  sessionRows.forEach((row) => {
+    row.classList.toggle("is-active", row.dataset.session === state.activeSession);
   });
 }
 
@@ -142,7 +175,7 @@ async function refreshStars() {
       node.textContent = String(stars);
     });
   } catch {
-    // Keep fallback count when the API is unavailable.
+    // Keep the fallback count when the API is unavailable.
   }
 }
 
