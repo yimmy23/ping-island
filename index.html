@@ -112,11 +112,13 @@
           </div>
 
           <div class="wide-demo-shell" data-demo-shell>
-            <div class="demo-screen">
-              <div class="demo-statusbar">
-                <span>9:41</span>
-                <span>Ping Island Demo</span>
-                <span>Wi-Fi • 100%</span>
+            <div class="demo-screen screenshot-demo">
+              <div class="demo-settings">
+                <button type="button" class="demo-settings-button" aria-label="Settings">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.22-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.22 1.12-.53 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/>
+                  </svg>
+                </button>
               </div>
 
               <button
@@ -141,97 +143,99 @@
                 </div>
               </button>
 
-                <div class="wide-demo-content">
-                  <div class="demo-session-column">
-                    <article class="demo-session-card is-active" data-session="codex">
-                      <div class="demo-session-icon-wrap">
-                        <img src="./assets/mascots/codex.gif" alt="" class="demo-session-mascot" />
-                      </div>
-                      <div class="demo-session-main">
-                        <div class="demo-session-head">
-                          <div class="demo-session-title-group">
-                            <span>Island</span>
-                            <strong data-demo-thread>Codex thread synced</strong>
-                          </div>
-                          <div class="demo-session-badges">
-                            <span class="demo-list-badge">1m</span>
-                            <span class="demo-list-badge accent" data-demo-event>Quiet state</span>
-                          </div>
-                        </div>
-                        <p class="demo-session-line">You: Session stable, no action needed.</p>
-                        <p class="demo-session-line strong" data-demo-copy>Ping Island stays small until the run actually needs you.</p>
-                      </div>
-                    </article>
-                    <article class="demo-session-card" data-session="claude">
-                      <div class="demo-session-icon-wrap">
-                        <img src="./assets/mascots/claude.gif" alt="" class="demo-session-mascot" />
-                      </div>
-                      <div class="demo-session-main">
-                        <div class="demo-session-head">
-                          <div class="demo-session-title-group">
-                            <span>Island</span>
-                            <strong>Ask me a question</strong>
-                          </div>
-                          <div class="demo-session-badges">
-                            <span class="demo-list-badge">1m</span>
-                            <span class="demo-list-badge warm">Claude Code</span>
-                            <span class="demo-list-badge">iTerm2</span>
-                          </div>
-                        </div>
-                        <p class="demo-session-line">You: Ask me a question using tool</p>
-                        <p class="demo-session-line strong">Claude: PingIsland is a mac app...</p>
-                      </div>
-                    </article>
-                    <article class="demo-session-card" data-session="gemini">
-                      <div class="demo-session-icon-wrap">
-                        <img src="./assets/mascots/gemini.gif" alt="" class="demo-session-mascot" />
-                      </div>
-                      <div class="demo-session-main">
-                        <div class="demo-session-head">
-                          <div class="demo-session-title-group">
-                            <span>Island</span>
-                            <strong>Question received</strong>
-                          </div>
-                          <div class="demo-session-badges">
-                            <span class="demo-list-badge">39s</span>
-                            <span class="demo-list-badge green">Qoder</span>
-                          </div>
-                        </div>
-                        <p class="demo-session-line">You: hi</p>
-                        <p class="demo-session-line strong">Hello, I&apos;m Qoder. I can see you...</p>
-                      </div>
-                    </article>
+              <div class="demo-list">
+                <article class="demo-row is-active" data-session="codex">
+                  <div class="demo-row-icon">
+                    <img src="./assets/mascots/codex.gif" alt="" class="demo-session-mascot" />
                   </div>
+                  <div class="demo-row-main">
+                    <div class="demo-row-head">
+                      <div class="demo-row-title">
+                        <span>Island ·</span>
+                        <strong data-demo-thread>Codex thread synced</strong>
+                      </div>
+                      <div class="demo-row-badges">
+                        <span class="demo-pill">1m</span>
+                        <span class="demo-pill accent" data-demo-event>Codex</span>
+                      </div>
+                    </div>
+                    <p class="demo-row-line">You: Session stable, no action needed.</p>
+                    <p class="demo-row-line strong" data-demo-copy>Ping Island stays small until the run actually needs you.</p>
+                  </div>
+                  <div class="demo-row-actions">
+                    <span class="demo-action-icon"></span>
+                  </div>
+                </article>
 
-                <div class="demo-preview-column">
-                  <div class="demo-card demo-detail-card">
-                    <span>Focus return</span>
-                    <strong data-demo-focus>Ghostty / tmux / Cursor</strong>
-                    <p data-demo-copy>Ping Island stays small until the run actually needs you.</p>
+                <article class="demo-row" data-session="claude">
+                  <div class="demo-row-icon">
+                    <img src="./assets/mascots/claude.gif" alt="" class="demo-session-mascot" />
                   </div>
+                  <div class="demo-row-main">
+                    <div class="demo-row-head">
+                      <div class="demo-row-title">
+                        <span>Island ·</span>
+                        <strong>Ask me a question</strong>
+                      </div>
+                      <div class="demo-row-badges">
+                        <span class="demo-pill">1m</span>
+                        <span class="demo-pill warm">Claude Code</span>
+                        <span class="demo-pill">iTerm2</span>
+                      </div>
+                    </div>
+                    <p class="demo-row-line">You: Ask me a question using tool</p>
+                    <p class="demo-row-line strong">Claude: PingIsland is a mac app...</p>
+                  </div>
+                  <div class="demo-row-actions">
+                    <span class="demo-action-icon"></span>
+                    <span class="demo-action-icon trash"></span>
+                  </div>
+                </article>
 
-                  <div class="demo-grid">
-                    <div class="demo-subcard">
-                      <span>Current view</span>
-                      <strong data-demo-surface>Compact island</strong>
-                    </div>
-                    <div class="demo-subcard">
-                      <span>Active interrupt</span>
-                      <strong data-demo-interrupt>None</strong>
-                    </div>
+                <article class="demo-row" data-session="gemini">
+                  <div class="demo-row-icon">
+                    <img src="./assets/mascots/gemini.gif" alt="" class="demo-session-mascot" />
                   </div>
+                  <div class="demo-row-main">
+                    <div class="demo-row-head">
+                      <div class="demo-row-title">
+                        <span>Island ·</span>
+                        <strong>Question received</strong>
+                      </div>
+                      <div class="demo-row-badges">
+                        <span class="demo-pill">39s</span>
+                        <span class="demo-pill green">Qoder</span>
+                      </div>
+                    </div>
+                    <p class="demo-row-line">You: hi</p>
+                    <p class="demo-row-line strong">Hello, I&apos;m Qoder. I can see you...</p>
+                  </div>
+                  <div class="demo-row-actions">
+                    <span class="demo-action-icon"></span>
+                  </div>
+                </article>
 
-                  <div class="demo-secondary-panel">
-                    <div class="demo-secondary-head">
-                      <span class="mono-label">Live panel</span>
-                      <span class="signal-chip signal-chip-subtle" data-demo-panel-chip>stable</span>
-                    </div>
-                    <div class="demo-panel-body">
-                      <strong data-demo-panel-title>Monitoring all sessions</strong>
-                      <p data-demo-panel-copy>When a session changes state, the island expands and gives you the next action immediately.</p>
-                    </div>
+                <article class="demo-row" data-session="complete">
+                  <div class="demo-row-icon">
+                    <img src="./assets/mascots/codebuddy.gif" alt="" class="demo-session-mascot" />
                   </div>
-                </div>
+                  <div class="demo-row-main">
+                    <div class="demo-row-head">
+                      <div class="demo-row-title">
+                        <span>Island ·</span>
+                        <strong>Session finished</strong>
+                      </div>
+                      <div class="demo-row-badges">
+                        <span class="demo-pill">2m</span>
+                        <span class="demo-pill purple">CodeBuddy</span>
+                      </div>
+                    </div>
+                    <p class="demo-row-line strong">Completion summary ready.</p>
+                  </div>
+                  <div class="demo-row-actions">
+                    <span class="demo-action-icon"></span>
+                  </div>
+                </article>
               </div>
             </div>
           </div>
@@ -414,7 +418,7 @@ xcodebuild -project PingIsland.xcodeproj \
               <svg viewBox="0 0 24 24" aria-hidden="true" class="github-icon">
                 <path
                   fill="currentColor"
-                  d="M12 .5C5.65.5.5 5.66.5 12.03c0 5.1 3.3 9.42 7.88 10.95.58.11.79-.25.79-.56 0-.27-.01-1.17-.02-2.12-3.21.7-3.89-1.36-3.89-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.72-1.55-2.56-.29-5.25-1.29-5.25-5.74 0-1.27.46-2.3 1.2-3.12-.12-.29-.52-1.48.11-3.08 0 0 .98-.31 3.2 1.19a11.1 11.1 0 0 1 5.83 0c2.22-1.5 3.2-1.19 3.2-1.19.63 1.6.23 2.79.11 3.08.75.82 1.2 1.85 1.2 3.12 0 4.46-2.69 5.44-5.26 5.73.41.35.78 1.04.78 2.1 0 1.52-.01 2.74-.01 3.11 0 .31.21.68.8.56A11.54 11.54 0 0 0 23.5 12.03C23.5 5.66 18.35.5 12 .5Z"
+                  d="M12 .5C5.65.5.5 5.66.5 12.03c0 5.1 3.3 9.42 7.88 10.95.58.11.79-.25.79-.56 0-.27-.01-1.17-.02-2.12-3.21.7-3.89-1.36-3.89-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.72-1.55-2.56-.29-5.25-1.29-5.25-5.74 0-1.27.46-2.3 1.2-3.12-.12-.29-.52-1.48.11-3.08 0 0 .98-.31 3.2 1.19a11.1 11.1 0 0 1 5.83 0c2.22-1.5 3.2-1.19 3.2-1.19.63 1.6.23 2.79.11 3.08.75.82 1.2 1.85 1.2 3.12 0 4.46-2.69 5.44-5.26 5.73.41.35.78.04.78 2.1 0 1.52-.01 2.74-.01 3.11 0 .31.21.68.8.56A11.54 11.54 0 0 0 23.5 12.03C23.5 5.66 18.35.5 12 .5Z"
                 />
               </svg>
               <span>Star Ping Island</span>

@@ -140,14 +140,13 @@ code {
 .hero-title,
 .section-head h2,
 .star-callout h2,
-.demo-card strong,
-.demo-subcard strong,
-.demo-notch-head strong,
+.demo-row-title strong,
 .feature-card h3,
 .install-card h3,
 .mascot-card strong,
 .stats-item strong,
-.demo-session-card strong {
+.demo-notch-head strong,
+.demo-panel-body strong {
   font-family: "Space Grotesk", system-ui, sans-serif;
 }
 
@@ -162,10 +161,11 @@ code {
 .status-badge,
 .demo-chip,
 .star-count,
+.demo-settings-button,
 .demo-statusbar,
 .demo-state-badge,
-.demo-session-card span,
-.demo-session-card em {
+.demo-row-title span,
+.demo-pill {
   font-family: "JetBrains Mono", monospace;
 }
 
@@ -216,7 +216,8 @@ code {
 .button:focus-visible,
 .site-nav a:focus-visible,
 .demo-chip:focus-visible,
-.demo-notch:focus-visible {
+.demo-notch:focus-visible,
+.demo-settings-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
 }
@@ -280,7 +281,7 @@ code {
 
 .hero {
   display: grid;
-  gap: 1.5rem;
+  gap: 1.25rem;
   padding: 1rem 0 1rem;
 }
 
@@ -330,10 +331,6 @@ code {
   border-color: rgba(245, 158, 11, 0.18);
 }
 
-.signal-chip-subtle {
-  color: rgba(245, 158, 11, 0.85);
-}
-
 .pulse-dot {
   position: relative;
   width: 0.55rem;
@@ -370,10 +367,6 @@ code {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-}
-
-.hero-demo-section {
-  padding-top: 0;
 }
 
 .glass-card,
@@ -415,25 +408,18 @@ code {
 
 .wide-demo-shell {
   padding-top: 0.25rem;
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.wide-demo-shell.is-expanded .wide-demo-content {
-  opacity: 1;
+.wide-demo-shell.is-expanded {
   transform: translateY(0);
-  max-height: 40rem;
 }
 
-.wide-demo-shell:not(.is-expanded) .wide-demo-content {
-  opacity: 0.55;
-  transform: translateY(-0.35rem);
-  max-height: 18rem;
-}
-
-.demo-screen {
+.screenshot-demo {
   position: relative;
-  min-height: 32rem;
+  min-height: 34rem;
   padding: 1rem;
-  border-radius: 1.5rem;
+  border-radius: 1.8rem;
   background:
     radial-gradient(circle at top, rgba(245, 158, 11, 0.08), transparent 28%),
     linear-gradient(180deg, #111119, #0d0d14);
@@ -441,50 +427,55 @@ code {
   overflow: hidden;
 }
 
-.demo-screen::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: linear-gradient(to bottom, black, transparent 90%);
-  pointer-events: none;
+.demo-settings {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.6rem;
 }
 
-.demo-statusbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  color: rgba(250, 250, 250, 0.72);
-  font-size: 0.74rem;
+.demo-settings-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border: 0;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(250, 250, 250, 0.9);
+  cursor: pointer;
+}
+
+.demo-settings-button svg {
+  width: 1.2rem;
+  height: 1.2rem;
 }
 
 .demo-notch {
   position: relative;
   display: block;
   width: min(100%, 22rem);
-  margin: 0.9rem auto 1.25rem;
+  margin: 0 auto 1rem;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: pointer;
-  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1), transform 280ms ease;
+  transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .demo-notch-collapsed,
 .demo-notch-expanded {
   color: var(--foreground);
-  background: rgba(4, 4, 8, 0.95);
+  background: rgba(4, 4, 8, 0.97);
   box-shadow:
     0 12px 24px rgba(0, 0, 0, 0.32),
     0 0 30px rgba(245, 158, 11, 0.08);
   transition:
-    opacity 220ms ease,
-    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-radius 320ms cubic-bezier(0.22, 1, 0.36, 1),
-    max-height 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 240ms ease,
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-height 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .demo-notch-collapsed {
@@ -500,12 +491,12 @@ code {
 }
 
 .demo-notch-expanded {
-  padding: 0.95rem 1rem 1rem;
-  border-radius: 1.4rem;
   opacity: 0;
-  transform: translateY(-0.4rem) scale(0.98);
+  transform: translateY(-0.45rem) scale(0.98);
   max-height: 0;
   overflow: hidden;
+  padding: 0 1rem;
+  border-radius: 1.6rem;
   pointer-events: none;
 }
 
@@ -526,7 +517,8 @@ code {
 .demo-notch.is-expanded .demo-notch-expanded {
   opacity: 1;
   transform: translateY(0) scale(1);
-  max-height: 12rem;
+  max-height: 10rem;
+  padding: 0.95rem 1rem 1rem;
   pointer-events: auto;
 }
 
@@ -572,52 +564,48 @@ code {
   font-size: 0.72rem;
 }
 
-.wide-demo-content {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: 1rem;
-  transition:
-    opacity 260ms ease,
-    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
-    max-height 320ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.demo-session-column,
-.demo-preview-column {
+.demo-list {
   display: grid;
   gap: 0.9rem;
+  margin-top: 0.75rem;
+  transition:
+    opacity 260ms ease,
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-height 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.demo-session-card,
-.demo-card,
-.demo-subcard,
-.demo-secondary-panel {
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.03);
+.wide-demo-shell.is-expanded .demo-list {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 40rem;
 }
 
-.demo-session-card {
+.wide-demo-shell:not(.is-expanded) .demo-list {
+  opacity: 0.7;
+  transform: translateY(-0.25rem);
+  max-height: 20rem;
+}
+
+.demo-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.95rem;
   align-items: flex-start;
   padding: 0.95rem 1.05rem;
   border-radius: 1.4rem;
-  background: rgba(7, 7, 10, 0.92);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(7, 7, 10, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
-.demo-session-card.is-active {
+.demo-row.is-active {
   border-color: rgba(245, 158, 11, 0.18);
   box-shadow:
     0 0 20px rgba(245, 158, 11, 0.08),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
-.demo-session-icon-wrap {
+.demo-row-icon {
   display: grid;
   place-items: center;
   width: 4rem;
@@ -626,35 +614,41 @@ code {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.demo-session-main {
+.demo-session-mascot {
+  width: 1.65rem;
+  height: 1.65rem;
+  object-fit: contain;
+}
+
+.demo-row-main {
   min-width: 0;
 }
 
-.demo-session-head {
+.demo-row-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.demo-session-title-group {
+.demo-row-title {
   min-width: 0;
 }
 
-.demo-session-title-group span {
+.demo-row-title span {
   display: block;
-  color: rgba(250, 250, 250, 0.7);
+  color: rgba(250, 250, 250, 0.72);
   font-size: 0.72rem;
 }
 
-.demo-session-title-group strong {
+.demo-row-title strong {
   display: block;
   margin-top: 0.1rem;
   font-size: 1rem;
   line-height: 1.2;
 }
 
-.demo-session-badges {
+.demo-row-badges {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -662,7 +656,7 @@ code {
   max-width: 15rem;
 }
 
-.demo-list-badge {
+.demo-pill {
   display: inline-flex;
   align-items: center;
   min-height: 1.8rem;
@@ -670,23 +664,26 @@ code {
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.08);
   color: rgba(250, 250, 250, 0.88);
-  font-family: "JetBrains Mono", monospace;
   font-size: 0.72rem;
 }
 
-.demo-list-badge.accent {
-  background: rgba(52, 76, 140, 0.35);
+.demo-pill.accent {
+  background: rgba(52, 76, 140, 0.42);
 }
 
-.demo-list-badge.warm {
-  background: rgba(110, 79, 32, 0.6);
+.demo-pill.warm {
+  background: rgba(110, 79, 32, 0.72);
 }
 
-.demo-list-badge.green {
-  background: rgba(28, 91, 53, 0.65);
+.demo-pill.green {
+  background: rgba(28, 91, 53, 0.75);
 }
 
-.demo-session-line {
+.demo-pill.purple {
+  background: rgba(82, 48, 120, 0.75);
+}
+
+.demo-row-line {
   margin: 0.35rem 0 0;
   color: var(--muted-foreground);
   font-size: 0.85rem;
@@ -696,64 +693,28 @@ code {
   text-overflow: ellipsis;
 }
 
-.demo-session-line.strong {
+.demo-row-line.strong {
   color: rgba(250, 250, 250, 0.82);
 }
 
-.demo-session-mascot {
-  width: 1.65rem;
-  height: 1.65rem;
-  object-fit: contain;
-}
-
-.demo-card,
-.demo-subcard,
-.demo-secondary-panel {
-  padding: 1rem;
-}
-
-.demo-card span,
-.demo-subcard span {
-  display: block;
-  color: var(--muted-foreground);
-  font-size: 0.74rem;
-}
-
-.demo-card strong,
-.demo-subcard strong {
-  display: block;
-  margin-top: 0.45rem;
-  font-size: 1rem;
-}
-
-.demo-card p {
-  margin: 0.45rem 0 0;
-  color: var(--muted-foreground);
-  font-size: 0.88rem;
-}
-
-.demo-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.9rem;
-}
-
-.demo-secondary-head {
+.demo-row-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.9rem;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding-top: 0.3rem;
 }
 
-.demo-panel-body strong {
-  display: block;
-  font-size: 1rem;
+.demo-action-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 2px solid rgba(255, 255, 255, 0.42);
+  border-radius: 0.25rem;
+  opacity: 0.9;
 }
 
-.demo-panel-body p {
-  margin: 0.4rem 0 0;
-  color: var(--muted-foreground);
-  font-size: 0.88rem;
+.demo-action-icon.trash {
+  border-radius: 0.2rem;
+  border-top-width: 3px;
 }
 
 .stats-panel {
@@ -905,7 +866,6 @@ code {
 }
 
 @media (max-width: 1100px) {
-  .wide-demo-content,
   .feature-grid,
   .mascot-gallery,
   .install-grid,
@@ -946,15 +906,19 @@ code {
     width: 100%;
   }
 
-  .demo-grid {
-    grid-template-columns: 1fr;
+  .demo-row {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .demo-session-head {
+  .demo-row-actions {
+    display: none;
+  }
+
+  .demo-row-head {
     flex-direction: column;
   }
 
-  .demo-session-badges {
+  .demo-row-badges {
     justify-content: flex-start;
     max-width: none;
   }
