@@ -98,8 +98,13 @@
           </div>
         </div>
 
-        <article class="glass-card hero-demo-card">
-          <div class="desktop-demo-stage">
+        <article class="hero-demo-card">
+          <div class="desktop-demo-stage is-collapsed" data-desktop-demo>
+            <div class="desktop-demo-collapsed-bar" aria-hidden="true">
+              <img src="./assets/mascots/claude.gif" alt="" class="desktop-demo-collapsed-icon" />
+              <span class="desktop-demo-collapsed-title">Need a quick answer about the next step</span>
+              <span class="desktop-demo-collapsed-count">8</span>
+            </div>
             <div class="desktop-demo-rails" aria-hidden="true"></div>
             <div class="desktop-demo-window">
 
@@ -132,7 +137,7 @@
                   <h3>What would you like to do in this project?</h3>
 
                   <div class="desktop-demo-choice-grid">
-                    <article class="desktop-demo-choice is-active">
+                    <article class="desktop-demo-choice">
                       <strong>Keep shipping</strong>
                       <span>Continue the feature that is already in motion</span>
                     </article>
@@ -150,7 +155,7 @@
                     </article>
                   </div>
 
-                  <button type="button" class="desktop-demo-submit">Send all answers</button>
+                  <button type="button" class="desktop-demo-submit">Submit</button>
                 </div>
               </div>
 

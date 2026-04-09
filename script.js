@@ -4,6 +4,15 @@ if (yearNode) {
   yearNode.textContent = String(new Date().getFullYear());
 }
 
+const desktopDemo = document.querySelector("[data-desktop-demo]");
+
+if (desktopDemo) {
+  window.setTimeout(() => {
+    desktopDemo.classList.remove("is-collapsed");
+    desktopDemo.classList.add("is-expanded");
+  }, 3000);
+}
+
 async function refreshStars() {
   try {
     const response = await fetch("https://api.github.com/repos/erha19/ping-island", {
@@ -28,3 +37,18 @@ async function refreshStars() {
 }
 
 refreshStars();
+
+/* Choice grid: click to select, light up submit button */
+const choiceGrid = document.querySelector(".desktop-demo-choice-grid");
+const submitBtn = document.querySelector(".desktop-demo-submit");
+
+if (choiceGrid && submitBtn) {
+  choiceGrid.addEventListener("click", (e) => {
+    const choice = e.target.closest(".desktop-demo-choice");
+    if (!choice) return;
+
+    choiceGrid.querySelectorAll(".desktop-demo-choice").forEach((c) => c.classList.remove("is-active"));
+    choice.classList.add("is-active");
+    submitBtn.classList.add("is-ready");
+  });
+}
