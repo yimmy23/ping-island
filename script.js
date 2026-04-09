@@ -81,6 +81,7 @@ const demoConfig = {
 
 const chips = Array.from(document.querySelectorAll("[data-demo-state]"));
 const notch = document.querySelector("[data-demo-notch]");
+const shell = document.querySelector("[data-demo-shell]");
 const sessionRows = Array.from(document.querySelectorAll("[data-session]"));
 
 const fields = {
@@ -108,6 +109,7 @@ function renderDemo(stateKey) {
 
   currentState = stateKey;
   notch.className = `demo-notch ${state.expanded ? "is-expanded " : ""}is-${stateKey}`;
+  shell?.classList.toggle("is-expanded", state.expanded);
 
   fields.mini.textContent = state.mini;
   fields.title.textContent = state.title;

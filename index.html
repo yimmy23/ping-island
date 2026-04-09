@@ -111,7 +111,7 @@
             <button class="demo-chip" type="button" data-demo-state="complete" aria-pressed="false">Complete</button>
           </div>
 
-          <div class="wide-demo-shell">
+          <div class="wide-demo-shell" data-demo-shell>
             <div class="demo-screen">
               <div class="demo-statusbar">
                 <span>9:41</span>
@@ -141,33 +141,67 @@
                 </div>
               </button>
 
-              <div class="wide-demo-content">
-                <div class="demo-session-column">
-                  <article class="demo-session-card is-active" data-session="codex">
-                    <img src="./assets/mascots/codex.gif" alt="" class="demo-session-mascot" />
-                    <div>
-                      <span>Codex</span>
-                      <strong data-demo-thread>Codex thread synced</strong>
-                    </div>
-                    <em data-demo-event>Quiet state</em>
-                  </article>
-                  <article class="demo-session-card" data-session="claude">
-                    <img src="./assets/mascots/claude.gif" alt="" class="demo-session-mascot" />
-                    <div>
-                      <span>Claude Code</span>
-                      <strong>Ready for approval</strong>
-                    </div>
-                    <em>Standby</em>
-                  </article>
-                  <article class="demo-session-card" data-session="gemini">
-                    <img src="./assets/mascots/gemini.gif" alt="" class="demo-session-mascot" />
-                    <div>
-                      <span>Gemini CLI</span>
-                      <strong>Latest rollout</strong>
-                    </div>
-                    <em>Background</em>
-                  </article>
-                </div>
+                <div class="wide-demo-content">
+                  <div class="demo-session-column">
+                    <article class="demo-session-card is-active" data-session="codex">
+                      <div class="demo-session-icon-wrap">
+                        <img src="./assets/mascots/codex.gif" alt="" class="demo-session-mascot" />
+                      </div>
+                      <div class="demo-session-main">
+                        <div class="demo-session-head">
+                          <div class="demo-session-title-group">
+                            <span>Island</span>
+                            <strong data-demo-thread>Codex thread synced</strong>
+                          </div>
+                          <div class="demo-session-badges">
+                            <span class="demo-list-badge">1m</span>
+                            <span class="demo-list-badge accent" data-demo-event>Quiet state</span>
+                          </div>
+                        </div>
+                        <p class="demo-session-line">You: Session stable, no action needed.</p>
+                        <p class="demo-session-line strong" data-demo-copy>Ping Island stays small until the run actually needs you.</p>
+                      </div>
+                    </article>
+                    <article class="demo-session-card" data-session="claude">
+                      <div class="demo-session-icon-wrap">
+                        <img src="./assets/mascots/claude.gif" alt="" class="demo-session-mascot" />
+                      </div>
+                      <div class="demo-session-main">
+                        <div class="demo-session-head">
+                          <div class="demo-session-title-group">
+                            <span>Island</span>
+                            <strong>Ask me a question</strong>
+                          </div>
+                          <div class="demo-session-badges">
+                            <span class="demo-list-badge">1m</span>
+                            <span class="demo-list-badge warm">Claude Code</span>
+                            <span class="demo-list-badge">iTerm2</span>
+                          </div>
+                        </div>
+                        <p class="demo-session-line">You: Ask me a question using tool</p>
+                        <p class="demo-session-line strong">Claude: PingIsland is a mac app...</p>
+                      </div>
+                    </article>
+                    <article class="demo-session-card" data-session="gemini">
+                      <div class="demo-session-icon-wrap">
+                        <img src="./assets/mascots/gemini.gif" alt="" class="demo-session-mascot" />
+                      </div>
+                      <div class="demo-session-main">
+                        <div class="demo-session-head">
+                          <div class="demo-session-title-group">
+                            <span>Island</span>
+                            <strong>Question received</strong>
+                          </div>
+                          <div class="demo-session-badges">
+                            <span class="demo-list-badge">39s</span>
+                            <span class="demo-list-badge green">Qoder</span>
+                          </div>
+                        </div>
+                        <p class="demo-session-line">You: hi</p>
+                        <p class="demo-session-line strong">Hello, I&apos;m Qoder. I can see you...</p>
+                      </div>
+                    </article>
+                  </div>
 
                 <div class="demo-preview-column">
                   <div class="demo-card demo-detail-card">
