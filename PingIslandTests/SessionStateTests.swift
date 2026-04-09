@@ -121,6 +121,8 @@ final class SessionStateTests: XCTestCase {
 
         XCTAssertEqual(session.scopedApprovalAction, .autoApprove)
         XCTAssertTrue(session.supportsSessionScopedApproval)
+        XCTAssertEqual(SessionScopedApprovalAction.autoApprove.buttonTitleKey, "Always Allow")
+        XCTAssertEqual(SessionScopedApprovalAction.autoApprove.compactButtonTitleKey, "Always")
     }
 
     func testQoderWaitingForApprovalDoesNotExposeClaudeAutoApproveAction() {

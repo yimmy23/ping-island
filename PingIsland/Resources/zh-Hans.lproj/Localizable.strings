@@ -271,6 +271,10 @@
 "Screen" = "屏幕";
 "Automatic" = "自动";
 "Auto" = "自动";
+"Allow Session" = "允许本次会话";
+"Always Allow" = "始终允许";
+"Session" = "会话";
+"Always" = "始终";
 "Built-in or Main" = "内建或主屏幕";
 "Built-in" = "内建";
 "Main" = "主屏幕";

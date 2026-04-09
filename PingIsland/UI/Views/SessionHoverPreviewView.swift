@@ -275,7 +275,7 @@ private struct HoverApprovalCard: View {
                 .buttonStyle(HoverApprovalButtonStyle(background: Color.white.opacity(0.1)))
 
                 if let sessionAction = session.scopedApprovalAction {
-                    Button(sessionAction.buttonTitle) {
+                    Button(AppLocalization.string(sessionAction.buttonTitleKey)) {
                         sessionMonitor.approvePermission(sessionId: session.sessionId, forSession: true)
                     }
                     .buttonStyle(

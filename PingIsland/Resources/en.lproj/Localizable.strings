@@ -271,6 +271,10 @@
 "Screen" = "Screen";
 "Automatic" = "Automatic";
 "Auto" = "Auto";
+"Allow Session" = "Allow Session";
+"Always Allow" = "Always Allow";
+"Session" = "Session";
+"Always" = "Always";
 "Built-in or Main" = "Built-in or Main";
 "Built-in" = "Built-in";
 "Main" = "Main";

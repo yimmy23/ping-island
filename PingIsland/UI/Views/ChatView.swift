@@ -1256,7 +1256,7 @@ struct ChatApprovalBar: View {
                 Button {
                     onApproveForSession()
                 } label: {
-                    Text(sessionAction.buttonTitle)
+                    Text(AppLocalization.string(sessionAction.buttonTitleKey))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.white.opacity(0.92))
                         .padding(.horizontal, 16)

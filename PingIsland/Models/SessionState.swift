@@ -12,21 +12,21 @@ enum SessionScopedApprovalAction: Equatable, Sendable {
     case allowSession
     case autoApprove
 
-    nonisolated var buttonTitle: String {
+    nonisolated var buttonTitleKey: String {
         switch self {
         case .allowSession:
             return "Allow Session"
         case .autoApprove:
-            return "Auto-Approve"
+            return "Always Allow"
         }
     }
 
-    nonisolated var compactButtonTitle: String {
+    nonisolated var compactButtonTitleKey: String {
         switch self {
         case .allowSession:
             return "Session"
         case .autoApprove:
-            return "Auto"
+            return "Always"
         }
     }
 }

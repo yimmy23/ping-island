@@ -103,7 +103,7 @@ struct CodexSessionView: View {
             .buttonStyle(CodexCapsuleButtonStyle(background: Color.white.opacity(0.9), foreground: .black))
 
             if intervention.supportsSessionScope {
-                Button("Allow Session") {
+                Button(AppLocalization.string("Allow Session")) {
                     sessionMonitor.approvePermission(sessionId: session.sessionId, forSession: true)
                     viewModel.exitChat()
                 }

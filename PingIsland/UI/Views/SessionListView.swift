@@ -757,7 +757,7 @@ struct InlineApprovalButtons: View {
                 Button {
                     onApproveForSession()
                 } label: {
-                    Text(sessionAction.compactButtonTitle)
+                    Text(AppLocalization.string(sessionAction.compactButtonTitleKey))
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.white.opacity(0.86))
                         .padding(.horizontal, 8)
