@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ping Island | Digital Gold for AI Coding Focus</title>
+    <title>Ping Island | Ambient Control for AI Coding Sessions</title>
     <meta
       name="description"
-      content="Ping Island is a macOS menu bar app that turns approvals, follow-up questions, completions, and focus return into a premium control surface for AI coding sessions."
+      content="Ping Island is a macOS menu bar app that surfaces approvals, follow-up questions, completions, and focus return for AI coding sessions in a calm, premium dark interface."
     />
     <meta property="og:title" content="Ping Island" />
     <meta
       property="og:description"
-      content="A Bitcoin DeFi-inspired control surface for Claude Code, Codex, Gemini CLI, and other AI coding clients on macOS."
+      content="A premium dark control surface for Claude Code, Codex, Gemini CLI, and other AI coding clients on macOS."
     />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="./assets/notch-panel.png" />
@@ -25,23 +25,23 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="bg-grid-pattern" aria-hidden="true"></div>
-    <div class="bg-orb bg-orb-left" aria-hidden="true"></div>
-    <div class="bg-orb bg-orb-right" aria-hidden="true"></div>
+    <div class="ambient-orb ambient-orb-top" aria-hidden="true"></div>
+    <div class="ambient-orb ambient-orb-bottom" aria-hidden="true"></div>
+    <div class="noise-layer" aria-hidden="true"></div>
 
     <header class="site-header">
       <a class="brand" href="#top" aria-label="Ping Island home">
         <img src="./assets/ping-island-icon.svg" alt="" class="brand-icon" />
         <div class="brand-copy">
-          <span class="mono-label">PING ISLAND / CONTROL PLANE</span>
-          <strong>Built for live AI coding sessions</strong>
+          <span class="mono-label">Ping Island / macOS control surface</span>
+          <strong>Stay calm while the agents work.</strong>
         </div>
       </a>
 
       <nav class="site-nav" aria-label="Primary">
         <a href="#features">Features</a>
-        <a href="#network">How it works</a>
-        <a href="#clients">Clients</a>
+        <a href="#mascots">Mascots</a>
+        <a href="#workflow">Workflow</a>
         <a href="#install">Install</a>
       </nav>
 
@@ -51,42 +51,42 @@
         target="_blank"
         rel="noreferrer"
       >
-        Star Repo
+        Star on GitHub
       </a>
     </header>
 
     <main id="top" class="page-shell">
       <section class="hero">
         <div class="hero-copy">
-          <div class="pill-row">
-            <span class="status-pill">
+          <div class="badge-row">
+            <span class="status-badge">
               <span class="pulse-dot"></span>
-              Live agent routing
+              Live routing
             </span>
-            <span class="status-pill">macOS 14+</span>
-            <span class="status-pill">Claude / Codex / Gemini</span>
+            <span class="status-badge">macOS 14+</span>
+            <span class="status-badge">Codex / Claude / Gemini</span>
           </div>
 
           <h1 class="hero-title">
-            Secure the most expensive part of your coding loop with
-            <span class="gradient-text">digital gold focus</span>.
+            A calmer dark surface for the moments your coding agents
+            <span class="gradient-text">actually need you</span>.
           </h1>
 
           <p class="hero-subtitle">
-            Ping Island turns approvals, follow-up questions, completions, and
-            terminal return into a premium notch-layer for AI coding sessions on
-            macOS. It watches the run, surfaces the decision, and sends you back
-            to the exact workspace when the action matters.
+            Ping Island turns approvals, questions, completions, and focus
+            return into a native Dynamic Island-style layer for macOS. It keeps
+            the high-value interrupts visible without forcing you to babysit
+            terminal tabs.
           </p>
 
-          <div class="button-row">
+          <div class="hero-actions">
             <a
               class="button button-primary"
               href="https://github.com/erha19/ping-island/releases"
               target="_blank"
               rel="noreferrer"
             >
-              Get Latest Release
+              Download Latest Release
             </a>
             <a
               class="button button-ghost"
@@ -94,118 +94,194 @@
               target="_blank"
               rel="noreferrer"
             >
-              Read Source
+              View Source
             </a>
           </div>
 
           <div class="hero-metrics">
-            <div class="metric-card glass-panel">
-              <span class="metric-label mono-label">coverage</span>
+            <article class="glass-card metric-card">
+              <span class="mono-label">coverage</span>
               <strong>8+ client families</strong>
-              <p>Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Qoder, CodeBuddy, Copilot.</p>
-            </div>
-            <div class="metric-card glass-panel">
-              <span class="metric-label mono-label">response surface</span>
-              <strong>One native intervention layer</strong>
-              <p>Approve, answer, deny, and return without losing session context.</p>
-            </div>
+              <p>Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Qoder, CodeBuddy, and Copilot in one surface.</p>
+            </article>
+            <article class="glass-card metric-card">
+              <span class="mono-label">operator loop</span>
+              <strong>Answer from the notch</strong>
+              <p>Approve tools, deny requests, and jump back to the right terminal or IDE only when needed.</p>
+            </article>
           </div>
         </div>
 
         <div class="hero-visual">
-          <div class="orbital-stage">
-            <div class="orbital-ring orbital-ring-outer"></div>
-            <div class="orbital-ring orbital-ring-inner"></div>
-            <div class="orb-core">
-              <div class="orb-center">₿</div>
-            </div>
-
-            <div class="floating-card floating-card-top glass-panel">
-              <span class="mono-label">trust layer</span>
-              <strong>Approvals in the notch</strong>
-            </div>
-            <div class="floating-card floating-card-right glass-panel">
-              <span class="mono-label">focus return</span>
-              <strong>Terminal / tmux / IDE</strong>
-            </div>
-            <div class="floating-card floating-card-bottom glass-panel">
-              <span class="mono-label">signal</span>
-              <strong>Completion / error / prompt</strong>
-            </div>
-          </div>
-
-          <div class="showcase-card glass-panel">
-            <div class="showcase-meta">
+          <article class="glass-card preview-card">
+            <div class="card-head">
               <span class="mono-label">Live Preview</span>
-              <span class="signal-tag">secured routing</span>
+              <span class="signal-chip">attention surface online</span>
             </div>
             <img
               src="./assets/notch-panel.png"
               alt="Ping Island notch preview"
               class="showcase-image"
             />
-          </div>
+          </article>
+
+          <article class="glass-card mascot-hero-card">
+            <div class="card-head">
+              <span class="mono-label">Mascot System</span>
+              <span class="signal-chip signal-chip-warm">pet gifs included</span>
+            </div>
+
+            <div class="mascot-cluster">
+              <figure class="mascot-tile">
+                <img src="./assets/mascots/claude.gif" alt="Claude mascot gif" />
+                <figcaption>Claude</figcaption>
+              </figure>
+              <figure class="mascot-tile">
+                <img src="./assets/mascots/codex.gif" alt="Codex mascot gif" />
+                <figcaption>Codex</figcaption>
+              </figure>
+              <figure class="mascot-tile">
+                <img src="./assets/mascots/gemini.gif" alt="Gemini mascot gif" />
+                <figcaption>Gemini</figcaption>
+              </figure>
+              <figure class="mascot-tile">
+                <img src="./assets/mascots/opencode.gif" alt="OpenCode mascot gif" />
+                <figcaption>OpenCode</figcaption>
+              </figure>
+            </div>
+          </article>
         </div>
       </section>
 
-      <section class="stats-strip panel">
+      <section class="stats-panel panel">
         <div class="stats-item">
           <span class="mono-label">session trust</span>
-          <strong>Codex hooks + app server sync</strong>
+          <strong>Codex hooks + app-server sync</strong>
         </div>
         <div class="stats-item">
-          <span class="mono-label">operator path</span>
-          <strong>Notch actions with one-click focus return</strong>
+          <span class="mono-label">focus return</span>
+          <strong>iTerm2, Ghostty, Terminal.app, tmux, IDEs</strong>
         </div>
         <div class="stats-item">
           <span class="mono-label">custom layer</span>
-          <strong>Sound packs, mascots, and client identity</strong>
+          <strong>Sound packs, mascots, and per-client identity</strong>
         </div>
       </section>
 
       <section id="features" class="content-section">
         <div class="section-head">
-          <span class="mono-label">value modules</span>
-          <h2>Engineered to keep expensive attention inside the right surface.</h2>
+          <span class="mono-label">Core Features</span>
+          <h2>Built around the interruptions that break deep work.</h2>
           <p>
-            The site now treats Ping Island like a premium piece of operator
-            infrastructure: bright trust signals, clean data hierarchy, and
-            panels that feel precise instead of decorative.
+            This version is intentionally quieter and more product-focused. The
+            structure stays static and deployable, but the design language now
+            communicates calm control instead of shouting for attention.
           </p>
         </div>
 
         <div class="feature-grid">
-          <article class="feature-card panel" data-mark="₿">
+          <article class="panel feature-card">
             <h3>Attention-first UI</h3>
-            <p>Stay compact until a run actually needs approval, input, review, or intervention.</p>
+            <p>Stay compact until a session needs approval, input, review, or intervention.</p>
           </article>
-          <article class="feature-card panel" data-mark="⛁">
+          <article class="panel feature-card">
             <h3>Native action loop</h3>
-            <p>Approve tools, deny requests, and answer prompts from the notch before you ever tab back.</p>
+            <p>Approve tools, deny requests, and answer follow-up prompts without hunting through tabs.</p>
           </article>
-          <article class="feature-card panel" data-mark="◎">
-            <h3>Terminal precision</h3>
-            <p>Jump directly to iTerm2, Ghostty, Terminal.app, tmux panes, and IDE windows that spawned the run.</p>
+          <article class="panel feature-card">
+            <h3>Precise focus return</h3>
+            <p>Jump back to the exact terminal, tmux pane, or IDE window that spawned the run.</p>
           </article>
-          <article class="feature-card panel" data-mark="₿">
+          <article class="panel feature-card">
             <h3>Codex-aware sync</h3>
-            <p>Codex hooks, app-server threads, and fallback parsing all collapse into one coherent status surface.</p>
+            <p>Codex hooks, app-server threads, and rollout fallback stay coherent inside one monitor layer.</p>
           </article>
-          <article class="feature-card panel" data-mark="◉">
-            <h3>Client identity</h3>
-            <p>Per-client mascots, sounds, and visual overrides make cross-agent monitoring feel readable at a glance.</p>
+          <article class="panel feature-card">
+            <h3>Custom signals</h3>
+            <p>Map event-specific sounds and give each client a visual identity that feels personal.</p>
           </article>
-          <article class="feature-card panel" data-mark="∞">
+          <article class="panel feature-card">
             <h3>Open-source trust</h3>
-            <p>Independent, local, and native. The product language stays transparent because the project is too.</p>
+            <p>Independent, local, and native. The UI stays transparent because the project is too.</p>
           </article>
         </div>
       </section>
 
-      <section id="network" class="content-section split-section">
+      <section id="mascots" class="content-section">
         <div class="section-head">
-          <span class="mono-label">network trust path</span>
-          <h2>The run moves through a chain of focused operator states.</h2>
+          <span class="mono-label">Pet GIF Showcase</span>
+          <h2>Our mascot system deserves to be seen, not hidden in a footer.</h2>
+          <p>
+            Ping Island lets each client carry its own animated personality
+            across the notch, session list, and hover preview. This section puts
+            those pets front and center.
+          </p>
+        </div>
+
+        <div class="mascot-gallery">
+          <figure class="glass-card mascot-card featured">
+            <img src="./assets/mascots/claude.gif" alt="Claude mascot gif" />
+            <figcaption>
+              <span class="mono-label">Claude Code</span>
+              <strong>Approval guardian</strong>
+            </figcaption>
+          </figure>
+          <figure class="glass-card mascot-card">
+            <img src="./assets/mascots/codex.gif" alt="Codex mascot gif" />
+            <figcaption>
+              <span class="mono-label">Codex</span>
+              <strong>Thread runner</strong>
+            </figcaption>
+          </figure>
+          <figure class="glass-card mascot-card">
+            <img src="./assets/mascots/gemini.gif" alt="Gemini mascot gif" />
+            <figcaption>
+              <span class="mono-label">Gemini CLI</span>
+              <strong>Fast signal scout</strong>
+            </figcaption>
+          </figure>
+          <figure class="glass-card mascot-card">
+            <img src="./assets/mascots/opencode.gif" alt="OpenCode mascot gif" />
+            <figcaption>
+              <span class="mono-label">OpenCode</span>
+              <strong>Plugin relay</strong>
+            </figcaption>
+          </figure>
+          <figure class="glass-card mascot-card">
+            <img src="./assets/mascots/cursor.gif" alt="Cursor mascot gif" />
+            <figcaption>
+              <span class="mono-label">Cursor</span>
+              <strong>IDE navigator</strong>
+            </figcaption>
+          </figure>
+          <figure class="glass-card mascot-card">
+            <img src="./assets/mascots/qoder.gif" alt="Qoder mascot gif" />
+            <figcaption>
+              <span class="mono-label">Qoder</span>
+              <strong>Focus router</strong>
+            </figcaption>
+          </figure>
+          <figure class="glass-card mascot-card">
+            <img src="./assets/mascots/codebuddy.gif" alt="CodeBuddy mascot gif" />
+            <figcaption>
+              <span class="mono-label">CodeBuddy</span>
+              <strong>Hook relay</strong>
+            </figcaption>
+          </figure>
+          <figure class="glass-card mascot-card">
+            <img src="./assets/mascots/copilot.gif" alt="GitHub Copilot mascot gif" />
+            <figcaption>
+              <span class="mono-label">Copilot</span>
+              <strong>Session copilot</strong>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="workflow" class="content-section split-section">
+        <div class="section-head">
+          <span class="mono-label">Workflow</span>
+          <h2>See the interrupt, act instantly, and return to the right workspace.</h2>
         </div>
 
         <div class="timeline panel">
@@ -213,103 +289,69 @@
           <article class="timeline-step">
             <div class="timeline-node">01</div>
             <div class="timeline-copy">
-              <h3>Observe the session</h3>
-              <p>Hooks and app-server signals are normalized before they become UI state.</p>
+              <h3>Observe the run</h3>
+              <p>Hooks and app-server signals normalize into one session model before they ever hit the UI.</p>
             </div>
           </article>
           <article class="timeline-step">
             <div class="timeline-node">02</div>
             <div class="timeline-copy">
               <h3>Surface the decision</h3>
-              <p>Approvals, prompts, and completions are rendered as the highest-value interruption on screen.</p>
+              <p>Approvals, prompts, completions, and failures appear in the notch as the next highest-value action.</p>
             </div>
           </article>
           <article class="timeline-step">
             <div class="timeline-node">03</div>
             <div class="timeline-copy">
-              <h3>Return to the exact source</h3>
-              <p>When the full workspace matters, focus jumps to the originating terminal, tmux pane, or IDE host.</p>
+              <h3>Route focus back</h3>
+              <p>When you need the full workspace, Ping Island jumps to the exact terminal, tmux pane, or IDE host.</p>
             </div>
           </article>
         </div>
 
-        <div class="glass-stack">
-          <div class="glass-panel preview-card">
+        <div class="workflow-stack">
+          <article class="glass-card workflow-card">
             <div class="card-head">
-              <span class="mono-label">intervention panel</span>
-              <span class="signal-tag">question state</span>
+              <span class="mono-label">Question Panel</span>
+              <span class="signal-chip">live intervention</span>
             </div>
             <img
               src="./assets/question-panel.png"
               alt="Ping Island question panel"
               class="showcase-image"
             />
-          </div>
+          </article>
 
-          <div class="glass-panel proof-card">
+          <article class="glass-card workflow-card">
             <div class="card-head">
-              <span class="mono-label">network confidence</span>
-              <span class="signal-tag signal-tag-gold">digital gold</span>
+              <span class="mono-label">Coverage</span>
+              <span class="signal-chip signal-chip-warm">operator confidence</span>
             </div>
             <div class="proof-list">
               <div class="proof-item">
-                <span>Operator visibility</span>
+                <span>Notch visibility</span>
                 <div class="progress-track"><span style="width: 92%"></span></div>
               </div>
               <div class="proof-item">
                 <span>Focus return accuracy</span>
-                <div class="progress-track amber"><span style="width: 96%"></span></div>
+                <div class="progress-track warm"><span style="width: 96%"></span></div>
               </div>
               <div class="proof-item">
-                <span>Cross-client coherence</span>
-                <div class="progress-track gold"><span style="width: 89%"></span></div>
+                <span>Cross-client clarity</span>
+                <div class="progress-track"><span style="width: 88%"></span></div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="clients" class="content-section">
-        <div class="section-head">
-          <span class="mono-label">client matrix</span>
-          <h2>One premium control plane for the whole coding stack.</h2>
-        </div>
-
-        <div class="client-layout">
-          <div class="glass-panel client-poster">
-            <div class="card-head">
-              <span class="mono-label">supported clients</span>
-              <span class="signal-tag">8+ families</span>
-            </div>
-            <img
-              src="./assets/ping-island-mascot-poster.png"
-              alt="Ping Island supported clients poster"
-              class="poster-image"
-            />
-          </div>
-
-          <div class="client-tags panel">
-            <span>Claude Code</span>
-            <span>Codex</span>
-            <span>Gemini CLI</span>
-            <span>OpenCode</span>
-            <span>Cursor</span>
-            <span>Qoder</span>
-            <span>CodeBuddy</span>
-            <span>GitHub Copilot</span>
-            <span>VS Code-compatible IDE focus</span>
-            <span>Terminal.app / iTerm2 / Ghostty / tmux</span>
-          </div>
+          </article>
         </div>
       </section>
 
       <section id="install" class="content-section">
         <div class="section-head">
-          <span class="mono-label">operator runbook</span>
-          <h2>Install fast, route trust, and keep moving.</h2>
+          <span class="mono-label">Install</span>
+          <h2>Start with the release build, or go straight to source.</h2>
         </div>
 
-        <div class="install-cards">
+        <div class="install-grid">
           <article class="panel install-card">
             <h3>Release path</h3>
             <ol>
@@ -348,15 +390,15 @@ xcodebuild -project PingIsland.xcodeproj \
       </section>
 
       <section class="content-section" id="star">
-        <div class="star-callout glass-panel">
-          <span class="mono-label">open-source signal</span>
-          <h2>If Ping Island protects your flow, turn that into a star.</h2>
+        <div class="glass-card star-callout">
+          <span class="mono-label">Open Source Signal</span>
+          <h2>If Ping Island makes your workflow calmer, give it a star.</h2>
           <p>
-            The project sits at the intersection of terminal precision, native
-            macOS ergonomics, and live agent control. A GitHub star helps it
-            reach more builders who are already living in that world.
+            The project sits at the intersection of native macOS ergonomics,
+            coding-agent control, and a lot of lovingly animated mascot energy.
+            A GitHub star helps more people discover it.
           </p>
-          <div class="button-row center">
+          <div class="hero-actions center-actions">
             <a
               class="button button-primary"
               href="https://github.com/erha19/ping-island"
@@ -379,7 +421,7 @@ xcodebuild -project PingIsland.xcodeproj \
     </main>
 
     <footer class="site-footer">
-      <span class="mono-label">PING ISLAND / BITCOIN DEFI EDITION</span>
+      <span class="mono-label">Ping Island / Minimalist Dark</span>
       <span>© <span id="year"></span></span>
     </footer>
 
