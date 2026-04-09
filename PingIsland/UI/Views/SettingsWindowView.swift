@@ -1036,21 +1036,13 @@ private struct SettingsPanelContentView: View {
                                     .font(.system(size: 12, weight: .semibold))
                             }
                             .foregroundColor(.white.opacity(0.7))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule(style: .continuous)
-                                    .fill(.white.opacity(0.06))
-                            )
-                            .overlay(
-                                Capsule(style: .continuous)
-                                    .strokeBorder(.white.opacity(0.1), lineWidth: 1)
-                            )
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         Spacer()
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 12)
                 }
             }
 
@@ -1766,7 +1758,7 @@ private struct CustomHookInstallSheet: View {
                         }
                     }
                     .labelsHidden()
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {

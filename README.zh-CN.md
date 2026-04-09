@@ -32,14 +32,14 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/product-icons/claude-app-icon.png" width="28" alt="Claude Code 图标" title="Claude Code">&nbsp;
-  <img src="PingIsland/Assets.xcassets/CodexLogo.imageset/codex-logo.png" width="28" alt="Codex 图标" title="Codex">&nbsp;
-  <img src="PingIsland/Assets.xcassets/GeminiLogo.imageset/gemini-logo.png" width="28" alt="Gemini CLI 图标" title="Gemini CLI">&nbsp;
-  <img src="docs/images/product-icons/opencode-app-icon.png" width="28" alt="OpenCode 图标" title="OpenCode">&nbsp;
-  <img src="docs/images/product-icons/cursor-app-icon.png" width="28" alt="Cursor 图标" title="Cursor">&nbsp;
-  <img src="PingIsland/Assets.xcassets/QoderLogo.imageset/qoder-logo.png" width="28" alt="Qoder 图标" title="Qoder">&nbsp;
-  <img src="docs/images/product-icons/codebuddy-app-icon.png" width="28" alt="CodeBuddy 图标" title="CodeBuddy">&nbsp;
-  <img src="PingIsland/Assets.xcassets/CopilotLogo.imageset/copilot-logo.png" width="28" alt="GitHub Copilot 图标" title="GitHub Copilot">
+  <img src="docs/images/mascots/claude.gif" width="36" alt="Claude Code gif" title="Claude Code">&nbsp;
+  <img src="docs/images/mascots/codex.gif" width="36" alt="Codex gif" title="Codex">&nbsp;
+  <img src="docs/images/mascots/gemini.gif" width="36" alt="Gemini CLI gif" title="Gemini CLI">&nbsp;
+  <img src="docs/images/mascots/opencode.gif" width="36" alt="OpenCode gif" title="OpenCode">&nbsp;
+  <img src="docs/images/mascots/cursor.gif" width="36" alt="Cursor gif" title="Cursor">&nbsp;
+  <img src="docs/images/mascots/qoder.gif" width="36" alt="Qoder gif" title="Qoder">&nbsp;
+  <img src="docs/images/mascots/codebuddy.gif" width="36" alt="CodeBuddy gif" title="CodeBuddy">&nbsp;
+  <img src="docs/images/mascots/copilot.gif" width="36" alt="GitHub Copilot gif" title="GitHub Copilot">
 </p>
 <p align="center">
   <sub>Claude Code · Codex · Gemini CLI · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
