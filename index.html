@@ -102,56 +102,56 @@
           <div class="desktop-demo-stage">
             <div class="desktop-demo-rails" aria-hidden="true"></div>
             <div class="desktop-demo-window">
-              <button type="button" class="desktop-demo-settings" aria-label="Settings">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.22-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.22 1.12-.53 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/>
-                </svg>
-              </button>
 
-              <div class="desktop-demo-header">
-                <div class="desktop-demo-client">
-                  <img src="./assets/mascots/claude.gif" alt="" class="desktop-demo-client-icon" />
-                  <div class="desktop-demo-client-copy">
-                    <div class="desktop-demo-title-row">
+              <div class="desktop-demo-question-group">
+                <article class="desktop-demo-feed-row desktop-demo-feed-row-alert">
+                  <img src="./assets/mascots/claude.gif" alt="" class="desktop-demo-feed-icon" />
+                  <div class="desktop-demo-feed-copy">
+                    <div class="desktop-demo-feed-title">
                       <span>Island</span>
                       <span>·</span>
                       <strong>Need a quick answer</strong>
                     </div>
-                    <div class="desktop-demo-pill-row">
-                      <span class="desktop-demo-pill">18s</span>
-                      <span class="desktop-demo-pill is-warm">Claude Code</span>
-                      <span class="desktop-demo-pill">iTerm2</span>
-                    </div>
+                    <p>Claude Code is waiting for a quick direction before it can continue.</p>
                   </div>
+                  <div class="desktop-demo-feed-pills">
+                    <span class="desktop-demo-pill">18s</span>
+                    <span class="desktop-demo-pill is-warm">Claude Code</span>
+                    <span class="desktop-demo-pill">iTerm2</span>
+                    <button type="button" class="desktop-demo-alert" aria-label="Question waiting">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path fill="currentColor" d="M12 22a2.2 2.2 0 0 0 2.18-1.9h-4.36A2.2 2.2 0 0 0 12 22Zm6-5.6V11a6 6 0 1 0-12 0v5.4L4.6 18v1.1h14.8V18L18 16.4Z"/>
+                      </svg>
+                    </button>
+                  </div>
+                </article>
+                <div class="desktop-demo-body">
+                  <p class="desktop-demo-kicker">Today&apos;s focus</p>
+                  <h2>What should we tackle next?</h2>
+                  <p class="desktop-demo-subtitle">Claude Code needs one small decision before it can keep moving. Pick the path that feels most helpful.</p>
+                  <h3>What would you like to do in this project?</h3>
+
+                  <div class="desktop-demo-choice-grid">
+                    <article class="desktop-demo-choice is-active">
+                      <strong>Keep shipping</strong>
+                      <span>Continue the feature that is already in motion</span>
+                    </article>
+                    <article class="desktop-demo-choice">
+                      <strong>Fix a bug</strong>
+                      <span>Resolve a failing test or smooth out a rough edge</span>
+                    </article>
+                    <article class="desktop-demo-choice">
+                      <strong>Explore the code</strong>
+                      <span>Build context before making the next change</span>
+                    </article>
+                    <article class="desktop-demo-choice">
+                      <strong>Something else</strong>
+                      <span>Describe the outcome you want and we will steer there</span>
+                    </article>
+                  </div>
+
+                  <button type="button" class="desktop-demo-submit">Send all answers</button>
                 </div>
-              </div>
-
-              <div class="desktop-demo-body">
-                <p class="desktop-demo-kicker">Today&apos;s focus</p>
-                <h2>What should we tackle next?</h2>
-                <p class="desktop-demo-subtitle">Claude Code needs one small decision before it can keep moving. Pick the path that feels most helpful.</p>
-                <h3>What would you like to do in this project?</h3>
-
-                <div class="desktop-demo-choice-grid">
-                  <article class="desktop-demo-choice is-active">
-                    <strong>Keep shipping</strong>
-                    <span>Continue the feature that is already in motion</span>
-                  </article>
-                  <article class="desktop-demo-choice">
-                    <strong>Fix a bug</strong>
-                    <span>Resolve a failing test or smooth out a rough edge</span>
-                  </article>
-                  <article class="desktop-demo-choice">
-                    <strong>Explore the code</strong>
-                    <span>Build context before making the next change</span>
-                  </article>
-                  <article class="desktop-demo-choice">
-                    <strong>Something else</strong>
-                    <span>Describe the outcome you want and we will steer there</span>
-                  </article>
-                </div>
-
-                <button type="button" class="desktop-demo-submit">Send all answers</button>
               </div>
 
               <div class="desktop-demo-feed">
