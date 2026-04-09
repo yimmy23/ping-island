@@ -99,151 +99,161 @@
         </div>
 
         <article class="glass-card hero-demo-card">
-          <div class="card-head">
-            <span class="mono-label">Interactive Notch Demo</span>
-            <span class="signal-chip">click the island or switch state</span>
-          </div>
-
-          <div class="demo-controls" aria-label="Demo states">
-            <button class="demo-chip is-active" type="button" data-demo-state="idle" aria-pressed="true">Idle</button>
-            <button class="demo-chip" type="button" data-demo-state="approval" aria-pressed="false">Approval</button>
-            <button class="demo-chip" type="button" data-demo-state="question" aria-pressed="false">Question</button>
-            <button class="demo-chip" type="button" data-demo-state="complete" aria-pressed="false">Complete</button>
-          </div>
-
-          <div class="wide-demo-shell is-expanded" data-demo-shell>
-            <div class="demo-screen screenshot-demo">
-              <div class="demo-settings">
-                <button type="button" class="demo-settings-button" aria-label="Settings">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.22-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.22 1.12-.53 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/>
-                  </svg>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                class="demo-notch is-expanded"
-                data-demo-notch
-                aria-label="Toggle Dynamic Island demo"
-              >
-                <div class="demo-notch-collapsed">
-                  <span class="demo-camera"></span>
-                  <span class="demo-mini-label" data-demo-mini>Panel preview</span>
-                </div>
-                <div class="demo-notch-expanded">
-                  <div class="demo-notch-head">
-                    <div>
-                      <strong data-demo-title>Session overview</strong>
-                      <p data-demo-subtitle>Preview how Ping Island expands when multiple sessions need attention.</p>
-                    </div>
-                    <span class="demo-state-badge" data-demo-badge>IDLE</span>
-                  </div>
-                  <div class="demo-action-row" data-demo-actions></div>
-                </div>
+          <div class="desktop-demo-stage">
+            <div class="desktop-demo-rails" aria-hidden="true"></div>
+            <div class="desktop-demo-window">
+              <button type="button" class="desktop-demo-settings" aria-label="Settings">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.22-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.22 1.12-.53 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/>
+                </svg>
               </button>
 
-              <div class="demo-list">
-                <article class="demo-row is-active" data-session="codex">
-                  <div class="demo-row-icon">
-                    <img src="./assets/mascots/codex.gif" alt="" class="demo-session-mascot" />
-                  </div>
-                  <div class="demo-row-main">
-                    <div class="demo-row-head">
-                      <div class="demo-row-title">
-                        <span>Island ·</span>
-                        <strong data-demo-thread>Placeholder session title</strong>
-                      </div>
-                      <div class="demo-row-badges">
-                        <span class="demo-pill">1m</span>
-                        <span class="demo-pill accent" data-demo-event>Codex</span>
-                      </div>
+              <div class="desktop-demo-header">
+                <div class="desktop-demo-client">
+                  <img src="./assets/mascots/claude.gif" alt="" class="desktop-demo-client-icon" />
+                  <div class="desktop-demo-client-copy">
+                    <div class="desktop-demo-title-row">
+                      <span>Island</span>
+                      <span>·</span>
+                      <strong>Need a quick answer</strong>
                     </div>
-                    <p class="demo-row-line">You: placeholder input text</p>
-                    <p class="demo-row-line strong" data-demo-copy>Placeholder preview copy for the active session row.</p>
+                    <div class="desktop-demo-pill-row">
+                      <span class="desktop-demo-pill">18s</span>
+                      <span class="desktop-demo-pill is-warm">Claude Code</span>
+                      <span class="desktop-demo-pill">iTerm2</span>
+                    </div>
                   </div>
-                  <div class="demo-row-actions">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" class="demo-action-svg bubble">
-                      <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H8l-5 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/>
-                    </svg>
+                </div>
+              </div>
+
+              <div class="desktop-demo-body">
+                <p class="desktop-demo-kicker">Today&apos;s focus</p>
+                <h2>What should we tackle next?</h2>
+                <p class="desktop-demo-subtitle">Claude Code needs one small decision before it can keep moving. Pick the path that feels most helpful.</p>
+                <h3>What would you like to do in this project?</h3>
+
+                <div class="desktop-demo-choice-grid">
+                  <article class="desktop-demo-choice is-active">
+                    <strong>Keep shipping</strong>
+                    <span>Continue the feature that is already in motion</span>
+                  </article>
+                  <article class="desktop-demo-choice">
+                    <strong>Fix a bug</strong>
+                    <span>Resolve a failing test or smooth out a rough edge</span>
+                  </article>
+                  <article class="desktop-demo-choice">
+                    <strong>Explore the code</strong>
+                    <span>Build context before making the next change</span>
+                  </article>
+                  <article class="desktop-demo-choice">
+                    <strong>Something else</strong>
+                    <span>Describe the outcome you want and we will steer there</span>
+                  </article>
+                </div>
+
+                <button type="button" class="desktop-demo-submit">Send all answers</button>
+              </div>
+
+              <div class="desktop-demo-feed">
+                <article class="desktop-demo-feed-row">
+                  <img src="./assets/mascots/codex.gif" alt="" class="desktop-demo-feed-icon" />
+                  <div class="desktop-demo-feed-copy">
+                    <div class="desktop-demo-feed-title">
+                      <span>Island</span>
+                      <span>·</span>
+                      <strong>Review the hook parser before the next release</strong>
+                    </div>
+                    <p>You: can you double-check the file mapping?</p>
+                    <p>Opened `Prototype/Sources/IslandShared/HookPayloadMapper.swift`</p>
+                  </div>
+                  <div class="desktop-demo-feed-pills">
+                    <span class="desktop-demo-pill">32s</span>
+                    <span class="desktop-demo-pill is-codex">Codex</span>
                   </div>
                 </article>
 
-                <article class="demo-row" data-session="claude">
-                  <div class="demo-row-icon">
-                    <img src="./assets/mascots/claude.gif" alt="" class="demo-session-mascot" />
-                  </div>
-                  <div class="demo-row-main">
-                    <div class="demo-row-head">
-                      <div class="demo-row-title">
-                        <span>Island ·</span>
-                        <strong>Placeholder session title</strong>
-                      </div>
-                      <div class="demo-row-badges">
-                        <span class="demo-pill">1m</span>
-                        <span class="demo-pill warm">Claude Code</span>
-                        <span class="demo-pill">iTerm2</span>
-                      </div>
+                <article class="desktop-demo-feed-row">
+                  <img src="./assets/mascots/cursor.gif" alt="" class="desktop-demo-feed-icon" />
+                  <div class="desktop-demo-feed-copy">
+                    <div class="desktop-demo-feed-title">
+                      <span>Island</span>
+                      <span>·</span>
+                      <strong>Tighten the IDE focus return behavior</strong>
                     </div>
-                    <p class="demo-row-line">You: placeholder input text</p>
-                    <p class="demo-row-line strong">Assistant: placeholder response preview...</p>
+                    <p>You: let&apos;s make Cursor and VS Code feel more reliable</p>
+                    <p>Exploring `PingIsland/Services/Window/IDEExtensionInstaller.swift`</p>
                   </div>
-                  <div class="demo-row-actions">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" class="demo-action-svg bubble">
-                      <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H8l-5 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <svg viewBox="0 0 24 24" aria-hidden="true" class="demo-action-svg trash">
-                      <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/>
-                    </svg>
+                  <div class="desktop-demo-feed-pills">
+                    <span class="desktop-demo-pill">&lt;1m</span>
+                    <span class="desktop-demo-pill">Cursor</span>
                   </div>
                 </article>
 
-                <article class="demo-row" data-session="gemini">
-                  <div class="demo-row-icon">
-                    <img src="./assets/mascots/gemini.gif" alt="" class="demo-session-mascot" />
-                  </div>
-                  <div class="demo-row-main">
-                    <div class="demo-row-head">
-                      <div class="demo-row-title">
-                        <span>Island ·</span>
-                        <strong>Placeholder session title</strong>
-                      </div>
-                      <div class="demo-row-badges">
-                        <span class="demo-pill">39s</span>
-                        <span class="demo-pill green">Qoder</span>
-                      </div>
+                <article class="desktop-demo-feed-row">
+                  <img src="./assets/mascots/gemini.gif" alt="" class="desktop-demo-feed-icon" />
+                  <div class="desktop-demo-feed-copy">
+                    <div class="desktop-demo-feed-title">
+                      <span>Island</span>
+                      <span>·</span>
+                      <strong>Trace one more launcher edge case before we ship</strong>
                     </div>
-                    <p class="demo-row-line">You: placeholder input text</p>
-                    <p class="demo-row-line strong">Assistant: placeholder response preview...</p>
+                    <p>You: please sanity-check the final routing path</p>
+                    <p>Reading `PingIsland/Services/Window/SessionLauncher.swift`</p>
                   </div>
-                  <div class="demo-row-actions">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" class="demo-action-svg bubble">
-                      <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H8l-5 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/>
-                    </svg>
+                  <div class="desktop-demo-feed-pills">
+                    <span class="desktop-demo-pill">&lt;1m</span>
+                    <span class="desktop-demo-pill">Gemini CLI</span>
                   </div>
                 </article>
 
-                <article class="demo-row" data-session="complete">
-                  <div class="demo-row-icon">
-                    <img src="./assets/mascots/codebuddy.gif" alt="" class="demo-session-mascot" />
-                  </div>
-                  <div class="demo-row-main">
-                    <div class="demo-row-head">
-                      <div class="demo-row-title">
-                        <span>Island ·</span>
-                        <strong>Placeholder completion title</strong>
-                      </div>
-                      <div class="demo-row-badges">
-                        <span class="demo-pill">2m</span>
-                        <span class="demo-pill purple">CodeBuddy</span>
-                      </div>
+                <article class="desktop-demo-feed-row">
+                  <img src="./assets/mascots/qoder.gif" alt="" class="desktop-demo-feed-icon" />
+                  <div class="desktop-demo-feed-copy">
+                    <div class="desktop-demo-feed-title">
+                      <span>Island</span>
+                      <span>·</span>
+                      <strong>Check the session cache after relaunch</strong>
                     </div>
-                    <p class="demo-row-line strong">Placeholder completion summary line.</p>
+                    <p>You: make sure the previous client identity is restored</p>
+                    <p>Inspecting `PingIsland/Services/State/SessionAssociationStore.swift`</p>
                   </div>
-                  <div class="demo-row-actions">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" class="demo-action-svg bubble">
-                      <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H8l-5 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/>
-                    </svg>
+                  <div class="desktop-demo-feed-pills">
+                    <span class="desktop-demo-pill">45s</span>
+                    <span class="desktop-demo-pill">Qoder</span>
+                  </div>
+                </article>
+
+                <article class="desktop-demo-feed-row">
+                  <img src="./assets/mascots/opencode.gif" alt="" class="desktop-demo-feed-icon" />
+                  <div class="desktop-demo-feed-copy">
+                    <div class="desktop-demo-feed-title">
+                      <span>Island</span>
+                      <span>·</span>
+                      <strong>Verify the plugin bridge still emits the right events</strong>
+                    </div>
+                    <p>You: I want to be sure OpenCode stays in sync with the app</p>
+                    <p>Reviewing `PingIsland/Services/Hooks/HookSocketServer.swift`</p>
+                  </div>
+                  <div class="desktop-demo-feed-pills">
+                    <span class="desktop-demo-pill">54s</span>
+                    <span class="desktop-demo-pill">OpenCode</span>
+                  </div>
+                </article>
+
+                <article class="desktop-demo-feed-row">
+                  <img src="./assets/mascots/codebuddy.gif" alt="" class="desktop-demo-feed-icon" />
+                  <div class="desktop-demo-feed-copy">
+                    <div class="desktop-demo-feed-title">
+                      <span>Island</span>
+                      <span>·</span>
+                      <strong>Polish the completion summary before the next demo</strong>
+                    </div>
+                    <p>You: keep the final summary short, warm, and easy to scan</p>
+                    <p>Drafting copy around `SessionCompletionNotificationView.swift`</p>
+                  </div>
+                  <div class="desktop-demo-feed-pills">
+                    <span class="desktop-demo-pill">1m</span>
+                    <span class="desktop-demo-pill">CodeBuddy</span>
                   </div>
                 </article>
               </div>

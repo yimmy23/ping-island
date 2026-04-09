@@ -1,0 +1,17 @@
+{
+  "active": true,
+  "current_phase": "verified",
+  "task_description": "Compare gh-pages notch demo against provided expanded and collapsed reference images",
+  "score": 91,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [
+    "Expanded state now matches the reference panel styling because it uses the real product screenshot, but inside the landing page it is still framed by surrounding hero content rather than shown standalone like the raw reference image.",
+    "Collapsed state is close to the target, though the blue background crop remains slightly taller and wider than the reference screenshot."
+  ],
+  "suggestions": [
+    "Keep the screenshot-driven expanded state; only revisit it if the user wants a fully programmable recreation instead of a faithful product shot.",
+    "If another polish pass is needed, trim the collapsed preview canvas height and side padding by a small amount."
+  ],
+  "reasoning": "The demo now lands in the same visual category as the references: the expanded panel reads like the real product and the collapsed island uses the intended narrow suspended shape."
+}
