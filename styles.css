@@ -451,10 +451,10 @@ code {
 }
 
 .demo-settings {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 0.45rem;
-  padding-right: 0.4rem;
+  position: absolute;
+  top: 0.85rem;
+  right: 1rem;
+  z-index: 3;
 }
 
 .demo-settings-button {
@@ -480,7 +480,7 @@ code {
   position: relative;
   display: block;
   width: min(100%, 22rem);
-  margin: 0 auto 0.8rem;
+  margin: 0.1rem auto 0.65rem;
   padding: 0;
   border: 0;
   background: transparent;
@@ -664,18 +664,19 @@ code {
 }
 
 .demo-row-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
   min-width: 0;
 }
 
 .demo-row-title span {
-  display: block;
   color: rgba(250, 250, 250, 0.72);
   font-size: 0.72rem;
+  flex: 0 0 auto;
 }
 
 .demo-row-title strong {
-  display: block;
-  margin-top: 0.1rem;
   font-size: 0.95rem;
   line-height: 1.2;
 }
@@ -733,20 +734,14 @@ code {
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
-  padding-top: 0.3rem;
+  padding-top: 0.45rem;
 }
 
-.demo-action-icon {
-  width: 1.1rem;
-  height: 1.1rem;
-  border: 2px solid rgba(255, 255, 255, 0.42);
-  border-radius: 0.25rem;
-  opacity: 0.9;
-}
-
-.demo-action-icon.trash {
-  border-radius: 0.2rem;
-  border-top-width: 3px;
+.demo-action-svg {
+  width: 1rem;
+  height: 1rem;
+  color: rgba(255, 255, 255, 0.55);
+  opacity: 0.95;
 }
 
 .stats-panel {
