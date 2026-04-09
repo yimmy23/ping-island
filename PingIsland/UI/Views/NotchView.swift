@@ -91,10 +91,7 @@ struct NotchView: View {
 
     /// Most recently active live session that has a hook message we can surface in the compact notch.
     private var latestHookMessageSession: SessionState? {
-        sessionMonitor.instances
-            .filter { $0.phase != .ended && $0.compactHookMessage != nil }
-            .sorted { $0.lastActivity > $1.lastActivity }
-            .first
+        latestHookMessageSession(from: sessionMonitor.instances)
     }
 
     private var closedCenterMessage: String? {
@@ -147,8 +144,10 @@ struct NotchView: View {
             .first
     }
 
+    /// The compact-notch mascot should follow the freshest visible activity source first,
+    /// instead of being pinned to whichever session currently owns the warning state.
     private var closedMascotClient: MascotClient {
-        representativeClosedSession?.mascotClient ?? lastVisibleMascotClient
+        latestMascotSourceSession(from: sessionMonitor.instances)?.mascotClient ?? lastVisibleMascotClient
     }
 
     private var closedMascotKind: MascotKind {
@@ -184,8 +183,26 @@ struct NotchView: View {
         )
     }
 
+    private func latestHookMessageSession(from instances: [SessionState]) -> SessionState? {
+        instances
+            .filter { $0.phase != .ended && $0.compactHookMessage != nil }
+            .sorted { $0.lastActivity > $1.lastActivity }
+            .first
+    }
+
+    private func latestMascotSourceSession(from instances: [SessionState]) -> SessionState? {
+        latestHookMessageSession(from: instances)
+            ?? instances
+                .filter { $0.phase.isActive }
+                .sorted(by: { $0.lastActivity > $1.lastActivity })
+                .first
+            ?? instances
+                .sorted(by: { $0.lastActivity > $1.lastActivity })
+                .first
+    }
+
     private func refreshLastVisibleMascotClient(from instances: [SessionState]) {
-        guard let latest = instances.sorted(by: { $0.lastActivity > $1.lastActivity }).first else { return }
+        guard let latest = latestMascotSourceSession(from: instances) else { return }
         lastVisibleMascotClient = latest.mascotClient
     }
 
