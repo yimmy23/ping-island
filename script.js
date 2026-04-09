@@ -6,16 +6,16 @@ if (yearNode) {
 
 const demoConfig = {
   idle: {
-    expanded: false,
-    mini: "No pending actions",
-    title: "Quiet mode",
-    subtitle: "No approvals or questions waiting.",
+    expanded: true,
+    mini: "Panel preview",
+    title: "Session overview",
+    subtitle: "Preview how Ping Island expands when multiple sessions need attention.",
     badge: "IDLE",
     actions: [],
     activeSession: "codex",
     event: "Codex",
-    thread: "Codex thread synced",
-    copy: "Ping Island stays small until the run actually needs you."
+    thread: "Placeholder session title",
+    copy: "Placeholder preview copy for the active session row."
   },
   approval: {
     expanded: true,
@@ -26,8 +26,8 @@ const demoConfig = {
     actions: ["Approve", "Deny"],
     activeSession: "claude",
     event: "Claude Code",
-    thread: "Approve tool call",
-    copy: "Claude: PingIsland is a mac app..."
+    thread: "Placeholder approval request",
+    copy: "Placeholder answer preview for an approval state."
   },
   question: {
     expanded: true,
@@ -38,8 +38,8 @@ const demoConfig = {
     actions: ["Reply", "Open session"],
     activeSession: "gemini",
     event: "Qoder",
-    thread: "Question received",
-    copy: "Hello, I'm Qoder. I can see you..."
+    thread: "Placeholder question state",
+    copy: "Placeholder assistant reply preview for a question state."
   },
   complete: {
     expanded: true,
@@ -50,8 +50,8 @@ const demoConfig = {
     actions: ["View summary", "Jump back"],
     activeSession: "complete",
     event: "CodeBuddy",
-    thread: "Session finished",
-    copy: "Completion summary ready."
+    thread: "Placeholder completion state",
+    copy: "Placeholder completion summary preview."
   }
 };
 
