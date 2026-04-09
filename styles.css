@@ -236,6 +236,28 @@ button {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.github-button {
+  gap: 0.55rem;
+}
+
+.github-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: 0 0 auto;
+}
+
+.star-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+}
+
 .page-shell {
   padding: 1.5rem 0 4rem;
 }
@@ -404,6 +426,225 @@ button {
 .workflow-card,
 .star-callout {
   padding: 1rem;
+}
+
+.demo-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.demo-chip {
+  min-height: 2rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted-foreground);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: all 200ms ease-out;
+}
+
+.demo-chip.is-active,
+.demo-chip:hover,
+.demo-chip:focus-visible {
+  color: var(--foreground);
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.1);
+  outline: none;
+}
+
+.notch-demo {
+  padding: 0.25rem 0 0;
+}
+
+.demo-screen {
+  position: relative;
+  min-height: 27rem;
+  padding: 1rem;
+  border-radius: 1.4rem;
+  background:
+    radial-gradient(circle at top, rgba(245, 158, 11, 0.08), transparent 26%),
+    linear-gradient(180deg, #111119, #0e0e15);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.demo-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(to bottom, black, transparent 90%);
+  pointer-events: none;
+}
+
+.demo-statusbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: rgba(250, 250, 250, 0.72);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.74rem;
+}
+
+.demo-notch {
+  position: relative;
+  display: block;
+  width: min(100%, 20rem);
+  margin: 0.9rem auto 1.25rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.demo-notch-collapsed,
+.demo-notch-expanded {
+  border-radius: 9999px;
+  background: rgba(4, 4, 8, 0.95);
+  box-shadow:
+    0 12px 24px rgba(0, 0, 0, 0.32),
+    0 0 30px rgba(245, 158, 11, 0.08);
+  color: var(--foreground);
+  transition: all 240ms ease-out;
+}
+
+.demo-notch-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 2.8rem;
+  padding: 0.7rem 1rem;
+}
+
+.demo-notch-expanded {
+  display: none;
+  padding: 0.95rem 1rem 1rem;
+  border-radius: 1.4rem;
+}
+
+.demo-notch.is-expanded {
+  width: min(100%, 24rem);
+}
+
+.demo-notch.is-expanded .demo-notch-collapsed {
+  display: none;
+}
+
+.demo-notch.is-expanded .demo-notch-expanded {
+  display: block;
+}
+
+.demo-camera {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.demo-mini-label {
+  font-size: 0.82rem;
+}
+
+.demo-notch-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.demo-notch-head strong {
+  display: block;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-size: 1rem;
+}
+
+.demo-notch-head p {
+  margin: 0.25rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.86rem;
+}
+
+.demo-state-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.6rem;
+  min-height: 2rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--accent);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+}
+
+.demo-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
+.demo-action-pill {
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--foreground);
+  font-size: 0.76rem;
+}
+
+.demo-content {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.demo-card,
+.demo-subcard {
+  position: relative;
+  z-index: 1;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1rem;
+}
+
+.demo-card span,
+.demo-subcard span {
+  display: block;
+  color: var(--muted-foreground);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.74rem;
+}
+
+.demo-card strong,
+.demo-subcard strong {
+  display: block;
+  margin-top: 0.45rem;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-size: 1rem;
+}
+
+.demo-card p {
+  margin: 0.45rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.88rem;
+}
+
+.demo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.95rem;
 }
 
 .card-head {
@@ -695,7 +936,8 @@ button {
   }
 
   .hero-metrics,
-  .mascot-cluster {
+  .mascot-cluster,
+  .demo-grid {
     grid-template-columns: 1fr;
   }
 

@@ -41,17 +41,24 @@
       <nav class="site-nav" aria-label="Primary">
         <a href="#features">Features</a>
         <a href="#mascots">Mascots</a>
-        <a href="#workflow">Workflow</a>
         <a href="#install">Install</a>
       </nav>
 
       <a
-        class="button button-outline"
+        class="button button-outline github-button"
         href="https://github.com/erha19/ping-island"
         target="_blank"
         rel="noreferrer"
+        aria-label="Star Ping Island on GitHub"
       >
-        Star on GitHub
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="github-icon">
+          <path
+            fill="currentColor"
+            d="M12 .5C5.65.5.5 5.66.5 12.03c0 5.1 3.3 9.42 7.88 10.95.58.11.79-.25.79-.56 0-.27-.01-1.17-.02-2.12-3.21.7-3.89-1.36-3.89-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.72-1.55-2.56-.29-5.25-1.29-5.25-5.74 0-1.27.46-2.3 1.2-3.12-.12-.29-.52-1.48.11-3.08 0 0 .98-.31 3.2 1.19a11.1 11.1 0 0 1 5.83 0c2.22-1.5 3.2-1.19 3.2-1.19.63 1.6.23 2.79.11 3.08.75.82 1.2 1.85 1.2 3.12 0 4.46-2.69 5.44-5.26 5.73.41.35.78 1.04.78 2.1 0 1.52-.01 2.74-.01 3.11 0 .31.21.68.8.56A11.54 11.54 0 0 0 23.5 12.03C23.5 5.66 18.35.5 12 .5Z"
+          />
+        </svg>
+        <span>Star on GitHub</span>
+        <span class="star-count" data-stars>35</span>
       </a>
     </header>
 
@@ -113,14 +120,66 @@
         <div class="hero-visual">
           <article class="glass-card preview-card">
             <div class="card-head">
-              <span class="mono-label">Live Preview</span>
-              <span class="signal-chip">attention surface online</span>
+              <span class="mono-label">Interactive Notch Demo</span>
+              <span class="signal-chip">try the states</span>
             </div>
-            <img
-              src="./assets/notch-panel.png"
-              alt="Ping Island notch preview"
-              class="showcase-image"
-            />
+
+            <div class="demo-controls" aria-label="Demo states">
+              <button class="demo-chip is-active" type="button" data-demo-state="idle" aria-pressed="true">Idle</button>
+              <button class="demo-chip" type="button" data-demo-state="approval" aria-pressed="false">Approval</button>
+              <button class="demo-chip" type="button" data-demo-state="question" aria-pressed="false">Question</button>
+              <button class="demo-chip" type="button" data-demo-state="complete" aria-pressed="false">Complete</button>
+            </div>
+
+            <div class="notch-demo">
+              <div class="demo-screen">
+                <div class="demo-statusbar">
+                  <span>9:41</span>
+                  <span>Ping Island</span>
+                  <span>100%</span>
+                </div>
+
+                <button
+                  type="button"
+                  class="demo-notch is-idle"
+                  data-demo-notch
+                  aria-label="Toggle Dynamic Island demo"
+                >
+                  <div class="demo-notch-collapsed">
+                    <span class="demo-camera"></span>
+                    <span class="demo-mini-label" data-demo-mini>No pending actions</span>
+                  </div>
+                  <div class="demo-notch-expanded">
+                    <div class="demo-notch-head">
+                      <div>
+                        <strong data-demo-title>Quiet mode</strong>
+                        <p data-demo-subtitle>No approvals or questions waiting.</p>
+                      </div>
+                      <span class="demo-state-badge" data-demo-badge>IDLE</span>
+                    </div>
+                    <div class="demo-action-row" data-demo-actions></div>
+                  </div>
+                </button>
+
+                <div class="demo-content">
+                  <div class="demo-card">
+                    <span>Session</span>
+                    <strong data-demo-thread>Codex thread synced</strong>
+                    <p data-demo-copy>Ping Island stays small until the run actually needs you.</p>
+                  </div>
+                  <div class="demo-grid">
+                    <div class="demo-subcard">
+                      <span>Focus return</span>
+                      <strong data-demo-focus>Ghostty / tmux / Cursor</strong>
+                    </div>
+                    <div class="demo-subcard">
+                      <span>Last event</span>
+                      <strong data-demo-event>Quiet state</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </article>
         </div>
       </section>
@@ -244,73 +303,6 @@
         </div>
       </section>
 
-      <section id="workflow" class="content-section split-section">
-        <div class="section-head">
-          <span class="mono-label">Workflow</span>
-          <h2>See the interrupt, act instantly, and return to the right workspace.</h2>
-        </div>
-
-        <div class="timeline panel">
-          <div class="timeline-line"></div>
-          <article class="timeline-step">
-            <div class="timeline-node">01</div>
-            <div class="timeline-copy">
-              <h3>Observe the run</h3>
-              <p>Hooks and app-server signals normalize into one session model before they ever hit the UI.</p>
-            </div>
-          </article>
-          <article class="timeline-step">
-            <div class="timeline-node">02</div>
-            <div class="timeline-copy">
-              <h3>Surface the decision</h3>
-              <p>Approvals, prompts, completions, and failures appear in the notch as the next highest-value action.</p>
-            </div>
-          </article>
-          <article class="timeline-step">
-            <div class="timeline-node">03</div>
-            <div class="timeline-copy">
-              <h3>Route focus back</h3>
-              <p>When you need the full workspace, Ping Island jumps to the exact terminal, tmux pane, or IDE host.</p>
-            </div>
-          </article>
-        </div>
-
-        <div class="workflow-stack">
-          <article class="glass-card workflow-card">
-            <div class="card-head">
-              <span class="mono-label">Question Panel</span>
-              <span class="signal-chip">live intervention</span>
-            </div>
-            <img
-              src="./assets/question-panel.png"
-              alt="Ping Island question panel"
-              class="showcase-image"
-            />
-          </article>
-
-          <article class="glass-card workflow-card">
-            <div class="card-head">
-              <span class="mono-label">Coverage</span>
-              <span class="signal-chip signal-chip-warm">operator confidence</span>
-            </div>
-            <div class="proof-list">
-              <div class="proof-item">
-                <span>Notch visibility</span>
-                <div class="progress-track"><span style="width: 92%"></span></div>
-              </div>
-              <div class="proof-item">
-                <span>Focus return accuracy</span>
-                <div class="progress-track warm"><span style="width: 96%"></span></div>
-              </div>
-              <div class="proof-item">
-                <span>Cross-client clarity</span>
-                <div class="progress-track"><span style="width: 88%"></span></div>
-              </div>
-            </div>
-          </article>
-        </div>
-      </section>
-
       <section id="install" class="content-section">
         <div class="section-head">
           <span class="mono-label">Install</span>
@@ -364,12 +356,20 @@ xcodebuild -project PingIsland.xcodeproj \
           </p>
           <div class="hero-actions center-actions">
             <a
-              class="button button-primary"
+              class="button button-primary github-button"
               href="https://github.com/erha19/ping-island"
               target="_blank"
               rel="noreferrer"
+              aria-label="Star Ping Island on GitHub"
             >
-              Star Ping Island
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="github-icon">
+                <path
+                  fill="currentColor"
+                  d="M12 .5C5.65.5.5 5.66.5 12.03c0 5.1 3.3 9.42 7.88 10.95.58.11.79-.25.79-.56 0-.27-.01-1.17-.02-2.12-3.21.7-3.89-1.36-3.89-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.72-1.55-2.56-.29-5.25-1.29-5.25-5.74 0-1.27.46-2.3 1.2-3.12-.12-.29-.52-1.48.11-3.08 0 0 .98-.31 3.2 1.19a11.1 11.1 0 0 1 5.83 0c2.22-1.5 3.2-1.19 3.2-1.19.63 1.6.23 2.79.11 3.08.75.82 1.2 1.85 1.2 3.12 0 4.46-2.69 5.44-5.26 5.73.41.35.78 1.04.78 2.1 0 1.52-.01 2.74-.01 3.11 0 .31.21.68.8.56A11.54 11.54 0 0 0 23.5 12.03C23.5 5.66 18.35.5 12 .5Z"
+                />
+              </svg>
+              <span>Star Ping Island</span>
+              <span class="star-count" data-stars>35</span>
             </a>
             <a
               class="button button-ghost"
