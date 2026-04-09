@@ -282,11 +282,12 @@ code {
 .hero {
   display: grid;
   gap: 1.25rem;
-  padding: 1rem 0 1rem;
+  padding: 0.35rem 0 0.5rem;
 }
 
 .hero-intro {
-  max-width: 44rem;
+  width: 100%;
+  max-width: none;
 }
 
 .badge-row,
@@ -300,7 +301,7 @@ code {
 }
 
 .hero-actions {
-  margin-top: 1.5rem;
+  margin-top: 0.95rem;
 }
 
 .center-actions {
@@ -358,8 +359,10 @@ code {
 }
 
 .hero-title {
-  max-width: 10.5ch;
-  font-size: clamp(2.5rem, 6vw, 4.9rem);
+  width: 100%;
+  max-width: none;
+  font-size: clamp(1.9rem, 4.4vw, 3.5rem);
+  line-height: 0.95;
 }
 
 .gradient-text {
@@ -410,7 +413,7 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .wide-demo-shell {
@@ -424,8 +427,8 @@ code {
 
 .screenshot-demo {
   position: relative;
-  min-height: 38rem;
-  padding: 1rem 0.9rem 1.2rem;
+  min-height: 30rem;
+  padding: 0.8rem 0.8rem 0.95rem;
   border-radius: 2rem;
   background:
     linear-gradient(90deg, rgba(57, 161, 255, 0.55) 0 6%, transparent 6% 94%, rgba(57, 161, 255, 0.55) 94% 100%),
@@ -450,7 +453,7 @@ code {
 .demo-settings {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 0.8rem;
+  margin-bottom: 0.45rem;
   padding-right: 0.4rem;
 }
 
@@ -477,7 +480,7 @@ code {
   position: relative;
   display: block;
   width: min(100%, 22rem);
-  margin: 0 auto 1.2rem;
+  margin: 0 auto 0.8rem;
   padding: 0;
   border: 0;
   background: transparent;
@@ -589,8 +592,8 @@ code {
 .demo-list {
   display: grid;
   gap: 0.9rem;
-  margin-top: 0.65rem;
-  padding: 1rem;
+  margin-top: 0.4rem;
+  padding: 0.8rem;
   border-radius: 2.2rem;
   background: rgba(6, 6, 9, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -620,7 +623,7 @@ code {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
-  padding: 1rem 1.1rem;
+  padding: 0.82rem 0.92rem;
   border-radius: 1.55rem;
   border: 1px solid rgba(255, 255, 255, 0.05);
   background: rgba(9, 9, 12, 0.98);
@@ -637,15 +640,15 @@ code {
 .demo-row-icon {
   display: grid;
   place-items: center;
-  width: 4.15rem;
-  height: 4.15rem;
+  width: 3.45rem;
+  height: 3.45rem;
   border-radius: 1.2rem;
   background: rgba(255, 255, 255, 0.035);
 }
 
 .demo-session-mascot {
-  width: 1.65rem;
-  height: 1.65rem;
+  width: 1.35rem;
+  height: 1.35rem;
   object-fit: contain;
 }
 
@@ -673,7 +676,7 @@ code {
 .demo-row-title strong {
   display: block;
   margin-top: 0.1rem;
-  font-size: 1.06rem;
+  font-size: 0.95rem;
   line-height: 1.2;
 }
 
@@ -715,7 +718,7 @@ code {
 .demo-row-line {
   margin: 0.35rem 0 0;
   color: var(--muted-foreground);
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
