@@ -398,6 +398,13 @@ code {
   padding: 1rem;
 }
 
+.hero-demo-card {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
 .card-head {
   display: flex;
   align-items: center;
@@ -417,32 +424,47 @@ code {
 
 .screenshot-demo {
   position: relative;
-  min-height: 34rem;
-  padding: 1rem;
-  border-radius: 1.8rem;
+  min-height: 38rem;
+  padding: 1rem 0.9rem 1.2rem;
+  border-radius: 2rem;
   background:
-    radial-gradient(circle at top, rgba(245, 158, 11, 0.08), transparent 28%),
-    linear-gradient(180deg, #111119, #0d0d14);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+    linear-gradient(90deg, rgba(57, 161, 255, 0.55) 0 6%, transparent 6% 94%, rgba(57, 161, 255, 0.55) 94% 100%),
+    linear-gradient(180deg, #0b0b10 0 14%, rgba(17, 17, 25, 0.92) 14% 100%);
   overflow: hidden;
+}
+
+.screenshot-demo::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 38%;
+  background:
+    linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.08)),
+    linear-gradient(135deg, rgba(255,255,255,0.08), transparent 40%),
+    linear-gradient(25deg, #d9dfe6 0 18%, #8ca3ba 18% 35%, #4d6b87 35% 58%, #123d68 58% 72%, #0a2a49 72% 100%);
+  mask-image: linear-gradient(to right, rgba(0,0,0,0.88), transparent 14%, transparent 86%, rgba(0,0,0,0.88));
 }
 
 .demo-settings {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.8rem;
+  padding-right: 0.4rem;
 }
 
 .demo-settings-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 3rem;
-  height: 3rem;
+  width: 3.1rem;
+  height: 3.1rem;
   border: 0;
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(250, 250, 250, 0.9);
+  background: rgba(32, 32, 40, 0.9);
+  color: rgba(250, 250, 250, 0.95);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
   cursor: pointer;
 }
 
@@ -455,7 +477,7 @@ code {
   position: relative;
   display: block;
   width: min(100%, 22rem);
-  margin: 0 auto 1rem;
+  margin: 0 auto 1.2rem;
   padding: 0;
   border: 0;
   background: transparent;
@@ -466,7 +488,7 @@ code {
 .demo-notch-collapsed,
 .demo-notch-expanded {
   color: var(--foreground);
-  background: rgba(4, 4, 8, 0.97);
+  background: rgba(4, 4, 8, 0.985);
   box-shadow:
     0 12px 24px rgba(0, 0, 0, 0.32),
     0 0 30px rgba(245, 158, 11, 0.08);
@@ -501,7 +523,7 @@ code {
 }
 
 .demo-notch.is-expanded {
-  width: min(100%, 25rem);
+  width: min(100%, 27rem);
 }
 
 .demo-notch.is-expanded .demo-notch-collapsed {
@@ -567,7 +589,14 @@ code {
 .demo-list {
   display: grid;
   gap: 0.9rem;
-  margin-top: 0.75rem;
+  margin-top: 0.65rem;
+  padding: 1rem;
+  border-radius: 2.2rem;
+  background: rgba(6, 6, 9, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
   transition:
     opacity 260ms ease,
     transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -589,12 +618,12 @@ code {
 .demo-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 0.95rem;
-  align-items: flex-start;
-  padding: 0.95rem 1.05rem;
-  border-radius: 1.4rem;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(7, 7, 10, 0.96);
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  border-radius: 1.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(9, 9, 12, 0.98);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
@@ -608,10 +637,10 @@ code {
 .demo-row-icon {
   display: grid;
   place-items: center;
-  width: 4rem;
-  height: 4rem;
-  border-radius: 1.1rem;
-  background: rgba(255, 255, 255, 0.03);
+  width: 4.15rem;
+  height: 4.15rem;
+  border-radius: 1.2rem;
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .demo-session-mascot {
@@ -644,7 +673,7 @@ code {
 .demo-row-title strong {
   display: block;
   margin-top: 0.1rem;
-  font-size: 1rem;
+  font-size: 1.06rem;
   line-height: 1.2;
 }
 
@@ -686,7 +715,7 @@ code {
 .demo-row-line {
   margin: 0.35rem 0 0;
   color: var(--muted-foreground);
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
