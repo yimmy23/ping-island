@@ -431,7 +431,7 @@ code {
   padding: 0.8rem 0.8rem 0.95rem;
   border-radius: 2rem;
   background:
-    linear-gradient(90deg, rgba(57, 161, 255, 0.72) 0 7.5%, transparent 7.5% 92.5%, rgba(57, 161, 255, 0.72) 92.5% 100%),
+    linear-gradient(90deg, rgba(57, 161, 255, 0.72) 0 6.6%, transparent 6.6% 93.4%, rgba(57, 161, 255, 0.72) 93.4% 100%),
     linear-gradient(180deg, #0b0b10 0 14%, rgba(17, 17, 25, 0.92) 14% 100%);
   overflow: hidden;
 }
@@ -464,7 +464,7 @@ code {
 
 .demo-settings {
   position: absolute;
-  top: 0.85rem;
+  top: 0.65rem;
   right: 1rem;
   z-index: 3;
 }
@@ -492,7 +492,7 @@ code {
   position: relative;
   display: block;
   width: min(100%, 22rem);
-  margin: 0.1rem auto 0.65rem;
+  margin: -0.05rem auto 0.6rem;
   padding: 0;
   border: 0;
   background: transparent;
@@ -606,11 +606,11 @@ code {
   gap: 0.9rem;
   margin-top: 0.4rem;
   padding: 0.8rem;
-  border-radius: 2.2rem;
+  border-radius: 2rem;
   background: rgba(6, 6, 9, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.45),
+    0 18px 42px rgba(0, 0, 0, 0.42),
     inset 0 0 0 1px rgba(255, 255, 255, 0.02);
   transition:
     opacity 260ms ease,
@@ -636,7 +636,7 @@ code {
   gap: 1rem;
   align-items: center;
   padding: 0.96rem 1.04rem;
-  border-radius: 1.72rem;
+  border-radius: 1.5rem;
   border: 1px solid rgba(255, 255, 255, 0.055);
   background: rgba(9, 9, 12, 0.99);
   box-shadow:
@@ -657,7 +657,7 @@ code {
   place-items: center;
   width: 3.45rem;
   height: 3.45rem;
-  border-radius: 1.2rem;
+  border-radius: 1rem;
   background: rgba(255, 255, 255, 0.035);
 }
 
