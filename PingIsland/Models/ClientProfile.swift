@@ -254,6 +254,7 @@ struct ManagedIDEExtensionProfile: Identifiable, Sendable {
     let localAppBundleIdentifiers: [String]
     let iconSymbolName: String
     let extensionRootRelativePaths: [String]
+    let extensionRegistryRelativePaths: [String]
     let uriScheme: String
     let exactBundleIdentifiers: Set<String>
     let bundleIdentifierKeywords: Set<String>
@@ -269,6 +270,7 @@ struct ManagedIDEExtensionProfile: Identifiable, Sendable {
         localAppBundleIdentifiers: [String] = [],
         iconSymbolName: String,
         extensionRootRelativePath: String,
+        extensionRegistryRelativePath: String? = nil,
         uriScheme: String,
         exactBundleIdentifiers: Set<String> = [],
         bundleIdentifierKeywords: Set<String> = [],
@@ -284,6 +286,7 @@ struct ManagedIDEExtensionProfile: Identifiable, Sendable {
             localAppBundleIdentifiers: localAppBundleIdentifiers,
             iconSymbolName: iconSymbolName,
             extensionRootRelativePaths: [extensionRootRelativePath],
+            extensionRegistryRelativePaths: extensionRegistryRelativePath.map { [$0] } ?? [],
             uriScheme: uriScheme,
             exactBundleIdentifiers: exactBundleIdentifiers,
             bundleIdentifierKeywords: bundleIdentifierKeywords,
@@ -301,6 +304,7 @@ struct ManagedIDEExtensionProfile: Identifiable, Sendable {
         localAppBundleIdentifiers: [String] = [],
         iconSymbolName: String,
         extensionRootRelativePaths: [String],
+        extensionRegistryRelativePaths: [String] = [],
         uriScheme: String,
         exactBundleIdentifiers: Set<String> = [],
         bundleIdentifierKeywords: Set<String> = [],
@@ -315,6 +319,7 @@ struct ManagedIDEExtensionProfile: Identifiable, Sendable {
         self.localAppBundleIdentifiers = localAppBundleIdentifiers
         self.iconSymbolName = iconSymbolName
         self.extensionRootRelativePaths = extensionRootRelativePaths
+        self.extensionRegistryRelativePaths = extensionRegistryRelativePaths
         self.uriScheme = uriScheme
         self.exactBundleIdentifiers = Set(exactBundleIdentifiers.map { $0.lowercased() })
         self.bundleIdentifierKeywords = Set(bundleIdentifierKeywords.map { $0.lowercased() })
@@ -344,6 +349,10 @@ struct ManagedIDEExtensionProfile: Identifiable, Sendable {
 
     nonisolated var primaryExtensionRootURL: URL {
         extensionRootURLs[0]
+    }
+
+    nonisolated var extensionRegistryURLs: [URL] {
+        extensionRegistryRelativePaths.map(Self.resolveRootURL(relativePath:))
     }
 
     nonisolated private static func resolveRootURL(relativePath: String) -> URL {
@@ -812,6 +821,7 @@ enum ClientProfileRegistry {
             localAppBundleIdentifiers: ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders"],
             iconSymbolName: "square.stack.3d.up.fill",
             extensionRootRelativePath: ".vscode/extensions",
+            extensionRegistryRelativePath: ".vscode/extensions/extensions.json",
             uriScheme: "vscode",
             exactBundleIdentifiers: ["com.microsoft.vscode", "com.microsoft.vscode.helper"],
             bundleIdentifierKeywords: ["vscode"],
@@ -824,6 +834,7 @@ enum ClientProfileRegistry {
             localAppBundleIdentifiers: ["com.todesktop.230313mzl4w4u92"],
             iconSymbolName: "cursorarrow.rays",
             extensionRootRelativePath: ".cursor/extensions",
+            extensionRegistryRelativePath: ".cursor/extensions/extensions.json",
             uriScheme: "cursor",
             exactBundleIdentifiers: ["com.todesktop.230313mzl4w4u92", "com.todesktop.230313mzl4w4u92.helper"],
             bundleIdentifierKeywords: ["todesktop", "cursor"],
@@ -839,6 +850,10 @@ enum ClientProfileRegistry {
                 ".codebuddy/extensions",
                 ".codebuddycn/extensions"
             ],
+            extensionRegistryRelativePaths: [
+                ".codebuddy/extensions/extensions.json",
+                ".codebuddycn/extensions/extensions.json"
+            ],
             uriScheme: "codebuddy",
             exactBundleIdentifiers: ["com.tencent.codebuddy", "com.codebuddy.app"],
             bundleIdentifierKeywords: ["codebuddy", "tencent"],
@@ -852,6 +867,7 @@ enum ClientProfileRegistry {
             localAppBundleIdentifiers: ["com.workbuddy.workbuddy"],
             iconSymbolName: "bubble.left.and.bubble.right.fill",
             extensionRootRelativePath: ".workbuddy/extensions",
+            extensionRegistryRelativePath: ".workbuddy/extensions/extensions.json",
             uriScheme: "workbuddy",
             exactBundleIdentifiers: ["com.workbuddy.workbuddy"],
             bundleIdentifierKeywords: ["workbuddy"],
@@ -865,6 +881,7 @@ enum ClientProfileRegistry {
             localAppBundleIdentifiers: ["com.qoder.ide"],
             iconSymbolName: "bolt.horizontal.circle.fill",
             extensionRootRelativePath: ".qoder/extensions",
+            extensionRegistryRelativePath: ".qoder/extensions/extensions.json",
             uriScheme: "qoder",
             exactBundleIdentifiers: ["com.qoder.ide"],
             bundleIdentifierKeywords: ["qoder.ide"],

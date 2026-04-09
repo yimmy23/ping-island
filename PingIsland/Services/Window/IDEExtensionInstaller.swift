@@ -23,16 +23,17 @@ struct IDEExtensionInstaller {
     }
 
     nonisolated static func isInstalled(_ profile: ManagedIDEExtensionProfile) -> Bool {
-        profile.extensionRootURLs.contains { rootURL in
-            let manifestURL = extensionDirectoryURL(rootURL: rootURL).appendingPathComponent("package.json")
-            return FileManager.default.fileExists(atPath: manifestURL.path)
+        candidateExtensionRootURLs(for: profile).contains { rootURL in
+            !generatedExtensionDirectoryURLs(in: rootURL).isEmpty
         }
     }
 
     static func install(_ profile: ManagedIDEExtensionProfile) {
-        for rootURL in installationTargets(for: profile) {
+        let rootURLs = installationTargets(for: profile)
+        for rootURL in rootURLs {
             installExtension(in: rootURL, profile: profile)
         }
+        syncExtensionRegistries(for: profile, rootURL: rootURLs.first ?? profile.primaryExtensionRootURL)
     }
 
     static func reinstall(_ profile: ManagedIDEExtensionProfile) {
@@ -41,9 +42,12 @@ struct IDEExtensionInstaller {
     }
 
     static func uninstall(_ profile: ManagedIDEExtensionProfile) {
-        for rootURL in profile.extensionRootURLs {
-            try? FileManager.default.removeItem(at: extensionDirectoryURL(rootURL: rootURL))
+        for rootURL in candidateExtensionRootURLs(for: profile) {
+            for extensionURL in generatedExtensionDirectoryURLs(in: rootURL) {
+                try? FileManager.default.removeItem(at: extensionURL)
+            }
         }
+        syncExtensionRegistries(for: profile, rootURL: nil)
     }
 
     static func cleanupLegacyTraeExtension() {
@@ -89,15 +93,92 @@ struct IDEExtensionInstaller {
 
     nonisolated private static func installationTargets(for profile: ManagedIDEExtensionProfile) -> [URL] {
         let fileManager = FileManager.default
-        let existingTargets = profile.extensionRootURLs.filter { rootURL in
+        let candidateTargets = candidateExtensionRootURLs(for: profile)
+        let existingTargets = candidateTargets.filter { rootURL in
             fileManager.fileExists(atPath: rootURL.path)
         }
 
-        return existingTargets.isEmpty ? [profile.primaryExtensionRootURL] : existingTargets
+        return existingTargets.isEmpty ? [candidateTargets.first ?? profile.primaryExtensionRootURL] : existingTargets
+    }
+
+    nonisolated static func candidateExtensionRootURLs(
+        for profile: ManagedIDEExtensionProfile,
+        resolvedInstalledAppURLs: [URL]? = nil
+    ) -> [URL] {
+        let discoveredRoots = (resolvedInstalledAppURLs ?? installedAppURLs(for: profile))
+            .compactMap(extensionRootURL(forVSCodeCompatibleAppAt:))
+        let configuredRoots = profile.extensionRootURLs
+
+        var orderedRoots: [URL] = []
+        var seenPaths: Set<String> = []
+
+        for rootURL in discoveredRoots + configuredRoots {
+            let normalizedPath = rootURL.standardizedFileURL.path
+            guard seenPaths.insert(normalizedPath).inserted else {
+                continue
+            }
+            orderedRoots.append(rootURL)
+        }
+
+        return orderedRoots
+    }
+
+    nonisolated static func extensionRootURL(forVSCodeCompatibleAppAt appURL: URL) -> URL? {
+        let productURL = appURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
+            .appendingPathComponent("app", isDirectory: true)
+            .appendingPathComponent("product.json", isDirectory: false)
+        guard
+            let data = try? Data(contentsOf: productURL),
+            let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let dataFolderName = decoded["dataFolderName"] as? String
+        else {
+            return nil
+        }
+
+        let trimmedFolderName = dataFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedFolderName.isEmpty else {
+            return nil
+        }
+
+        let homeURL = FileManager.default.homeDirectoryForCurrentUser
+        let dataFolderURL = trimmedFolderName
+            .split(separator: "/")
+            .reduce(homeURL) { partialURL, component in
+                partialURL.appendingPathComponent(String(component), isDirectory: true)
+            }
+        return dataFolderURL.appendingPathComponent("extensions", isDirectory: true)
+    }
+
+    nonisolated private static func installedAppURLs(for profile: ManagedIDEExtensionProfile) -> [URL] {
+        profile.localAppBundleIdentifiers.compactMap { bundleIdentifier in
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
+        }
     }
 
     nonisolated private static func extensionDirectoryURL(rootURL: URL) -> URL {
         rootURL.appendingPathComponent(extensionDirectoryName, isDirectory: true)
+    }
+
+    nonisolated private static func generatedExtensionDirectoryURLs(in rootURL: URL) -> [URL] {
+        let prefix = "\(extensionIdentifier)-"
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: rootURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return entries.filter { entry in
+            guard entry.lastPathComponent.hasPrefix(prefix) else {
+                return false
+            }
+
+            let manifestURL = entry.appendingPathComponent("package.json")
+            return FileManager.default.fileExists(atPath: manifestURL.path)
+        }
     }
 
     private static func installExtension(in rootURL: URL, profile: ManagedIDEExtensionProfile) {
@@ -143,6 +224,66 @@ struct IDEExtensionInstaller {
         for entry in existingEntries where entry.lastPathComponent.hasPrefix(prefix) {
             try? FileManager.default.removeItem(at: entry)
         }
+    }
+
+    private static func syncExtensionRegistries(for profile: ManagedIDEExtensionProfile, rootURL: URL?) {
+        for registryURL in profile.extensionRegistryURLs {
+            syncExtensionRegistry(at: registryURL, rootURL: rootURL)
+        }
+    }
+
+    private static func syncExtensionRegistry(at registryURL: URL, rootURL: URL?) {
+        let fileManager = FileManager.default
+        if let parentURL = registryURL.deletingLastPathComponent() as URL? {
+            try? fileManager.createDirectory(at: parentURL, withIntermediateDirectories: true)
+        }
+
+        let currentEntries: [[String: Any]]
+        if let data = try? Data(contentsOf: registryURL),
+           let decoded = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            currentEntries = decoded
+        } else {
+            currentEntries = []
+        }
+
+        var updatedEntries = currentEntries.filter { entry in
+            let identifier = entry["identifier"] as? [String: Any]
+            let id = identifier?["id"] as? String
+            return id != extensionIdentifier
+        }
+
+        if let rootURL {
+            let extensionURL = extensionDirectoryURL(rootURL: rootURL)
+            updatedEntries.append(extensionRegistryEntry(extensionURL: extensionURL))
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: updatedEntries) else {
+            return
+        }
+        try? data.write(to: registryURL, options: .atomic)
+    }
+
+    private static func extensionRegistryEntry(extensionURL: URL) -> [String: Any] {
+        [
+            "identifier": [
+                "id": extensionIdentifier
+            ],
+            "version": extensionVersion,
+            "location": [
+                "$mid": 1,
+                "path": extensionURL.path,
+                "scheme": "file"
+            ],
+            "relativeLocation": extensionURL.lastPathComponent,
+            "metadata": [
+                "installedTimestamp": Int(Date().timeIntervalSince1970 * 1000),
+                "source": "file",
+                "isApplicationScoped": false,
+                "isMachineScoped": false,
+                "isBuiltin": false,
+                "pinned": false
+            ]
+        ]
     }
 
     private static func packageJSON(for profile: ManagedIDEExtensionProfile) -> String {

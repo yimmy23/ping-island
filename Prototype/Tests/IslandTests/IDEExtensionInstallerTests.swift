@@ -61,6 +61,18 @@ func installerWritesVSCodeCompatibleExtensionPayload() throws {
         .appending(path: "ping-island.session-focus-\(version)", directoryHint: .isDirectory)
     let qoderExtensionJS = try String(contentsOf: qoderExtensionURL.appending(path: "extension.js"))
     let qoderReadme = try String(contentsOf: qoderExtensionURL.appending(path: "README.md"))
+    let qoderRegistryURL = root
+        .appending(path: ".qoder/extensions", directoryHint: .isDirectory)
+        .appending(path: "extensions.json")
+    let qoderRegistryData = try Data(contentsOf: qoderRegistryURL)
+    let qoderRegistry = try #require(
+        JSONSerialization.jsonObject(with: qoderRegistryData) as? [[String: Any]]
+    )
+    let qoderRegistryEntry = try #require(qoderRegistry.first { entry in
+        let identifier = entry["identifier"] as? [String: Any]
+        let id = identifier?["id"] as? String
+        return id == IDEExtensionInstaller.extensionIdentifier
+    })
     #expect(FileManager.default.fileExists(atPath: qoderExtensionURL.appending(path: "package.json").path()))
     #expect(qoderExtensionJS.contains("aicoding.chat.history"))
     #expect(qoderExtensionJS.contains("uri.path === '/session'"))
@@ -70,6 +82,16 @@ func installerWritesVSCodeCompatibleExtensionPayload() throws {
     #expect(qoderExtensionJS.contains("Unable to match terminal for focus request"))
     #expect(qoderReadme.contains("chat session"))
     #expect(qoderReadme.contains(repositoryURL))
+    #expect(qoderRegistryEntry["version"] as? String == version)
+    #expect((qoderRegistryEntry["relativeLocation"] as? String) == "ping-island.session-focus-\(version)")
+    let qoderLocation = try #require(qoderRegistryEntry["location"] as? [String: Any])
+    #expect(
+        (qoderLocation["path"] as? String)?
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        ==
+        qoderExtensionURL.path()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    )
 }
 
 @Test
@@ -90,9 +112,21 @@ func installerRemovesGeneratedExtensionFolders() throws {
     let qoderExtensionURL = root
         .appending(path: ".qoder/extensions", directoryHint: .isDirectory)
         .appending(path: "ping-island.session-focus-\(version)", directoryHint: .isDirectory)
+    let qoderRegistryURL = root
+        .appending(path: ".qoder/extensions", directoryHint: .isDirectory)
+        .appending(path: "extensions.json")
 
     #expect(!FileManager.default.fileExists(atPath: codeBuddyExtensionURL.path()))
     #expect(!FileManager.default.fileExists(atPath: qoderExtensionURL.path()))
+    let qoderRegistryData = try Data(contentsOf: qoderRegistryURL)
+    let qoderRegistry = try #require(
+        JSONSerialization.jsonObject(with: qoderRegistryData) as? [[String: Any]]
+    )
+    #expect(!qoderRegistry.contains { entry in
+        let identifier = entry["identifier"] as? [String: Any]
+        let id = identifier?["id"] as? String
+        return id == IDEExtensionInstaller.extensionIdentifier
+    })
 }
 
 private func repositoryAppIconURL() -> URL {

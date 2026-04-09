@@ -41,6 +41,12 @@ struct IDEExtensionInstaller {
         for root in relativeRoots {
             let rootURL = homeDirectory.appending(path: root, directoryHint: .isDirectory)
             try? FileManager.default.removeItem(at: extensionDirectoryURL(rootURL: rootURL))
+            if root == ".qoder/extensions" {
+                try? syncExtensionRegistry(
+                    at: rootURL.appending(path: "extensions.json"),
+                    extensionURL: nil
+                )
+            }
         }
     }
 
@@ -59,6 +65,13 @@ struct IDEExtensionInstaller {
             try iconData.write(to: extensionURL.appending(path: Self.extensionIconFilename), options: .atomic)
         }
         try Data(vsixManifest(sessionFocusStrategy: sessionFocusStrategy).utf8).write(to: extensionURL.appending(path: ".vsixmanifest"), options: .atomic)
+
+        if relativeRoot == ".qoder/extensions" {
+            try syncExtensionRegistry(
+                at: rootURL.appending(path: "extensions.json"),
+                extensionURL: extensionURL
+            )
+        }
     }
 
     private func removeStaleGeneratedExtensions(in rootURL: URL) throws {
@@ -78,6 +91,53 @@ struct IDEExtensionInstaller {
 
     private func extensionDirectoryURL(rootURL: URL) -> URL {
         rootURL.appending(path: "\(Self.extensionIdentifier)-\(Self.extensionVersion)", directoryHint: .isDirectory)
+    }
+
+    private func syncExtensionRegistry(at registryURL: URL, extensionURL: URL?) throws {
+        try FileManager.default.createDirectory(
+            at: registryURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let currentEntries: [[String: Any]]
+        if let data = try? Data(contentsOf: registryURL),
+           let decoded = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            currentEntries = decoded
+        } else {
+            currentEntries = []
+        }
+
+        var updatedEntries = currentEntries.filter { entry in
+            let identifier = entry["identifier"] as? [String: Any]
+            let id = identifier?["id"] as? String
+            return id != Self.extensionIdentifier
+        }
+
+        if let extensionURL {
+            updatedEntries.append([
+                "identifier": [
+                    "id": Self.extensionIdentifier
+                ],
+                "version": Self.extensionVersion,
+                "location": [
+                    "$mid": 1,
+                    "path": extensionURL.path,
+                    "scheme": "file"
+                ],
+                "relativeLocation": extensionURL.lastPathComponent,
+                "metadata": [
+                    "installedTimestamp": Int(Date().timeIntervalSince1970 * 1000),
+                    "source": "file",
+                    "isApplicationScoped": false,
+                    "isMachineScoped": false,
+                    "isBuiltin": false,
+                    "pinned": false
+                ]
+            ])
+        }
+
+        let data = try JSONSerialization.data(withJSONObject: updatedEntries)
+        try data.write(to: registryURL, options: .atomic)
     }
 
     private func packageJSON(sessionFocusStrategy: SessionFocusStrategy?) -> String {
