@@ -15,6 +15,7 @@ const demoConfig = {
     copy: "Ping Island stays small until the run actually needs you.",
     focus: "Ghostty / tmux / Cursor",
     event: "Quiet state",
+    image: "./assets/notch-panel.png",
     actions: []
   },
   approval: {
@@ -24,9 +25,10 @@ const demoConfig = {
     title: "Approve tool call",
     subtitle: "Claude Code wants permission to run a shell command.",
     thread: "Claude Code / tool approval",
-    copy: "Approve from the notch, then jump back only if the workspace matters.",
+    copy: "Approve from the notch, then jump back only if the full workspace matters.",
     focus: "iTerm2 / tmux pane 2",
     event: "Shell approval waiting",
+    image: "./assets/question-panel.png",
     actions: ["Approve", "Deny"]
   },
   question: {
@@ -36,9 +38,10 @@ const demoConfig = {
     title: "Answer follow-up",
     subtitle: "Codex needs a quick product decision before continuing.",
     thread: "Codex / ask-user question",
-    copy: "Reply inline and keep the run moving without tab hunting.",
+    copy: "Reply inline and keep the run moving without leaving the notch.",
     focus: "Cursor / project window",
     event: "User input requested",
+    image: "./assets/question-panel.png",
     actions: ["Reply", "Open session"]
   },
   complete: {
@@ -51,6 +54,7 @@ const demoConfig = {
     copy: "The notch can hold the summary long enough for you to decide what to do next.",
     focus: "Ghostty / latest session",
     event: "Completion summary ready",
+    image: "./assets/notch-panel.png",
     actions: ["View summary", "Jump back"]
   }
 };
@@ -66,6 +70,7 @@ const fields = {
   copy: document.querySelector("[data-demo-copy]"),
   focus: document.querySelector("[data-demo-focus]"),
   event: document.querySelector("[data-demo-event]"),
+  image: document.querySelector("[data-demo-image]"),
   actions: document.querySelector("[data-demo-actions]")
 };
 
@@ -76,7 +81,6 @@ function renderDemo(stateKey) {
   if (!state || !notch) return;
 
   currentState = stateKey;
-  notch.classList.toggle("is-expanded", state.expanded);
   notch.className = `demo-notch ${state.expanded ? "is-expanded " : ""}is-${stateKey}`;
 
   fields.mini.textContent = state.mini;
@@ -87,6 +91,8 @@ function renderDemo(stateKey) {
   fields.copy.textContent = state.copy;
   fields.focus.textContent = state.focus;
   fields.event.textContent = state.event;
+  fields.image.src = state.image;
+
   fields.actions.innerHTML = state.actions
     .map((action) => `<span class="demo-action-pill">${action}</span>`)
     .join("");
@@ -104,12 +110,8 @@ chips.forEach((chip) => {
 
 if (notch) {
   notch.addEventListener("click", () => {
-    if (currentState === "idle") {
-      renderDemo("approval");
-      return;
-    }
-
     const nextState = {
+      idle: "approval",
       approval: "question",
       question: "complete",
       complete: "idle"

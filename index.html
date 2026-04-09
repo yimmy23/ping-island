@@ -6,7 +6,7 @@
     <title>Ping Island | Ambient Control for AI Coding Sessions</title>
     <meta
       name="description"
-      content="Ping Island is a macOS menu bar app that surfaces approvals, follow-up questions, completions, and focus return for AI coding sessions in a calm, premium dark interface."
+      content="Ping Island is a macOS menu bar app that surfaces approvals, questions, completions, and focus return for AI coding sessions in a calm, premium dark interface."
     />
     <meta property="og:title" content="Ping Island" />
     <meta
@@ -34,7 +34,7 @@
         <img src="./assets/ping-island-icon.svg" alt="" class="brand-icon" />
         <div class="brand-copy">
           <span class="mono-label">Ping Island / macOS control surface</span>
-          <strong>Stay calm while the agents work.</strong>
+          <strong>Ping Island</strong>
         </div>
       </a>
 
@@ -75,14 +75,9 @@
           </div>
 
           <h1 class="hero-title">
-            The calmest way to catch the moments your agents
-            <span class="gradient-text">actually need you</span>.
+            Catch the exact moment your agents
+            <span class="gradient-text">need you</span>.
           </h1>
-
-          <p class="hero-subtitle">
-            Ping Island surfaces approvals, questions, completions, and focus
-            return in a native Dynamic Island-style layer for macOS.
-          </p>
 
           <div class="hero-actions">
             <a
@@ -102,92 +97,107 @@
               View Source
             </a>
           </div>
-
-          <div class="hero-metrics">
-            <article class="glass-card metric-card">
-              <span class="mono-label">coverage</span>
-              <strong>8+ client families</strong>
-              <p>Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Qoder, CodeBuddy, and Copilot.</p>
-            </article>
-            <article class="glass-card metric-card">
-              <span class="mono-label">operator loop</span>
-              <strong>Answer from the notch</strong>
-              <p>Approve, deny, reply, and jump back to the right workspace.</p>
-            </article>
-          </div>
         </div>
+      </section>
 
-        <div class="hero-visual">
-          <article class="glass-card preview-card">
-            <div class="card-head">
-              <span class="mono-label">Interactive Notch Demo</span>
-              <span class="signal-chip">try the states</span>
-            </div>
+      <section class="content-section hero-demo-section">
+        <article class="glass-card hero-demo-card">
+          <div class="card-head">
+            <span class="mono-label">Interactive Notch Demo</span>
+            <span class="signal-chip">click the island or switch state</span>
+          </div>
 
-            <div class="demo-controls" aria-label="Demo states">
-              <button class="demo-chip is-active" type="button" data-demo-state="idle" aria-pressed="true">Idle</button>
-              <button class="demo-chip" type="button" data-demo-state="approval" aria-pressed="false">Approval</button>
-              <button class="demo-chip" type="button" data-demo-state="question" aria-pressed="false">Question</button>
-              <button class="demo-chip" type="button" data-demo-state="complete" aria-pressed="false">Complete</button>
-            </div>
+          <div class="demo-controls" aria-label="Demo states">
+            <button class="demo-chip is-active" type="button" data-demo-state="idle" aria-pressed="true">Idle</button>
+            <button class="demo-chip" type="button" data-demo-state="approval" aria-pressed="false">Approval</button>
+            <button class="demo-chip" type="button" data-demo-state="question" aria-pressed="false">Question</button>
+            <button class="demo-chip" type="button" data-demo-state="complete" aria-pressed="false">Complete</button>
+          </div>
 
-            <div class="notch-demo">
-              <div class="demo-screen">
-                <div class="demo-statusbar">
-                  <span>9:41</span>
-                  <span>Ping Island</span>
-                  <span>100%</span>
+          <div class="wide-demo-shell">
+            <div class="demo-screen">
+              <div class="demo-statusbar">
+                <span>9:41</span>
+                <span>Ping Island Demo</span>
+                <span>Wi-Fi • 100%</span>
+              </div>
+
+              <button
+                type="button"
+                class="demo-notch is-idle"
+                data-demo-notch
+                aria-label="Toggle Dynamic Island demo"
+              >
+                <div class="demo-notch-collapsed">
+                  <span class="demo-camera"></span>
+                  <span class="demo-mini-label" data-demo-mini>No pending actions</span>
+                </div>
+                <div class="demo-notch-expanded">
+                  <div class="demo-notch-head">
+                    <div>
+                      <strong data-demo-title>Quiet mode</strong>
+                      <p data-demo-subtitle>No approvals or questions waiting.</p>
+                    </div>
+                    <span class="demo-state-badge" data-demo-badge>IDLE</span>
+                  </div>
+                  <div class="demo-action-row" data-demo-actions></div>
+                </div>
+              </button>
+
+              <div class="wide-demo-content">
+                <div class="demo-session-column">
+                  <article class="demo-session-card is-active">
+                    <img src="./assets/mascots/codex.gif" alt="" class="demo-session-mascot" />
+                    <div>
+                      <span>Codex</span>
+                      <strong data-demo-thread>Codex thread synced</strong>
+                    </div>
+                    <em data-demo-event>Quiet state</em>
+                  </article>
+                  <article class="demo-session-card">
+                    <img src="./assets/mascots/claude.gif" alt="" class="demo-session-mascot" />
+                    <div>
+                      <span>Claude Code</span>
+                      <strong>Ready for approval</strong>
+                    </div>
+                    <em>Standby</em>
+                  </article>
+                  <article class="demo-session-card">
+                    <img src="./assets/mascots/gemini.gif" alt="" class="demo-session-mascot" />
+                    <div>
+                      <span>Gemini CLI</span>
+                      <strong>Latest rollout</strong>
+                    </div>
+                    <em>Background</em>
+                  </article>
                 </div>
 
-                <button
-                  type="button"
-                  class="demo-notch is-idle"
-                  data-demo-notch
-                  aria-label="Toggle Dynamic Island demo"
-                >
-                  <div class="demo-notch-collapsed">
-                    <span class="demo-camera"></span>
-                    <span class="demo-mini-label" data-demo-mini>No pending actions</span>
-                  </div>
-                  <div class="demo-notch-expanded">
-                    <div class="demo-notch-head">
-                      <div>
-                        <strong data-demo-title>Quiet mode</strong>
-                        <p data-demo-subtitle>No approvals or questions waiting.</p>
-                      </div>
-                      <span class="demo-state-badge" data-demo-badge>IDLE</span>
-                    </div>
-                    <div class="demo-action-row" data-demo-actions></div>
-                  </div>
-                </button>
-
-                <div class="demo-content">
+                <div class="demo-preview-column">
                   <div class="demo-card">
-                    <span>Session</span>
-                    <strong data-demo-thread>Codex thread synced</strong>
+                    <span>Focus return</span>
+                    <strong data-demo-focus>Ghostty / tmux / Cursor</strong>
                     <p data-demo-copy>Ping Island stays small until the run actually needs you.</p>
                   </div>
-                  <div class="demo-grid">
-                    <div class="demo-subcard">
-                      <span>Focus return</span>
-                      <strong data-demo-focus>Ghostty / tmux / Cursor</strong>
-                    </div>
-                    <div class="demo-subcard">
-                      <span>Last event</span>
-                      <strong data-demo-event>Quiet state</strong>
-                    </div>
+
+                  <div class="demo-preview-panel">
+                    <img
+                      src="./assets/notch-panel.png"
+                      alt="Ping Island product preview"
+                      class="demo-preview-image"
+                      data-demo-image
+                    />
                   </div>
                 </div>
               </div>
             </div>
-          </article>
-        </div>
+          </div>
+        </article>
       </section>
 
       <section class="stats-panel panel">
         <div class="stats-item">
           <span class="mono-label">session trust</span>
-          <strong>Codex hooks + app-server sync</strong>
+          <strong>Codex hooks + app server sync</strong>
         </div>
         <div class="stats-item">
           <span class="mono-label">focus return</span>
@@ -237,10 +247,7 @@
         <div class="section-head">
           <span class="mono-label">Pet GIF Showcase</span>
           <h2>One mascot system, all your clients.</h2>
-          <p>
-            Each client carries its own animated personality across the notch,
-            session list, and hover preview.
-          </p>
+          <p>Each client carries its own animated personality across the notch, session list, and hover preview.</p>
         </div>
 
         <div class="mascot-gallery">
@@ -351,9 +358,7 @@ xcodebuild -project PingIsland.xcodeproj \
         <div class="glass-card star-callout">
           <span class="mono-label">Open Source Signal</span>
           <h2>If Ping Island sharpens your flow, give it a star.</h2>
-          <p>
-            A GitHub star helps more people discover the project.
-          </p>
+          <p>A GitHub star helps more people discover the project.</p>
           <div class="hero-actions center-actions">
             <a
               class="button button-primary github-button"
