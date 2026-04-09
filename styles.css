@@ -577,8 +577,8 @@ code {
 }
 
 .demo-session-mascot {
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 1.65rem;
+  height: 1.65rem;
   object-fit: contain;
 }
 
@@ -730,7 +730,8 @@ code {
 }
 
 .mascot-card img {
-  width: 100%;
+  width: min(100%, 7rem);
+  margin: 0 auto;
   aspect-ratio: 1;
   object-fit: contain;
 }
