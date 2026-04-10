@@ -101,7 +101,7 @@ final class UpdateManager: NSObject, ObservableObject {
         }
 
         state = .checking
-        updater.checkForUpdates()
+        updater.checkForUpdateInformation()
     }
 
     func checkForUpdatesInBackground() {
@@ -180,6 +180,17 @@ final class UpdateManager: NSObject, ObservableObject {
                     ReleaseNotesWindowController.shared.present(notes: notes)
                 }
             }
+        }
+    }
+
+    private func handleUpdateCycleError(_ error: NSError) {
+        switch Self.terminalState(forUpdateCycleError: error) {
+        case .upToDate:
+            handleNoUpdateFound()
+        case .error(let message):
+            state = .error(message: message)
+        default:
+            break
         }
     }
 
@@ -281,6 +292,44 @@ final class UpdateManager: NSObject, ObservableObject {
 
         return description
     }
+
+    nonisolated static func terminalState(forUpdateCycleError error: NSError) -> UpdateState {
+        if let noUpdateReason = noUpdateReason(from: error) {
+            switch noUpdateReason {
+            case .onLatestVersion, .onNewerThanLatestVersion, .unknown:
+                return .upToDate
+            case .systemIsTooOld:
+                return .error(message: "当前系统版本过低，无法安装可用更新")
+            case .systemIsTooNew:
+                return .error(message: "当前系统版本过新，暂时没有兼容的更新")
+            case .hardwareDoesNotSupportARM64:
+                return .error(message: "当前设备架构不支持可用更新")
+            @unknown default:
+                return .upToDate
+            }
+        }
+
+        let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if message.isEmpty {
+            return .error(message: "更新失败，请稍后再试")
+        }
+
+        return .error(message: message)
+    }
+
+    private nonisolated static func noUpdateReason(from error: NSError) -> SPUNoUpdateFoundReason? {
+        guard error.domain == SUSparkleErrorDomain,
+              error.code == Int(SUError.noUpdateError.rawValue) else {
+            return nil
+        }
+
+        if let rawReason = (error.userInfo[SPUNoUpdateFoundReasonKey] as? NSNumber)?.intValue,
+           let reason = SPUNoUpdateFoundReason(rawValue: OSStatus(rawReason)) {
+            return reason
+        }
+
+        return .unknown
+    }
 }
 
 extension UpdateManager: SPUUpdaterDelegate {
@@ -295,7 +344,11 @@ extension UpdateManager: SPUUpdaterDelegate {
     }
 
     func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
-        handleNoUpdateFound()
+        handleUpdateCycleError(error as NSError)
+    }
+
+    func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+        handleUpdateCycleError(error as NSError)
     }
 
     func updater(_ updater: SPUUpdater, userDidMake choice: SPUUserUpdateChoice, forUpdate updateItem: SUAppcastItem, state userState: SPUUserUpdateState) {
