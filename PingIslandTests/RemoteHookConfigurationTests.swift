@@ -2,6 +2,64 @@ import XCTest
 @testable import Ping_Island
 
 final class RemoteHookConfigurationTests: XCTestCase {
+    func testRemoteBootstrapPrepareCommandStopsRunningAgentBeforeReplacingBridge() {
+        let command = RemoteConnectorManager.remoteBootstrapPrepareCommand(
+            installRoot: "/root/.ping-island",
+            controlSocketPath: "/root/.ping-island/run/agent-control.sock",
+            hookSocketPath: "/root/.ping-island/run/agent-hook.sock",
+            configDirectoryPaths: ["/root/.codex", "/root/.qoder"]
+        )
+
+        XCTAssertTrue(command.contains("mkdir -p "))
+        XCTAssertTrue(command.contains("pkill -f "))
+        XCTAssertTrue(command.contains("PingIslandBridge"))
+        XCTAssertTrue(command.contains("rm -f "))
+        XCTAssertTrue(command.contains("PingIslandBridge.tmp"))
+    }
+
+    func testRemoteBootstrapInstallCommandPromotesStagedBridgeAtomically() {
+        let command = RemoteConnectorManager.remoteBootstrapInstallCommand(
+            installRoot: "/root/.ping-island",
+            stagedBridgePath: "/root/.ping-island/bin/PingIslandBridge.tmp"
+        )
+
+        XCTAssertTrue(command.contains("mv -f '/root/.ping-island/bin/PingIslandBridge.tmp' '/root/.ping-island/bin/PingIslandBridge'"))
+        XCTAssertTrue(command.contains("chmod 755 '/root/.ping-island/bin/PingIslandBridge' '/root/.ping-island/bin/ping-island-bridge'"))
+    }
+
+    func testRemoteManagedHookProfilesIncludeSupportedCliIntegrations() {
+        let profileIDs = Set(RemoteConnectorManager.remoteManagedHookProfiles().map(\.id))
+
+        XCTAssertEqual(profileIDs, [
+            "claude-hooks",
+            "codex-hooks",
+            "qoder-hooks",
+            "qoderwork-hooks",
+        ])
+    }
+
+    func testRemoteManagedHookConfigDirectoryPathsResolveUnderRemoteHome() {
+        let directories = RemoteConnectorManager.remoteManagedHookConfigDirectoryPaths(
+            homeDirectory: "/root",
+            profiles: RemoteConnectorManager.remoteManagedHookProfiles()
+        )
+
+        XCTAssertTrue(directories.contains("/root/.claude"))
+        XCTAssertTrue(directories.contains("/root/.codex"))
+        XCTAssertTrue(directories.contains("/root/.qoder"))
+        XCTAssertTrue(directories.contains("/root/.qoderwork"))
+    }
+
+    func testRemoteConfigurationPathResolvesRelativeHomePaths() {
+        XCTAssertEqual(
+            RemoteConnectorManager.remoteConfigurationPath(
+                relativePath: ".codex/hooks.json",
+                homeDirectory: "/root"
+            ),
+            "/root/.codex/hooks.json"
+        )
+    }
+
     func testManagedConfigurationDataInstallsClaudeHooksWithoutRemovingExistingEntries() throws {
         let existingJSON = """
         {

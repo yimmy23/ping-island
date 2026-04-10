@@ -489,6 +489,24 @@ struct ChatView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+            } else if intervention.metadata["responseMode"] == "external_only",
+                      session.clientInfo.kind == .codexCLI {
+                HStack(spacing: 8) {
+                    Button {
+                        Task {
+                            _ = await SessionLauncher.shared.activate(session)
+                        }
+                    }
+                    label: {
+                        Text(verbatim: AppLocalization.format("打开 %@", session.interactionDisplayName))
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(Color.white.opacity(0.9)))
+                }
             } else if intervention.supportsInlineResponse {
                 SessionQuestionForm(
                     intervention: intervention,
@@ -532,7 +550,7 @@ struct ChatView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, intervention.metadata["responseMode"] == "external_only" ? 10 : 12)
         .background(Color.black.opacity(0.2))
         .overlay(alignment: .top) {
             LinearGradient(

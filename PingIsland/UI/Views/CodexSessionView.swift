@@ -119,18 +119,38 @@ struct CodexSessionView: View {
     }
 
     private func questionForm(_ intervention: SessionIntervention) -> some View {
-        SessionQuestionForm(
-            intervention: intervention,
-            submitLabel: "Submit",
-            onSubmit: { payload in
-                sessionMonitor.answerIntervention(sessionId: session.sessionId, answers: payload)
-                viewModel.exitChat()
-            },
-            secondaryActionTitle: "Cancel",
-            onSecondaryAction: {
-                viewModel.exitChat()
+        Group {
+            if intervention.metadata["responseMode"] == "external_only",
+               session.clientInfo.kind == .codexCLI {
+                HStack(spacing: 0) {
+                    Button {
+                        openClient()
+                    } label: {
+                        Text(verbatim: AppLocalization.format("打开 %@", session.interactionDisplayName))
+                    }
+                    .buttonStyle(CodexCapsuleButtonStyle(background: Color.white.opacity(0.9), foreground: .black))
+                }
+            } else {
+                SessionQuestionForm(
+                    intervention: intervention,
+                    submitLabel: "Submit",
+                    onSubmit: { payload in
+                        sessionMonitor.answerIntervention(sessionId: session.sessionId, answers: payload)
+                        viewModel.exitChat()
+                    },
+                    secondaryActionTitle: "Cancel",
+                    onSecondaryAction: {
+                        viewModel.exitChat()
+                    }
+                )
             }
-        )
+        }
+    }
+
+    private func openClient() {
+        Task {
+            _ = await SessionLauncher.shared.activate(session)
+        }
     }
 
     private var providerBadge: some View {

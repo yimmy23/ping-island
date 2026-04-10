@@ -78,4 +78,35 @@ final class CodexRolloutParserTests: XCTestCase {
         XCTAssertEqual(snapshot?.intervention?.metadata["server"], "omx_state")
         XCTAssertEqual(snapshot?.intervention?.metadata["toolName"], "state_get_status")
     }
+
+    func testRolloutParserDoesNotInferPendingMCPApprovalForCodexApp() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let threadId = "019d7874-9b7a-7533-a757-3fb452609c4d"
+        let rolloutURL = tempDirectory.appendingPathComponent("rollout-\(threadId).jsonl")
+        let rollout = """
+        {"timestamp":"2026-04-10T17:41:27.371Z","type":"session_meta","payload":{"id":"\(threadId)","cwd":"/Users/wudanwu/github/CodeIsland","originator":"Codex Desktop","source":"desktop"}}
+        {"timestamp":"2026-04-10T17:41:27.371Z","type":"event_msg","payload":{"type":"user_message","message":"删除一下 README 文件"}}
+        {"timestamp":"2026-04-10T17:41:40.151Z","type":"response_item","payload":{"type":"function_call","name":"mcp__omx_state__state_get_status","arguments":"{\\"workingDirectory\\":\\"/Users/wudanwu/github/CodeIsland\\"}","call_id":"call_IvTKO1mWarOvCiIBwppVMmyt"}}
+        """
+        try rollout.write(to: rolloutURL, atomically: true, encoding: .utf8)
+
+        let snapshot = await CodexRolloutParser.shared.parseThread(
+            threadId: threadId,
+            fallbackCwd: "/Users/wudanwu/github/CodeIsland",
+            clientInfo: SessionClientInfo(
+                kind: .codexApp,
+                profileID: "codex-app",
+                name: "Codex App",
+                bundleIdentifier: "com.openai.codex",
+                sessionFilePath: rolloutURL.path
+            )
+        )
+
+        XCTAssertNil(snapshot?.intervention)
+        XCTAssertEqual(snapshot?.phase, .processing)
+    }
 }

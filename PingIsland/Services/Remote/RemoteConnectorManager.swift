@@ -228,6 +228,12 @@ final class RemoteConnectorManager: ObservableObject {
 
         try await connector.start()
         connectors[endpointID] = connector
+        setState(
+            for: endpointID,
+            phase: .connected,
+            detail: "远程转发已连接",
+            agentVersion: endpoint.agentVersion
+        )
         logger.notice(
             "Remote attach connected endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
         )
@@ -334,33 +340,41 @@ final class RemoteConnectorManager: ObservableObject {
     private func bootstrapRemoteAgent(endpointID: UUID, password: String?, probe: RemoteHostProbe) async throws {
         guard let endpoint = endpoint(for: endpointID) else { return }
         let bridgeBinaryURL = try await assetResolver.resolveBinaryURL(for: probe)
+        let stagedBridgePath = "\(endpoint.remoteInstallRoot)/bin/PingIslandBridge.tmp"
+        let remoteHookProfiles = Self.remoteManagedHookProfiles()
         logger.notice(
             "Remote bootstrap starting endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) binary=\(bridgeBinaryURL.path, privacy: .public) installRoot=\(endpoint.remoteInstallRoot, privacy: .public)"
         )
-        guard let claudeProfile = ClientProfileRegistry.managedHookProfile(id: "claude-hooks") else {
+        guard remoteHookProfiles.contains(where: { $0.id == "claude-hooks" }) else {
             throw RemoteConnectorError.missingClaudeHookProfile
         }
 
         _ = try await RemoteSSHCommandRunner.runSSH(
             target: endpoint.sshTarget,
             password: password,
-            remoteCommand: """
-            mkdir -p \(quoted(endpoint.remoteInstallRoot))/bin \(quoted(endpoint.remoteInstallRoot))/run \(quoted(endpoint.remoteInstallRoot))/logs "$HOME/.claude"
-            """,
+            remoteCommand: Self.remoteBootstrapPrepareCommand(
+                installRoot: endpoint.remoteInstallRoot,
+                controlSocketPath: endpoint.remoteControlSocketPath,
+                hookSocketPath: endpoint.remoteHookSocketPath,
+                configDirectoryPaths: Self.remoteManagedHookConfigDirectoryPaths(
+                    homeDirectory: probe.homeDirectory,
+                    profiles: remoteHookProfiles
+                )
+            ),
             acceptNewHostKey: true
         )
         logger.debug(
-            "Remote bootstrap prepared directories endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
+            "Remote bootstrap prepared directories and stopped stale agent endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
         )
 
         try await RemoteSSHCommandRunner.copyFile(
             localURL: bridgeBinaryURL,
             remoteTarget: endpoint.sshTarget,
-            remotePath: "\(endpoint.remoteInstallRoot)/bin/PingIslandBridge",
+            remotePath: stagedBridgePath,
             password: password
         )
         logger.debug(
-            "Remote bootstrap copied bridge endpoint=\(endpoint.id.uuidString, privacy: .public) remotePath=\("\(endpoint.remoteInstallRoot)/bin/PingIslandBridge", privacy: .public)"
+            "Remote bootstrap copied staged bridge endpoint=\(endpoint.id.uuidString, privacy: .public) remotePath=\(stagedBridgePath, privacy: .public)"
         )
 
         let launcherScript = """
@@ -377,41 +391,48 @@ final class RemoteConnectorManager: ObservableObject {
         _ = try await RemoteSSHCommandRunner.runSSH(
             target: endpoint.sshTarget,
             password: password,
-            remoteCommand: """
-            chmod 755 \(quoted(endpoint.remoteInstallRoot))/bin/PingIslandBridge \(quoted(endpoint.remoteInstallRoot))/bin/ping-island-bridge
-            """,
+            remoteCommand: Self.remoteBootstrapInstallCommand(
+                installRoot: endpoint.remoteInstallRoot,
+                stagedBridgePath: stagedBridgePath
+            ),
             acceptNewHostKey: true
         )
         logger.debug(
             "Remote bootstrap wrote launcher endpoint=\(endpoint.id.uuidString, privacy: .public)"
         )
 
-        let existingConfig = try? await RemoteSSHCommandRunner.readRemoteFile(
-            target: endpoint.sshTarget,
-            remotePath: "\(probe.homeDirectory)/.claude/settings.json",
-            password: password
-        )
-        let remoteCommand = HookInstaller.managedBridgeCommand(
-            source: claudeProfile.bridgeSource,
-            extraArguments: claudeProfile.bridgeExtraArguments,
-            launcherPath: "\(endpoint.remoteInstallRoot)/bin/ping-island-bridge",
-            socketPath: endpoint.remoteHookSocketPath
-        )
-        let updatedData = HookInstaller.updatedConfigurationData(
-            existingData: existingConfig,
-            profile: claudeProfile,
-            customCommand: remoteCommand,
-            installing: true
-        )
-        logger.debug(
-            "Remote bootstrap preparing hook config endpoint=\(endpoint.id.uuidString, privacy: .public) hasExistingConfig=\(existingConfig != nil, privacy: .public) updatedConfigBytes=\(updatedData.count, privacy: .public)"
-        )
-        try await RemoteSSHCommandRunner.writeRemoteFile(
-            target: endpoint.sshTarget,
-            remotePath: "\(probe.homeDirectory)/.claude/settings.json",
-            contents: updatedData,
-            password: password
-        )
+        for profile in remoteHookProfiles {
+            let remoteConfigPath = Self.remoteConfigurationPath(
+                relativePath: profile.configurationRelativePaths[0],
+                homeDirectory: probe.homeDirectory
+            )
+            let existingConfig = try? await RemoteSSHCommandRunner.readRemoteFile(
+                target: endpoint.sshTarget,
+                remotePath: remoteConfigPath,
+                password: password
+            )
+            let remoteCommand = HookInstaller.managedBridgeCommand(
+                source: profile.bridgeSource,
+                extraArguments: profile.bridgeExtraArguments,
+                launcherPath: "\(endpoint.remoteInstallRoot)/bin/ping-island-bridge",
+                socketPath: endpoint.remoteHookSocketPath
+            )
+            let updatedData = HookInstaller.updatedConfigurationData(
+                existingData: existingConfig?.isEmpty == true ? nil : existingConfig,
+                profile: profile,
+                customCommand: remoteCommand,
+                installing: true
+            )
+            logger.debug(
+                "Remote bootstrap preparing hook config endpoint=\(endpoint.id.uuidString, privacy: .public) profile=\(profile.id, privacy: .public) remotePath=\(remoteConfigPath, privacy: .public) hasExistingConfig=\(existingConfig?.isEmpty == false, privacy: .public) updatedConfigBytes=\(updatedData.count, privacy: .public)"
+            )
+            try await RemoteSSHCommandRunner.writeRemoteFile(
+                target: endpoint.sshTarget,
+                remotePath: remoteConfigPath,
+                contents: updatedData,
+                password: password
+            )
+        }
         logger.notice(
             "Remote bootstrap completed endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
         )
@@ -507,8 +528,80 @@ final class RemoteConnectorManager: ObservableObject {
         }
     }
 
+    static func remoteBootstrapPrepareCommand(
+        installRoot: String,
+        controlSocketPath: String,
+        hookSocketPath: String,
+        configDirectoryPaths: [String]
+    ) -> String {
+        let agentPattern = "\(installRoot)/bin/[P]ingIslandBridge --mode remote-agent-service"
+        let directoryList = ([ "\(installRoot)/bin", "\(installRoot)/run", "\(installRoot)/logs", "$HOME/.claude" ] + configDirectoryPaths)
+            .uniquedPreservingOrder()
+            .map(shellQuote)
+            .joined(separator: " ")
+        return """
+        mkdir -p \(directoryList)
+        pkill -f \(shellQuote(agentPattern)) >/dev/null 2>&1 || true
+        sleep 1
+        rm -f \(shellQuote(controlSocketPath)) \(shellQuote(hookSocketPath)) \(shellQuote("\(installRoot)/bin/PingIslandBridge.tmp"))
+        """
+    }
+
+    static func remoteBootstrapInstallCommand(
+        installRoot: String,
+        stagedBridgePath: String
+    ) -> String {
+        """
+        mv -f \(shellQuote(stagedBridgePath)) \(shellQuote("\(installRoot)/bin/PingIslandBridge"))
+        chmod 755 \(shellQuote("\(installRoot)/bin/PingIslandBridge")) \(shellQuote("\(installRoot)/bin/ping-island-bridge"))
+        """
+    }
+
+    static func remoteManagedHookProfiles() -> [ManagedHookClientProfile] {
+        let supportedProfileIDs: Set<String> = [
+            "claude-hooks",
+            "codex-hooks",
+            "qoder-hooks",
+            "qoderwork-hooks"
+        ]
+        return ClientProfileRegistry.managedHookProfiles.filter { profile in
+            supportedProfileIDs.contains(profile.id) && profile.installationKind == .jsonHooks
+        }
+    }
+
+    static func remoteManagedHookConfigDirectoryPaths(
+        homeDirectory: String,
+        profiles: [ManagedHookClientProfile]
+    ) -> [String] {
+        profiles
+            .map { remoteConfigurationPath(relativePath: $0.configurationRelativePaths[0], homeDirectory: homeDirectory) }
+            .map { NSString(string: $0).deletingLastPathComponent }
+            .filter { !$0.isEmpty }
+            .uniquedPreservingOrder()
+    }
+
+    static func remoteConfigurationPath(relativePath: String, homeDirectory: String) -> String {
+        guard !relativePath.isEmpty else { return homeDirectory }
+        return relativePath
+            .split(separator: "/")
+            .reduce(homeDirectory) { partialPath, component in
+                partialPath + "/" + component
+            }
+    }
+
     private func quoted(_ value: String) -> String {
+        Self.shellQuote(value)
+    }
+
+    private static func shellQuote(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+}
+
+private extension Array where Element: Hashable {
+    func uniquedPreservingOrder() -> [Element] {
+        var seen: Set<Element> = []
+        return filter { seen.insert($0).inserted }
     }
 }
 

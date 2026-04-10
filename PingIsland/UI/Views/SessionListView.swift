@@ -50,36 +50,50 @@ struct SessionListView: View {
         sessionMonitor.instances.sorted { $0.shouldSortBeforeInQueue($1) }
     }
 
-    private var instancesList: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: 2) {
-                ForEach(sortedInstances) { session in
-                    InstanceRow(
-                        session: session,
-                        isExpanded: expandedSessionStableID == session.stableId,
-                        onActivate: { activateSession(session) },
-                        onToggleExpanded: { toggleExpanded(session) },
-                        onFocus: { activateSession(session) },
-                        onChat: { openChat(session) },
-                        onArchive: { archiveSession(session) },
-                        onApprove: { approveSession(session) },
-                        onApproveForSession: { approveSessionForScope(session) },
-                        onReject: { rejectSession(session) }
-                    )
-                    .id(session.stableId)
-                }
+    private var shouldUseScrollContainer: Bool {
+        sortedInstances.count > 3 || expandedSessionStableID != nil
+    }
+
+    private var listContent: some View {
+        LazyVStack(spacing: 2) {
+            ForEach(sortedInstances) { session in
+                InstanceRow(
+                    session: session,
+                    isExpanded: expandedSessionStableID == session.stableId,
+                    onActivate: { activateSession(session) },
+                    onToggleExpanded: { toggleExpanded(session) },
+                    onFocus: { activateSession(session) },
+                    onChat: { openChat(session) },
+                    onArchive: { archiveSession(session) },
+                    onApprove: { approveSession(session) },
+                    onApproveForSession: { approveSessionForScope(session) },
+                    onReject: { rejectSession(session) }
+                )
+                .id(session.stableId)
             }
-            .padding(.vertical, 4)
-            .background(
-                GeometryReader { geometry in
-                    Color.clear.preference(
-                        key: OpenedPanelContentHeightPreferenceKey.self,
-                        value: geometry.size.height
-                    )
-                }
-            )
         }
-        .scrollBounceBehavior(.basedOnSize)
+        .padding(.vertical, 4)
+        .background(
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: OpenedPanelContentHeightPreferenceKey.self,
+                    value: geometry.size.height
+                )
+            }
+        )
+    }
+
+    private var instancesList: some View {
+        Group {
+            if shouldUseScrollContainer {
+                ScrollView(.vertical, showsIndicators: false) {
+                    listContent
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            } else {
+                listContent
+            }
+        }
         .onChange(of: sortedInstances.map(\.stableId)) { _, stableIDs in
             guard let expandedSessionStableID, !stableIDs.contains(expandedSessionStableID) else { return }
             self.expandedSessionStableID = nil

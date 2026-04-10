@@ -277,11 +277,6 @@ actor CodexRolloutParser {
             phase = .idle
         }
 
-        if let inferredIntervention = Self.pendingMCPApprovalIntervention(from: historyItems) {
-            intervention = inferredIntervention
-            phase = .waitingForInput
-        }
-
         let preview = latestFinalText ?? latestAgentText ?? latestUserText ?? firstUserMessage
         let conversationInfo = ConversationInfo(
             summary: sessionName ?? firstUserMessage,
@@ -299,6 +294,12 @@ actor CodexRolloutParser {
                 && clientInfo?.terminalBundleIdentifier != "com.openai.codex")
             || clientInfo?.terminalSessionIdentifier?.isEmpty == false
             || clientInfo?.iTermSessionIdentifier?.isEmpty == false
+
+        if prefersCLIContext,
+           let inferredIntervention = Self.pendingMCPApprovalIntervention(from: historyItems) {
+            intervention = inferredIntervention
+            phase = .waitingForInput
+        }
 
         let baseClientInfo = prefersCLIContext
             ? SessionClientInfo.codexCLI()

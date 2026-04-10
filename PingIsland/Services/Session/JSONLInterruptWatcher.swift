@@ -47,20 +47,51 @@ class JSONLInterruptWatcher {
         if let explicitFilePath, !explicitFilePath.isEmpty {
             self.filePath = explicitFilePath
         } else {
-            let projectDir = cwd.replacingOccurrences(of: "/", with: "-")
-                                .replacingOccurrences(of: ".", with: "-")
-            let qoderPath = NSHomeDirectory() + "/.qoder/projects/" + projectDir + "/transcript/" + sessionId + ".jsonl"
-            if FileManager.default.fileExists(atPath: qoderPath) {
-                self.filePath = qoderPath
-            } else {
-                let qoderWorkPath = NSHomeDirectory() + "/.qoderwork/projects/" + projectDir + "/" + sessionId + ".jsonl"
-                if FileManager.default.fileExists(atPath: qoderWorkPath) {
-                    self.filePath = qoderWorkPath
-                } else {
-                    self.filePath = NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionId + ".jsonl"
-                }
-            }
+            self.filePath = Self.resolveFallbackFilePath(sessionId: sessionId, cwd: cwd)
         }
+    }
+
+    static func resolveFallbackFilePath(sessionId: String, cwd: String) -> String {
+        let projectDir = cwd.replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ".", with: "-")
+
+        let qoderPath = NSHomeDirectory() + "/.qoder/projects/" + projectDir + "/transcript/" + sessionId + ".jsonl"
+        if FileManager.default.fileExists(atPath: qoderPath) {
+            return qoderPath
+        }
+
+        let qoderWorkPath = NSHomeDirectory() + "/.qoderwork/projects/" + projectDir + "/" + sessionId + ".jsonl"
+        if FileManager.default.fileExists(atPath: qoderWorkPath) {
+            return qoderWorkPath
+        }
+
+        if let codexPath = resolveCodexRolloutPath(sessionId: sessionId) {
+            return codexPath
+        }
+
+        return NSHomeDirectory() + "/.claude/projects/" + projectDir + "/" + sessionId + ".jsonl"
+    }
+
+    private static func resolveCodexRolloutPath(sessionId: String) -> String? {
+        let sessionsRoot = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codex")
+            .appendingPathComponent("sessions", isDirectory: true)
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: sessionsRoot,
+            includingPropertiesForKeys: nil
+        ) else {
+            return nil
+        }
+
+        let suffix = "-\(sessionId).jsonl"
+        for case let fileURL as URL in enumerator {
+            let name = fileURL.lastPathComponent
+            guard name.hasPrefix("rollout-"), name.hasSuffix(suffix) else { continue }
+            return fileURL.path
+        }
+
+        return nil
     }
 
     /// Start watching the JSONL file for interrupts

@@ -369,6 +369,8 @@ actor CodexAppServerMonitor {
 
         case "item/autoApprovalReview/started":
             guard let threadId = params["threadId"] as? String,
+                  let session = await SessionStore.shared.session(for: threadId),
+                  session.clientInfo.kind == .codexCLI,
                   let intervention = Self.guardianReviewIntervention(from: params) else {
                 return
             }
@@ -746,6 +748,7 @@ actor CodexAppServerMonitor {
         let createdAt = date(fromUnixTimestamp: thread["createdAt"]) ?? Date()
         let updatedAt = date(fromUnixTimestamp: thread["updatedAt"]) ?? createdAt
         let status = thread["status"] as? [String: Any]
+        let snapshotClientInfo = makeClientInfo(from: thread, threadId: threadId)
         let phase = phaseFromCodexStatus(
             status,
             threadId: threadId,
@@ -835,7 +838,7 @@ actor CodexAppServerMonitor {
                         )),
                         timestamp: timestamp
                     ))
-                    if toolStatus == .running {
+                    if toolStatus == .running, snapshotClientInfo.kind == .codexCLI {
                         inferredIntervention = SessionIntervention(
                             id: "mcp-pending-\(server)-\(tool)",
                             kind: .question,
@@ -875,7 +878,7 @@ actor CodexAppServerMonitor {
             name: sanitizedText(thread["name"] as? String),
             preview: preview,
             cwd: (thread["cwd"] as? String) ?? "/",
-            clientInfo: makeClientInfo(from: thread, threadId: threadId),
+            clientInfo: snapshotClientInfo,
             intervention: inferredIntervention,
             createdAt: createdAt,
             updatedAt: updatedAt,

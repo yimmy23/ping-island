@@ -96,7 +96,7 @@ class NotchViewModel: ObservableObject {
                 height: maxAllowedHeight
             )
         case .instances:
-            let fallbackHeight: CGFloat = openReason == .hover ? 220 : 260
+            let fallbackHeight: CGFloat = openReason == .hover ? 180 : 200
             let measuredHeight = openedMeasuredHeight ?? fallbackHeight
             return CGSize(
                 width: openReason == .hover

@@ -1664,8 +1664,20 @@ actor SessionStore {
         if let preview, !preview.isEmpty {
             session.previewText = preview
         }
-        session.intervention = intervention
-        if session.phase.canTransition(to: phase) || session.phase == phase {
+        let shouldPreserveExternalIntervention = shouldPreserveExternalCodexIntervention(
+            current: session.intervention,
+            incoming: intervention,
+            nextPhase: phase,
+            clientKind: session.clientInfo.kind
+        )
+        if !shouldPreserveExternalIntervention {
+            session.intervention = intervention
+        }
+        if shouldPreserveExternalIntervention {
+            if !session.phase.needsAttention {
+                session.phase = phase
+            }
+        } else if session.phase.canTransition(to: phase) || session.phase == phase {
             session.phase = phase
         } else {
             session.phase = phase
@@ -1775,10 +1787,20 @@ actor SessionStore {
         }
         session.chatItems = snapshot.historyItems
         session.conversationInfo = snapshot.conversationInfo
-        if snapshot.intervention != nil || !snapshot.phase.needsAttention {
+        let shouldPreserveExternalIntervention = shouldPreserveExternalCodexIntervention(
+            current: session.intervention,
+            incoming: snapshot.intervention,
+            nextPhase: snapshot.phase,
+            clientKind: session.clientInfo.kind
+        )
+        if !shouldPreserveExternalIntervention {
             session.intervention = snapshot.intervention
         }
-        if case .none = session.intervention {
+        if shouldPreserveExternalIntervention {
+            if !session.phase.needsAttention {
+                session.phase = snapshot.phase
+            }
+        } else if case .none = session.intervention {
             session.phase = snapshot.phase
         } else if snapshot.phase.needsAttention {
             session.phase = snapshot.phase
@@ -1806,6 +1828,28 @@ actor SessionStore {
         sessions[resolvedSessionId] = session
         publishState()
         updateCodexPlaceholderPrune(for: session)
+    }
+
+    private func shouldPreserveExternalCodexIntervention(
+        current: SessionIntervention?,
+        incoming: SessionIntervention?,
+        nextPhase: SessionPhase,
+        clientKind: SessionClientKind
+    ) -> Bool {
+        guard clientKind == .codexCLI else {
+            return false
+        }
+        guard incoming == nil,
+              let current,
+              current.metadata["responseMode"] == "external_only",
+              current.metadata["source"]?.hasPrefix("rollout_pending_mcp") == true
+                || current.metadata["source"]?.hasPrefix("app_server_pending_mcp") == true
+                || current.metadata["source"]?.hasPrefix("guardian_review") == true
+        else {
+            return false
+        }
+
+        return !nextPhase.needsAttention
     }
 
     func resolveCodexIntervention(sessionId: String, nextPhase: SessionPhase = .processing) {

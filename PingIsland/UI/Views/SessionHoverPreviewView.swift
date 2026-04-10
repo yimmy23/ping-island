@@ -341,6 +341,17 @@ private struct HoverQuestionInterventionCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+            } else if intervention.metadata["responseMode"] == "external_only",
+                      session.clientInfo.kind == .codexCLI {
+                Button {
+                    Task {
+                        _ = await SessionLauncher.shared.activate(session)
+                    }
+                }
+                label: {
+                    Text(verbatim: AppLocalization.format("打开 %@", session.interactionDisplayName))
+                }
+                .buttonStyle(HoverApprovalButtonStyle(background: Color.white.opacity(0.9), foreground: .black))
             } else if intervention.supportsInlineResponse {
                 SessionQuestionForm(
                     intervention: intervention,
@@ -362,7 +373,7 @@ private struct HoverQuestionInterventionCard: View {
             }
         }
         .padding(.top, 12)
-        .padding(.bottom, 18)
+        .padding(.bottom, intervention.metadata["responseMode"] == "external_only" ? 12 : 18)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

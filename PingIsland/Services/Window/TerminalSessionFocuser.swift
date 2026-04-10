@@ -407,13 +407,15 @@ actor TerminalSessionFocuser {
         let tty: String?
     }
 
-    private func iTermScriptSelector(for tty: String?, sessionIdentifier: String?) -> ITermScriptSelector? {
+    private nonisolated func iTermScriptSelector(for tty: String?, sessionIdentifier: String?) -> ITermScriptSelector? {
         let normalizedSessionIdentifier = normalizedITermSessionIdentifier(sessionIdentifier)
-        let usableSessionIdentifier = normalizedSessionIdentifier?.isEmpty == false ? normalizedSessionIdentifier : nil
         let normalizedTTY = tty?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "/dev/", with: "")
         let usableTTY = normalizedTTY?.isEmpty == false ? normalizedTTY : nil
+        let usableSessionIdentifier = usableTTY == nil && normalizedSessionIdentifier?.isEmpty == false
+            ? normalizedSessionIdentifier
+            : nil
 
         guard usableSessionIdentifier != nil || usableTTY != nil else {
             return nil
@@ -425,7 +427,7 @@ actor TerminalSessionFocuser {
         )
     }
 
-    private func iTermRestoreScriptLines(for selector: ITermScriptSelector) -> [String] {
+    private nonisolated func iTermRestoreScriptLines(for selector: ITermScriptSelector) -> [String] {
         var lines: [String] = [
             "tell application id \"com.googlecode.iterm2\"",
             "repeat with theWindow in windows",
@@ -455,7 +457,7 @@ actor TerminalSessionFocuser {
         return lines
     }
 
-    private func iTermSelectionScriptLines(for selector: ITermScriptSelector) -> [String] {
+    private nonisolated func iTermSelectionScriptLines(for selector: ITermScriptSelector) -> [String] {
         var lines: [String] = [
             "tell application id \"com.googlecode.iterm2\"",
             "repeat with theWindow in windows",
@@ -486,11 +488,21 @@ actor TerminalSessionFocuser {
         return lines
     }
 
-    private func appendITermSelectorMatch(
+    private nonisolated func appendITermSelectorMatch(
         lines: inout [String],
         selector: ITermScriptSelector,
         body: () -> [String]
     ) {
+        if let usableTTY = selector.tty {
+            let fullTTY = "/dev/\(usableTTY)"
+            lines.append(contentsOf: [
+                "set sessionTTY to tty of theSession",
+                "if sessionTTY is \"\(usableTTY)\" or sessionTTY is \"\(fullTTY)\" then"
+            ])
+            lines.append(contentsOf: body())
+            lines.append("end if")
+        }
+
         if let usableSessionIdentifier = selector.sessionIdentifier {
             lines.append(contentsOf: [
                 "try",
@@ -502,16 +514,14 @@ actor TerminalSessionFocuser {
                 "end try"
             ])
         }
+    }
 
-        if let usableTTY = selector.tty {
-            let fullTTY = "/dev/\(usableTTY)"
-            lines.append(contentsOf: [
-                "set sessionTTY to tty of theSession",
-                "if sessionTTY is \"\(usableTTY)\" or sessionTTY is \"\(fullTTY)\" then"
-            ])
-            lines.append(contentsOf: body())
-            lines.append("end if")
+    static func iTermSelectionScriptLinesForTesting(tty: String?, sessionIdentifier: String?) -> [String] {
+        let focuser = TerminalSessionFocuser.shared
+        guard let selector = focuser.iTermScriptSelector(for: tty, sessionIdentifier: sessionIdentifier) else {
+            return []
         }
+        return focuser.iTermSelectionScriptLines(for: selector)
     }
 
     static func ghosttySelectionScriptLines(
@@ -655,7 +665,7 @@ actor TerminalSessionFocuser {
         return trimmed
     }
 
-    private func normalizedITermSessionIdentifier(_ sessionIdentifier: String?) -> String? {
+    private nonisolated func normalizedITermSessionIdentifier(_ sessionIdentifier: String?) -> String? {
         guard let rawValue = sessionIdentifier?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !rawValue.isEmpty else {
