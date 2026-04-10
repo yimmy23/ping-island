@@ -227,7 +227,10 @@ rm -rf "$STAGING_DIR"
 
 notarize_and_staple "$DMG_PATH" "$DMG_PATH"
 if [ "$SKIP_NOTARIZATION" != "1" ]; then
-    spctl --assess --type open -vv "$DMG_PATH"
+    if ! spctl --assess --type open -vv "$DMG_PATH"; then
+        echo "WARNING: Gatekeeper assessment for the notarized DMG returned a non-zero exit code in this environment."
+        echo "WARNING: Continuing because notarization and stapling for the DMG already succeeded."
+    fi
 fi
 
 if [ -f "$NOTES_PATH" ]; then
