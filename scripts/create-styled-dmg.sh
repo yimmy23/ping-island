@@ -20,6 +20,8 @@ APP_X="${PING_ISLAND_DMG_APP_X:-138}"
 APP_Y="${PING_ISLAND_DMG_APP_Y:-168}"
 APPLICATIONS_X="${PING_ISLAND_DMG_APPLICATIONS_X:-388}"
 APPLICATIONS_Y="${PING_ISLAND_DMG_APPLICATIONS_Y:-168}"
+FAIL_ON_PLAIN="${PING_ISLAND_DMG_FAIL_ON_PLAIN:-0}"
+FINDER_VOLUME_NAME=""
 
 resolve_image_source() {
   local requested_source="$1"
@@ -120,7 +122,7 @@ fi
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ping-island-dmg.XXXXXX")"
 RW_DMG="$TMP_DIR/styled.dmg"
-MOUNT_POINT="$TMP_DIR/mount"
+MOUNT_POINT=""
 BACKGROUND_PATH="$TMP_DIR/background.png"
 ICON_WORK_PNG="$TMP_DIR/dmg-icon.png"
 ICON_RESOURCE_PATH="$TMP_DIR/dmg-icon.rsrc"
@@ -129,7 +131,7 @@ LAYOUT_READY=0
 ATTACHED=0
 
 cleanup() {
-  if [[ "$ATTACHED" -eq 1 ]]; then
+  if [[ "$ATTACHED" -eq 1 && -n "$MOUNT_POINT" ]]; then
     hdiutil detach "$MOUNT_POINT" -quiet >/dev/null 2>&1 || true
   fi
   rm -rf "$TMP_DIR"
@@ -137,7 +139,6 @@ cleanup() {
 trap cleanup EXIT
 
 SOURCE_SIZE_MB=$(du -sk "$SOURCE_DIR" | awk '{ printf "%d", ($1 / 1024) + 80 }')
-mkdir -p "$MOUNT_POINT"
 rm -f "$OUTPUT_DMG"
 
 if logo_source="$(resolve_image_source "$BRAND_LOGO_SOURCE")"; then
@@ -167,12 +168,20 @@ hdiutil create \
   -ov \
   "$RW_DMG" >/dev/null
 
-hdiutil attach \
-  -readwrite \
-  -noverify \
-  -noautoopen \
-  -mountpoint "$MOUNT_POINT" \
-  "$RW_DMG" >/dev/null
+attach_output="$(
+  hdiutil attach \
+    -readwrite \
+    -noverify \
+    -noautoopen \
+    -nobrowse \
+    "$RW_DMG"
+)"
+MOUNT_POINT="$(printf '%s\n' "$attach_output" | awk '/\/Volumes\// { sub(/^.*\/Volumes\//, "/Volumes/"); print; exit }')"
+if [[ -z "$MOUNT_POINT" || ! -d "$MOUNT_POINT" ]]; then
+  echo "ERROR: Unable to determine mounted DMG path" >&2
+  exit 1
+fi
+FINDER_VOLUME_NAME="$(basename "$MOUNT_POINT")"
 ATTACHED=1
 
 mkdir -p "$MOUNT_POINT/.background"
@@ -185,42 +194,97 @@ if [[ -f "$ICON_RESOURCE_PATH" ]]; then
   xcrun SetFile -a C "$MOUNT_POINT"
 fi
 
-if osascript <<EOF
-tell application "Finder"
-  repeat 20 times
-    if exists disk "$VOLNAME" then exit repeat
-    delay 0.5
-  end repeat
+if osascript - "$FINDER_VOLUME_NAME" "$WINDOW_WIDTH" "$WINDOW_HEIGHT" "$ICON_SIZE" "$APP_NAME" "$APP_X" "$APP_Y" "$APPLICATIONS_X" "$APPLICATIONS_Y" <<'EOF'
+on run argv
+  set volumeName to item 1 of argv
+  set windowWidth to (item 2 of argv) as integer
+  set windowHeight to (item 3 of argv) as integer
+  set iconSize to (item 4 of argv) as integer
+  set appName to item 5 of argv
+  set appX to (item 6 of argv) as integer
+  set appY to (item 7 of argv) as integer
+  set applicationsX to (item 8 of argv) as integer
+  set applicationsY to (item 9 of argv) as integer
+  set windowOriginX to 120
+  set windowOriginY to 120
+  set windowRightX to windowOriginX + windowWidth
+  set windowBottomY to windowOriginY + windowHeight
+  set dsStorePath to "/Volumes/" & volumeName & "/.DS_Store"
 
-  if not (exists disk "$VOLNAME") then error "Disk $VOLNAME not visible in Finder"
+  tell application "Finder"
+    repeat 20 times
+      if exists disk volumeName then exit repeat
+      delay 0.5
+    end repeat
 
-  tell disk "$VOLNAME"
-    open
+    if not (exists disk volumeName) then error "Disk " & volumeName & " not visible in Finder"
+
+    tell disk volumeName
+      open
+
+      tell container window
+        set current view to icon view
+        try
+          set toolbar visible to false
+        end try
+        try
+          set statusbar visible to false
+        end try
+        set bounds to {windowOriginX, windowOriginY, windowRightX, windowBottomY}
+      end tell
+
+      set viewOptions to the icon view options of container window
+      tell viewOptions
+        set arrangement to not arranged
+        set icon size to iconSize
+        set text size to 13
+      end tell
+      set background picture of viewOptions to file ".background:background.png"
+
+      try
+        set position of item appName to {appX, appY}
+      end try
+      try
+        set position of item "Applications" to {applicationsX, applicationsY}
+      end try
+
+      close
+      open
+      update without registering applications
+      delay 1
+
+      tell container window
+        try
+          set statusbar visible to false
+        end try
+        set bounds to {windowOriginX, windowOriginY, windowRightX - 10, windowBottomY - 10}
+      end tell
+    end tell
+
     delay 1
-    set current view of container window to icon view
-    try
-      set toolbar visible of container window to false
-    end try
-    try
-      set statusbar visible of container window to false
-    end try
-    set bounds of container window to {120, 120, 120 + $WINDOW_WIDTH, 120 + $WINDOW_HEIGHT}
-    set theViewOptions to the icon view options of container window
-    set arrangement of theViewOptions to not arranged
-    set icon size of theViewOptions to $ICON_SIZE
-    set text size of theViewOptions to 13
-    set background picture of theViewOptions to POSIX file "$MOUNT_POINT/.background/background.png" as alias
-    set position of item "$APP_NAME" of container window to {$APP_X, $APP_Y}
-    set position of item "Applications" of container window to {$APPLICATIONS_X, $APPLICATIONS_Y}
-    close
-    open
-    update without registering applications
-    delay 2
+
+    tell disk volumeName
+      tell container window
+        try
+          set statusbar visible to false
+        end try
+        set bounds to {windowOriginX, windowOriginY, windowRightX, windowBottomY}
+      end tell
+    end tell
+
+    repeat 40 times
+      if (do shell script "[ -s " & quoted form of dsStorePath & " ] && echo ready || echo waiting") is "ready" then exit repeat
+      delay 0.5
+    end repeat
   end tell
-end tell
+end run
 EOF
 then
-  LAYOUT_READY=1
+  if [[ -s "$MOUNT_POINT/.DS_Store" ]]; then
+    LAYOUT_READY=1
+  else
+    echo "warning: Finder customization finished but .DS_Store was not written; falling back to a plain DMG layout" >&2
+  fi
 else
   echo "warning: Finder customization failed; falling back to a plain DMG layout" >&2
 fi
@@ -244,5 +308,9 @@ fi
 if [[ "$LAYOUT_READY" -eq 1 ]]; then
   echo "Styled DMG created at $OUTPUT_DMG"
 else
+  if [[ "$FAIL_ON_PLAIN" = "1" ]]; then
+    echo "ERROR: DMG styling did not persist; refusing to ship a plain DMG" >&2
+    exit 1
+  fi
   echo "DMG created without Finder styling at $OUTPUT_DMG"
 fi

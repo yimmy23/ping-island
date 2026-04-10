@@ -177,6 +177,7 @@ echo "=== Packaging Signed Ping Island ==="
 echo ""
 
 export PING_ISLAND_BUILD_DIR="$BUILD_DIR"
+export PING_ISLAND_DMG_FAIL_ON_PLAIN=1
 "$SCRIPT_DIR/build.sh"
 
 if [ ! -d "$APP_PATH" ]; then
