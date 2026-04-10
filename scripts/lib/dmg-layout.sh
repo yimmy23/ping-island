@@ -19,7 +19,8 @@ create_styled_dmg() {
     local icon_y="${PING_ISLAND_DMG_ICON_Y:-245}"
     local temp_dmg="${dmg_path%.dmg}-temp.dmg"
     local compressed_stem="${dmg_path%.dmg}"
-    local mount_dir="$staging_dir/.mount"
+    local mount_info="$staging_dir/.mount.plist"
+    local mount_dir=""
     local window_right=$((window_left + background_width))
     local window_bottom=$((window_top + background_height))
     local app_name
@@ -61,14 +62,33 @@ create_styled_dmg() {
         "$temp_dmg" \
         >/dev/null
 
-    mkdir -p "$mount_dir"
     hdiutil attach \
         -readwrite \
         -noverify \
         -noautoopen \
-        -mountpoint "$mount_dir" \
+        -plist \
         "$temp_dmg" \
-        >/dev/null
+        > "$mount_info"
+
+    mount_dir="$(python3 - <<'PY' "$mount_info"
+import plistlib
+import sys
+
+with open(sys.argv[1], "rb") as handle:
+    payload = plistlib.load(handle)
+
+for entity in payload.get("system-entities", []):
+    mount_point = entity.get("mount-point")
+    if mount_point:
+        print(mount_point)
+        break
+PY
+)"
+
+    if [ -z "$mount_dir" ]; then
+        echo "ERROR: Failed to determine DMG mount point"
+        return 1
+    fi
 
     touch "$mount_dir/.DS_Store"
 
@@ -115,7 +135,7 @@ EOF
         return 1
     fi
 
-    rm -rf "$mount_dir"
+    rm -f "$mount_info"
 
     hdiutil convert \
         "$temp_dmg" \
@@ -126,5 +146,6 @@ EOF
         >/dev/null
 
     rm -f "$temp_dmg"
+    rm -f "$mount_info"
     rm -rf "$staging_dir"
 }
