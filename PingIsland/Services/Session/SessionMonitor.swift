@@ -575,6 +575,7 @@ class SessionMonitor: ObservableObject {
     }
 
     nonisolated static func shouldWatchTranscript(for event: HookEvent, phase: SessionPhase) -> Bool {
+        guard event.ingress != .remoteBridge else { return false }
         switch event.provider {
         case .claude:
             return phase == .processing
@@ -592,6 +593,7 @@ class SessionMonitor: ObservableObject {
     }
 
     nonisolated static func shouldStopWatchingTranscript(for event: HookEvent) -> Bool {
+        guard event.ingress != .remoteBridge else { return true }
         switch event.provider {
         case .claude:
             return event.status == "ended"

@@ -14,7 +14,7 @@ enum RemoteEndpointAuthMode: String, Codable, CaseIterable, Identifiable, Sendab
         case .publicKey:
             return "公钥 / SSH Agent"
         case .passwordSession:
-            return "密码（仅本次会话）"
+            return "密码认证"
         }
     }
 }

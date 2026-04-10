@@ -380,6 +380,7 @@ private struct SettingsPanelContentView: View {
     @State private var pendingHookReinstallProfile: ManagedHookClientProfile?
     @State private var showingCustomHookInstallSheet = false
     @State private var showingRemoteHostSheet = false
+    @State private var remotePasswordPromptEndpoint: RemoteEndpoint?
 
     var body: some View {
         ZStack {
@@ -451,6 +452,14 @@ private struct SettingsPanelContentView: View {
         .sheet(isPresented: $showingRemoteHostSheet) {
             AddRemoteHostSheet(remoteManager: remoteManager) {
                 showingRemoteHostSheet = false
+            }
+        }
+        .sheet(item: $remotePasswordPromptEndpoint) { endpoint in
+            RemotePasswordPromptSheet(endpoint: endpoint) { password in
+                remotePasswordPromptEndpoint = nil
+                remoteManager.connect(endpointID: endpoint.id, password: password)
+            } onDismiss: {
+                remotePasswordPromptEndpoint = nil
             }
         }
     }
@@ -1211,8 +1220,12 @@ private struct SettingsPanelContentView: View {
                         RemoteHostManagementLine(
                             endpoint: endpoint,
                             runtimeState: remoteManager.runtimeStates[endpoint.id] ?? RemoteEndpointRuntimeState(),
+                            hasReusablePassword: remoteManager.hasReusablePassword(for: endpoint.id),
                             connectAction: { password in
                                 remoteManager.connect(endpointID: endpoint.id, password: password)
+                            },
+                            requestPasswordAction: {
+                                remotePasswordPromptEndpoint = endpoint
                             },
                             disconnectAction: { remoteManager.disconnect(endpointID: endpoint.id) },
                             removeAction: { remoteManager.removeEndpoint(id: endpoint.id) }
@@ -1250,7 +1263,7 @@ private struct SettingsPanelContentView: View {
                 SettingsLineDivider()
                 SettingsValueLine(title: "首连能力", value: AppLocalization.string("检测 + 安装 bridge + 改写 Claude hooks"))
                 SettingsLineDivider()
-                SettingsValueLine(title: "密码模式", value: AppLocalization.string("仅保留在当前 app 会话内，不落盘"))
+                SettingsValueLine(title: "密码模式", value: AppLocalization.string("连接成功后可直接重连；连接失败后需要重新输入"))
             }
         }
     }
@@ -2034,11 +2047,11 @@ private struct HookManagementIcon: View {
 private struct RemoteHostManagementLine: View {
     let endpoint: RemoteEndpoint
     let runtimeState: RemoteEndpointRuntimeState
+    let hasReusablePassword: Bool
     let connectAction: (String?) -> Void
+    let requestPasswordAction: () -> Void
     let disconnectAction: () -> Void
     let removeAction: () -> Void
-
-    @State private var showingPasswordSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2089,11 +2102,13 @@ private struct RemoteHostManagementLine: View {
                     HookManagementButton(title: "断开", tint: TerminalColors.amber, action: disconnectAction)
                 } else {
                     HookManagementButton(
-                        title: endpoint.authMode == .passwordSession ? "输入密码并连接" : "连接",
-                        tint: TerminalColors.blue
+                        title: connectButtonTitle,
+                        tint: TerminalColors.blue,
+                        isLoading: isConnecting,
+                        isDisabled: isConnecting
                     ) {
-                        if endpoint.authMode == .passwordSession {
-                            showingPasswordSheet = true
+                        if shouldPromptForPassword {
+                            requestPasswordAction()
                         } else {
                             connectAction(nil)
                         }
@@ -2113,14 +2128,6 @@ private struct RemoteHostManagementLine: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .sheet(isPresented: $showingPasswordSheet) {
-            RemotePasswordPromptSheet(endpoint: endpoint) { password in
-                showingPasswordSheet = false
-                connectAction(password)
-            } onDismiss: {
-                showingPasswordSheet = false
-            }
-        }
     }
 
     private var detailText: String {
@@ -2128,11 +2135,41 @@ private struct RemoteHostManagementLine: View {
         if let detectedHostname = endpoint.detectedHostname, !detectedHostname.isEmpty {
             parts.append(detectedHostname)
         }
-        parts.append(AppLocalization.string(endpoint.authMode.titleKey))
+        parts.append(AppLocalization.string(authenticationDetail))
         if let agentVersion = runtimeState.agentVersion ?? endpoint.agentVersion {
             parts.append("Agent \(agentVersion)")
         }
         return parts.map { AppLocalization.string($0) }.joined(separator: " · ")
+    }
+
+    private var shouldPromptForPassword: Bool {
+        runtimeState.requiresPassword || (endpoint.authMode == .passwordSession && !hasReusablePassword)
+    }
+
+    private var isConnecting: Bool {
+        switch runtimeState.phase {
+        case .probing, .bootstrapping, .connecting:
+            return true
+        case .disconnected, .connected, .degraded, .failed:
+            return false
+        }
+    }
+
+    private var connectButtonTitle: String {
+        if isConnecting {
+            return "连接中"
+        }
+
+        return shouldPromptForPassword ? "输入密码并连接" : "连接"
+    }
+
+    private var authenticationDetail: String {
+        switch endpoint.authMode {
+        case .passwordSession:
+            return hasReusablePassword ? "密码已保存" : "需要重新输入密码"
+        default:
+            return endpoint.authMode.titleKey
+        }
     }
 
     private var statusTint: Color {
@@ -2176,7 +2213,7 @@ private struct AddRemoteHostSheet: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white.opacity(0.7))
 
-                    SecureField("", text: $password, prompt: Text(appLocalized: "仅用于本次连接，不会保存到磁盘"))
+                    SecureField("", text: $password, prompt: Text(appLocalized: "连接成功后后续可直接重连"))
                         .textFieldStyle(.plain)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white)

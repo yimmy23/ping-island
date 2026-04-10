@@ -366,6 +366,7 @@ extension HookEvent {
 
     /// Whether this event should trigger a file sync
     nonisolated var shouldSyncFile: Bool {
+        guard ingress != .remoteBridge else { return false }
         guard provider == .claude else { return false }
 
         switch event {

@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import os.log
+import Security
 
 @MainActor
 final class RemoteConnectorManager: ObservableObject {
@@ -20,6 +21,7 @@ final class RemoteConnectorManager: ObservableObject {
     private var ephemeralPasswords: [UUID: String] = [:]
     private var hasStarted = false
     private let assetResolver = RemoteBridgeAssetResolver()
+    private let credentialStore = RemoteEndpointCredentialStore()
 
     private init() {
         loadPersistedEndpoints()
@@ -66,6 +68,7 @@ final class RemoteConnectorManager: ObservableObject {
         endpoints.removeAll { $0.id == id }
         runtimeStates.removeValue(forKey: id)
         ephemeralPasswords.removeValue(forKey: id)
+        credentialStore.deletePassword(for: id)
         pendingRequests = pendingRequests.filter { _, value in
             value.endpointID != id
         }
@@ -75,11 +78,10 @@ final class RemoteConnectorManager: ObservableObject {
     func connect(endpointID: UUID, password: String?, forceBootstrap: Bool = true) {
         guard let endpoint = endpoint(for: endpointID) else { return }
 
-        if let password, !password.isEmpty {
-            ephemeralPasswords[endpointID] = password
-        }
-
-        let effectivePassword = ephemeralPasswords[endpointID]
+        let trimmedPassword = password?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let requestedPassword = trimmedPassword?.isEmpty == false ? trimmedPassword : nil
+        let credential = resolvedCredential(for: endpointID, requestedPassword: requestedPassword)
+        let effectivePassword = credential.password
         logger.notice(
             "Remote connect requested endpoint=\(endpoint.id.uuidString, privacy: .public) title=\(endpoint.resolvedTitle, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) authMode=\(endpoint.authMode.rawValue, privacy: .public) forceBootstrap=\(forceBootstrap, privacy: .public) hasPassword=\(effectivePassword != nil, privacy: .public)"
         )
@@ -128,8 +130,18 @@ final class RemoteConnectorManager: ObservableObject {
 
                 stage = "attach"
                 try await attach(endpointID: endpointID, password: effectivePassword)
+                await MainActor.run {
+                    self.persistCredentialAfterSuccessfulConnection(
+                        endpointID: endpointID,
+                        password: effectivePassword
+                    )
+                }
             } catch {
                 await MainActor.run {
+                    self.handleConnectionFailure(
+                        endpointID: endpointID,
+                        credentialSource: credential.source
+                    )
                     self.logger.error(
                         "Remote connect failed endpoint=\(endpoint.id.uuidString, privacy: .public) title=\(endpoint.resolvedTitle, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) stage=\(stage, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
                     )
@@ -138,7 +150,10 @@ final class RemoteConnectorManager: ObservableObject {
                         phase: .failed,
                         detail: "远程连接失败",
                         lastError: error.localizedDescription,
-                        requiresPassword: effectivePassword == nil && endpoint.authMode == .passwordSession
+                        requiresPassword: shouldRequirePasswordAfterConnectionFailure(
+                            endpointID: endpointID,
+                            credentialSource: credential.source
+                        )
                     )
                 }
             }
@@ -479,6 +494,14 @@ final class RemoteConnectorManager: ObservableObject {
         persistEndpoints()
     }
 
+    func hasReusablePassword(for endpointID: UUID) -> Bool {
+        if let password = ephemeralPasswords[endpointID], !password.isEmpty {
+            return true
+        }
+
+        return credentialStore.hasPassword(for: endpointID)
+    }
+
     private func setState(
         for endpointID: UUID,
         phase: RemoteEndpointConnectionPhase,
@@ -512,6 +535,73 @@ final class RemoteConnectorManager: ObservableObject {
     private func persistEndpoints() {
         guard let data = try? JSONEncoder().encode(endpoints) else { return }
         defaults.set(data, forKey: persistenceKey)
+    }
+
+    private func resolvedCredential(
+        for endpointID: UUID,
+        requestedPassword: String?
+    ) -> RemoteEndpointCredential {
+        if let requestedPassword {
+            ephemeralPasswords[endpointID] = requestedPassword
+            return RemoteEndpointCredential(password: requestedPassword, source: .userInput)
+        }
+
+        if let password = ephemeralPasswords[endpointID], !password.isEmpty {
+            return RemoteEndpointCredential(password: password, source: .memory)
+        }
+
+        if let password = credentialStore.password(for: endpointID) {
+            return RemoteEndpointCredential(password: password, source: .keychain)
+        }
+
+        return RemoteEndpointCredential(password: nil, source: .none)
+    }
+
+    private func persistCredentialAfterSuccessfulConnection(endpointID: UUID, password: String?) {
+        guard let endpoint = endpoint(for: endpointID) else { return }
+
+        if endpoint.authMode == .passwordSession, let password, !password.isEmpty {
+            if credentialStore.savePassword(password, for: endpoint) {
+                ephemeralPasswords.removeValue(forKey: endpointID)
+            }
+            objectWillChange.send()
+            return
+        }
+
+        ephemeralPasswords.removeValue(forKey: endpointID)
+        credentialStore.deletePassword(for: endpointID)
+        objectWillChange.send()
+    }
+
+    private func handleConnectionFailure(
+        endpointID: UUID,
+        credentialSource: RemoteEndpointCredentialSource
+    ) {
+        if credentialSource != .none {
+            ephemeralPasswords.removeValue(forKey: endpointID)
+        }
+
+        if credentialSource == .keychain || endpoint(for: endpointID)?.authMode == .passwordSession {
+            credentialStore.deletePassword(for: endpointID)
+        }
+
+        if var endpoint = endpoint(for: endpointID), endpoint.authMode == .unknown, credentialSource != .none {
+            endpoint.authMode = .passwordSession
+            updateEndpoint(endpoint)
+        }
+
+        objectWillChange.send()
+    }
+
+    private func shouldRequirePasswordAfterConnectionFailure(
+        endpointID: UUID,
+        credentialSource: RemoteEndpointCredentialSource
+    ) -> Bool {
+        if credentialSource != .none {
+            return true
+        }
+
+        return endpoint(for: endpointID)?.authMode == .passwordSession
     }
 
     private func resolvedRemotePath(_ path: String, homeDirectory: String) -> String {
@@ -611,6 +701,76 @@ private struct PendingRemoteRequest {
     let sessionID: String
 }
 
+private struct RemoteEndpointCredential {
+    let password: String?
+    let source: RemoteEndpointCredentialSource
+}
+
+private enum RemoteEndpointCredentialSource {
+    case none
+    case userInput
+    case memory
+    case keychain
+}
+
+private struct RemoteEndpointCredentialStore {
+    private let service = "com.wudanwu.pingisland.remote-host-password"
+
+    func hasPassword(for endpointID: UUID) -> Bool {
+        password(for: endpointID) != nil
+    }
+
+    func password(for endpointID: UUID) -> String? {
+        var query = baseQuery(for: endpointID)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess,
+              let data = item as? Data,
+              let password = String(data: data, encoding: .utf8),
+              !password.isEmpty else {
+            return nil
+        }
+
+        return password
+    }
+
+    @discardableResult
+    func savePassword(_ password: String, for endpoint: RemoteEndpoint) -> Bool {
+        let passwordData = Data(password.utf8)
+        let query = baseQuery(for: endpoint.id)
+        let attributesToUpdate: [String: Any] = [
+            kSecValueData as String: passwordData
+        ]
+
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributesToUpdate as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return true
+        }
+
+        var addQuery = query
+        addQuery[kSecValueData as String] = passwordData
+        addQuery[kSecAttrLabel as String] = endpoint.resolvedTitle
+        addQuery[kSecAttrComment as String] = endpoint.sshTarget
+        return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+    }
+
+    func deletePassword(for endpointID: UUID) {
+        let query = baseQuery(for: endpointID)
+        SecItemDelete(query as CFDictionary)
+    }
+
+    private func baseQuery(for endpointID: UUID) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: endpointID.uuidString
+        ]
+    }
+}
+
 private enum RemoteConnectorError: LocalizedError {
     case localBridgeBinaryMissing
     case missingClaudeHookProfile
@@ -644,10 +804,10 @@ private final class RemoteAttachConnector {
     private let password: String?
     private let onMessage: @Sendable (RemoteInboundMessage) async -> Void
     private let onDisconnect: @Sendable (Error?) -> Void
+    private let readQueue = DispatchQueue(label: "com.wudanwu.pingisland.remote-attach", qos: .userInitiated)
 
     private var process: Process?
     private var stdinHandle: FileHandle?
-    private var readTask: Task<Void, Never>?
     private let disconnectLock = NSLock()
     private var didFinishDisconnect = false
 
@@ -683,8 +843,9 @@ private final class RemoteAttachConnector {
         )
         self.process = process
         self.stdinHandle = stdinPipe.fileHandleForWriting
-        self.readTask = Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.readLoop(handle: stdoutPipe.fileHandleForReading)
+        let stdoutHandle = stdoutPipe.fileHandleForReading
+        readQueue.async { [weak self] in
+            self?.readLoop(handle: stdoutHandle)
         }
         process.terminationHandler = { [weak self] process in
             let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
@@ -717,7 +878,6 @@ private final class RemoteAttachConnector {
     }
 
     func stop() {
-        readTask?.cancel()
         if let process, process.isRunning {
             process.terminate()
         }
@@ -741,11 +901,11 @@ private final class RemoteAttachConnector {
         try stdinHandle?.write(contentsOf: data)
     }
 
-    private func readLoop(handle: FileHandle) async {
+    private func readLoop(handle: FileHandle) {
         var buffer = Data()
 
         do {
-            while !Task.isCancelled {
+            while true {
                 let chunk = try handle.read(upToCount: 4096) ?? Data()
                 if chunk.isEmpty { break }
 
@@ -756,7 +916,9 @@ private final class RemoteAttachConnector {
                     guard !line.isEmpty else { continue }
                     do {
                         let message = try JSONDecoder().decode(RemoteInboundMessage.self, from: line)
-                        await onMessage(message)
+                        Task {
+                            await self.onMessage(message)
+                        }
                     } catch {
                         Self.logger.error(
                             "Remote attach decode failed endpoint=\(self.endpoint.id.uuidString, privacy: .public) payload=\(Self.excerpt(String(decoding: line, as: UTF8.self)), privacy: .public) error=\(error.localizedDescription, privacy: .public)"

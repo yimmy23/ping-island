@@ -1550,6 +1550,7 @@ actor SessionStore {
     func requestFileSync(for sessionId: String) {
         let resolvedSessionId = resolveCodexSessionAlias(sessionId)
         guard let session = sessions[resolvedSessionId] else { return }
+        guard session.ingress != .remoteBridge else { return }
 
         if session.provider == .codex {
             scheduleCodexRolloutSync(
