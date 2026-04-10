@@ -11,6 +11,7 @@ RELEASE_DIR="${PING_ISLAND_RELEASE_DIR:-$PROJECT_DIR/releases/signed}"
 NOTES_DIR="$PROJECT_DIR/releases/notes"
 KEYS_DIR="$PROJECT_DIR/.sparkle-keys"
 STAGING_DIR="$BUILD_DIR/dmg-staging"
+DMG_HELPER="$SCRIPT_DIR/create-styled-dmg.sh"
 
 APP_BUNDLE_NAME="Ping Island.app"
 APP_PRODUCT_NAME="PingIsland"
@@ -167,6 +168,7 @@ require_command ditto
 require_command hdiutil
 require_command codesign
 require_command spctl
+require_command swift
 
 resolve_notary_credentials
 
@@ -216,12 +218,11 @@ mkdir -p "$STAGING_DIR"
 cp -R "$APP_PATH" "$STAGING_DIR/"
 ln -s /Applications "$STAGING_DIR/Applications"
 
-hdiutil create \
-    -volname "Ping Island" \
-    -srcfolder "$STAGING_DIR" \
-    -ov \
-    -format UDZO \
-    "$DMG_PATH"
+"$DMG_HELPER" \
+    --volname "Ping Island" \
+    --source "$STAGING_DIR" \
+    --output "$DMG_PATH" \
+    --app-name "$APP_BUNDLE_NAME"
 
 rm -rf "$STAGING_DIR"
 

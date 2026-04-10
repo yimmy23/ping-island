@@ -8,6 +8,8 @@ The repo ships `.github/workflows/release-packages.yml` for GitHub-hosted releas
 - It imports your `Developer ID Application` certificate into a temporary keychain.
 - It archives and exports the app through `./scripts/package-release.sh`.
 - It notarizes the exported app bundle, staples it, then creates signed `.zip` and `.dmg` artifacts.
+  - Use the `.dmg` as the primary manual-install artifact.
+  - Keep the `.zip` available for update/distribution workflows that still expect it.
 - It publishes those assets to the matching GitHub Release for a `v*` tag.
 - It is safe to rerun after a partially failed publish; the workflow reuses the existing tag release, re-uploads assets with `--clobber`, and then updates the final draft / prerelease state.
 

@@ -83,7 +83,7 @@ The mascot GIFs used throughout this README are generated from the live `MascotV
 ### Download a Release
 
 1. Go to [Releases](https://github.com/erha19/ping-island/releases).
-2. Download the latest DMG or zip package.
+2. Download the latest DMG.
 3. Move `Ping Island.app` into your Applications folder.
 4. Launch the app and start the clients you want Ping Island to monitor.
 

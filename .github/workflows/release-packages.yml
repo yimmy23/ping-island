@@ -261,7 +261,7 @@ jobs:
             cp "${{ steps.meta.outputs.notes_path }}" "$notes_file"
             printf '\n\n%s\n' "$release_block" >> "$notes_file"
           else
-            printf 'Release build for %s.\n\nIncluded assets:\n- %s\n- %s\n- %s\n\n%s\n' \
+            printf 'Release build for %s.\n\nIncluded assets:\n- %s (recommended for manual install)\n- %s (kept for update/distribution workflows)\n- %s\n\n%s\n' \
               "$RELEASE_TAG" \
               "$(basename "${{ steps.meta.outputs.dmg_path }}")" \
               "$(basename "${{ steps.meta.outputs.zip_path }}")" \

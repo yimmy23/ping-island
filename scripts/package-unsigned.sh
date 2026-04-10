@@ -8,6 +8,7 @@ BUILD_DIR="$PROJECT_DIR/build/unsigned"
 DERIVED_DATA_PATH="$BUILD_DIR/DerivedData"
 STAGING_DIR="$BUILD_DIR/dmg-staging"
 RELEASE_DIR="$PROJECT_DIR/releases/unsigned"
+DMG_HELPER="$SCRIPT_DIR/create-styled-dmg.sh"
 
 APP_BUNDLE_NAME="Ping Island.app"
 APP_PRODUCT_NAME="PingIsland"
@@ -86,12 +87,11 @@ cp -R "$APP_PATH" "$STAGING_DIR/"
 ln -s /Applications "$STAGING_DIR/Applications"
 
 echo "Creating DMG..."
-hdiutil create \
-    -volname "Ping Island" \
-    -srcfolder "$STAGING_DIR" \
-    -ov \
-    -format UDZO \
-    "$DMG_PATH"
+"$DMG_HELPER" \
+    --volname "Ping Island" \
+    --source "$STAGING_DIR" \
+    --output "$DMG_PATH" \
+    --app-name "$APP_BUNDLE_NAME"
 
 rm -rf "$STAGING_DIR"
 
