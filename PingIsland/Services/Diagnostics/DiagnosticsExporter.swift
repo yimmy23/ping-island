@@ -244,6 +244,9 @@ actor DiagnosticsExporter {
 
         let sessionSnapshots = await SessionStore.shared.diagnosticsSnapshot()
         let codexThreadSnapshots = await CodexAppServerMonitor.shared.diagnosticsSnapshot()
+        let remoteEndpointSnapshots = await MainActor.run {
+            RemoteConnectorManager.shared.diagnosticsSnapshot()
+        }
 
         let sessionsURL = rootURL.appendingPathComponent("state/live-sessions.json")
         try fileManager.createDirectory(at: sessionsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -252,6 +255,10 @@ actor DiagnosticsExporter {
         let codexThreadsURL = rootURL.appendingPathComponent("state/codex-thread-list.json")
         try fileManager.createDirectory(at: codexThreadsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try encoder.encode(codexThreadSnapshots).write(to: codexThreadsURL, options: .atomic)
+
+        let remoteEndpointsURL = rootURL.appendingPathComponent("state/remote-endpoints.json")
+        try fileManager.createDirectory(at: remoteEndpointsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try encoder.encode(remoteEndpointSnapshots).write(to: remoteEndpointsURL, options: .atomic)
     }
 
     private func writeUnifiedLogs(to destinationURL: URL) async throws {

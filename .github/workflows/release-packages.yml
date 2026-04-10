@@ -47,7 +47,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          swift build --package-path Prototype -c release --product PingIslandBridge
+          swift build --package-path Prototype -c release --static-swift-stdlib --product PingIslandBridge
+
+          if ldd Prototype/.build/release/PingIslandBridge | grep -q 'libswift'; then
+            echo "::error::Linux PingIslandBridge still depends on Swift runtime shared libraries"
+            ldd Prototype/.build/release/PingIslandBridge
+            exit 1
+          fi
 
           mkdir -p releases/unsigned
           cp Prototype/.build/release/PingIslandBridge releases/unsigned/PingIslandBridge-linux-x86_64
@@ -56,7 +62,7 @@ jobs:
       - name: Upload Linux bridge artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PingIsland-linux-bridge
+          name: PingIslandBridge-linux-x86_64
           path: releases/unsigned/PingIslandBridge-linux-x86_64
           if-no-files-found: error
 
@@ -177,7 +183,7 @@ jobs:
       - name: Download Linux bridge artifact
         uses: actions/download-artifact@v4
         with:
-          name: PingIsland-linux-bridge
+          name: PingIslandBridge-linux-x86_64
           path: releases/bridge
 
       - name: Collect release metadata
@@ -238,14 +244,18 @@ jobs:
             echo "release_title=Ping Island $RELEASE_TAG"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Upload packaged artifacts
+      - name: Upload packaged DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PingIsland-${{ steps.meta.outputs.version }}-${{ steps.meta.outputs.build }}-release-packages
-          path: |
-            ${{ steps.meta.outputs.dmg_path }}
-            ${{ steps.meta.outputs.zip_path }}
-            ${{ steps.meta.outputs.linux_bridge_path }}
+          name: PingIsland-${{ steps.meta.outputs.version }}-${{ steps.meta.outputs.build }}.dmg
+          path: ${{ steps.meta.outputs.dmg_path }}
+          if-no-files-found: error
+
+      - name: Upload packaged ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PingIsland-${{ steps.meta.outputs.version }}-${{ steps.meta.outputs.build }}.zip
+          path: ${{ steps.meta.outputs.zip_path }}
           if-no-files-found: error
 
       - name: Prepare release notes body

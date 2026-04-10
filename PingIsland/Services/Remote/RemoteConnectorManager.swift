@@ -80,6 +80,9 @@ final class RemoteConnectorManager: ObservableObject {
         }
 
         let effectivePassword = ephemeralPasswords[endpointID]
+        logger.notice(
+            "Remote connect requested endpoint=\(endpoint.id.uuidString, privacy: .public) title=\(endpoint.resolvedTitle, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) authMode=\(endpoint.authMode.rawValue, privacy: .public) forceBootstrap=\(forceBootstrap, privacy: .public) hasPassword=\(effectivePassword != nil, privacy: .public)"
+        )
         setState(
             for: endpointID,
             phase: .probing,
@@ -89,12 +92,16 @@ final class RemoteConnectorManager: ObservableObject {
         )
 
         Task {
+            var stage = "probe"
             do {
                 let probe = try await RemoteSSHCommandRunner.probe(
                     target: endpoint.sshTarget,
                     password: effectivePassword
                 )
                 await MainActor.run {
+                    self.logger.notice(
+                        "Remote probe succeeded endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) os=\(probe.operatingSystem, privacy: .public) arch=\(probe.architecture, privacy: .public) home=\(probe.homeDirectory, privacy: .public) hasClaude=\(probe.hasClaude, privacy: .public) hasTmux=\(probe.hasTmux, privacy: .public) fingerprintPresent=\(probe.fingerprint != nil, privacy: .public)"
+                    )
                     self.applyProbe(probe, to: endpointID, passwordWasUsed: effectivePassword != nil)
                     self.setState(
                         for: endpointID,
@@ -107,12 +114,25 @@ final class RemoteConnectorManager: ObservableObject {
                     )
                 }
 
-                try await bootstrapRemoteAgent(endpointID: endpointID, password: effectivePassword, probe: probe)
+                stage = forceBootstrap ? "bootstrap" : "bootstrap-if-needed"
+                if forceBootstrap {
+                    try await bootstrapRemoteAgent(endpointID: endpointID, password: effectivePassword, probe: probe)
+                } else {
+                    logger.notice(
+                        "Remote bootstrap skipped endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) reason=forceBootstrap_disabled"
+                    )
+                }
+
+                stage = "ensure-remote-agent"
                 try await ensureRemoteAgentRunning(endpointID: endpointID, password: effectivePassword)
+
+                stage = "attach"
                 try await attach(endpointID: endpointID, password: effectivePassword)
             } catch {
                 await MainActor.run {
-                    self.logger.error("Remote connect failed endpoint=\(endpoint.id.uuidString, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+                    self.logger.error(
+                        "Remote connect failed endpoint=\(endpoint.id.uuidString, privacy: .public) title=\(endpoint.resolvedTitle, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) stage=\(stage, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    )
                     self.setState(
                         for: endpointID,
                         phase: .failed,
@@ -187,6 +207,9 @@ final class RemoteConnectorManager: ObservableObject {
         guard let endpoint = endpoint(for: endpointID) else { return }
 
         connectors.removeValue(forKey: endpointID)?.stop()
+        logger.notice(
+            "Remote attach starting endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) controlSocket=\(endpoint.remoteControlSocketPath, privacy: .public)"
+        )
         setState(for: endpointID, phase: .connecting, detail: "正在建立远程转发通道…")
 
         let connector = RemoteAttachConnector(
@@ -205,11 +228,17 @@ final class RemoteConnectorManager: ObservableObject {
 
         try await connector.start()
         connectors[endpointID] = connector
+        logger.notice(
+            "Remote attach connected endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
+        )
     }
 
     private func handle(message: RemoteInboundMessage, endpointID: UUID) async {
         switch message {
         case .hello(let hello):
+            logger.notice(
+                "Remote daemon hello endpoint=\(endpointID.uuidString, privacy: .public) hostname=\(hello.hostname, privacy: .public) version=\(hello.version, privacy: .public)"
+            )
             if var currentEndpoint = endpoint(for: endpointID) {
                 currentEndpoint.agentVersion = hello.version
                 currentEndpoint.lastConnectedAt = Date()
@@ -274,6 +303,9 @@ final class RemoteConnectorManager: ObservableObject {
 
     private func handleDisconnect(endpointID: UUID, error: Error?) {
         connectors.removeValue(forKey: endpointID)
+        logger.error(
+            "Remote attach disconnected endpoint=\(endpointID.uuidString, privacy: .public) error=\(error?.localizedDescription ?? "none", privacy: .public)"
+        )
         setState(
             for: endpointID,
             phase: .degraded,
@@ -294,11 +326,17 @@ final class RemoteConnectorManager: ObservableObject {
         endpoint.remoteHookSocketPath = resolvedRemotePath(endpoint.remoteHookSocketPath, homeDirectory: probe.homeDirectory)
         endpoint.remoteControlSocketPath = resolvedRemotePath(endpoint.remoteControlSocketPath, homeDirectory: probe.homeDirectory)
         updateEndpoint(endpoint)
+        logger.debug(
+            "Remote probe applied endpoint=\(endpoint.id.uuidString, privacy: .public) installRoot=\(endpoint.remoteInstallRoot, privacy: .public) hookSocket=\(endpoint.remoteHookSocketPath, privacy: .public) controlSocket=\(endpoint.remoteControlSocketPath, privacy: .public)"
+        )
     }
 
     private func bootstrapRemoteAgent(endpointID: UUID, password: String?, probe: RemoteHostProbe) async throws {
         guard let endpoint = endpoint(for: endpointID) else { return }
         let bridgeBinaryURL = try await assetResolver.resolveBinaryURL(for: probe)
+        logger.notice(
+            "Remote bootstrap starting endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) binary=\(bridgeBinaryURL.path, privacy: .public) installRoot=\(endpoint.remoteInstallRoot, privacy: .public)"
+        )
         guard let claudeProfile = ClientProfileRegistry.managedHookProfile(id: "claude-hooks") else {
             throw RemoteConnectorError.missingClaudeHookProfile
         }
@@ -311,12 +349,18 @@ final class RemoteConnectorManager: ObservableObject {
             """,
             acceptNewHostKey: true
         )
+        logger.debug(
+            "Remote bootstrap prepared directories endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
+        )
 
         try await RemoteSSHCommandRunner.copyFile(
             localURL: bridgeBinaryURL,
             remoteTarget: endpoint.sshTarget,
             remotePath: "\(endpoint.remoteInstallRoot)/bin/PingIslandBridge",
             password: password
+        )
+        logger.debug(
+            "Remote bootstrap copied bridge endpoint=\(endpoint.id.uuidString, privacy: .public) remotePath=\("\(endpoint.remoteInstallRoot)/bin/PingIslandBridge", privacy: .public)"
         )
 
         let launcherScript = """
@@ -338,6 +382,9 @@ final class RemoteConnectorManager: ObservableObject {
             """,
             acceptNewHostKey: true
         )
+        logger.debug(
+            "Remote bootstrap wrote launcher endpoint=\(endpoint.id.uuidString, privacy: .public)"
+        )
 
         let existingConfig = try? await RemoteSSHCommandRunner.readRemoteFile(
             target: endpoint.sshTarget,
@@ -356,11 +403,17 @@ final class RemoteConnectorManager: ObservableObject {
             customCommand: remoteCommand,
             installing: true
         )
+        logger.debug(
+            "Remote bootstrap preparing hook config endpoint=\(endpoint.id.uuidString, privacy: .public) hasExistingConfig=\(existingConfig != nil, privacy: .public) updatedConfigBytes=\(updatedData.count, privacy: .public)"
+        )
         try await RemoteSSHCommandRunner.writeRemoteFile(
             target: endpoint.sshTarget,
             remotePath: "\(probe.homeDirectory)/.claude/settings.json",
             contents: updatedData,
             password: password
+        )
+        logger.notice(
+            "Remote bootstrap completed endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
         )
 
         if var refreshed = self.endpoint(for: endpointID) {
@@ -371,6 +424,9 @@ final class RemoteConnectorManager: ObservableObject {
 
     private func ensureRemoteAgentRunning(endpointID: UUID, password: String?) async throws {
         guard let endpoint = endpoint(for: endpointID) else { return }
+        logger.notice(
+            "Remote agent ensure/start endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) controlSocket=\(endpoint.remoteControlSocketPath, privacy: .public)"
+        )
         let command = """
         mkdir -p \(quoted(endpoint.remoteInstallRoot))/run \(quoted(endpoint.remoteInstallRoot))/logs
         if [ -S \(quoted(endpoint.remoteControlSocketPath)) ]; then
@@ -384,6 +440,9 @@ final class RemoteConnectorManager: ObservableObject {
             password: password,
             remoteCommand: command,
             acceptNewHostKey: true
+        )
+        logger.debug(
+            "Remote agent ensure/start completed endpoint=\(endpoint.id.uuidString, privacy: .public)"
         )
     }
 
@@ -439,6 +498,15 @@ final class RemoteConnectorManager: ObservableObject {
         return homeDirectory + "/" + path.dropFirst(2)
     }
 
+    func diagnosticsSnapshot() -> [RemoteEndpointDiagnosticsSnapshot] {
+        endpoints.map { endpoint in
+            RemoteEndpointDiagnosticsSnapshot(
+                endpoint: endpoint,
+                runtimeState: runtimeStates[endpoint.id] ?? RemoteEndpointRuntimeState(agentVersion: endpoint.agentVersion)
+            )
+        }
+    }
+
     private func quoted(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
     }
@@ -477,6 +545,8 @@ private enum RemoteConnectorError: LocalizedError {
 }
 
 private final class RemoteAttachConnector {
+    nonisolated private static let logger = Logger(subsystem: "com.wudanwu.pingisland", category: "Remote")
+
     private let endpoint: RemoteEndpoint
     private let password: String?
     private let onMessage: @Sendable (RemoteInboundMessage) async -> Void
@@ -485,6 +555,8 @@ private final class RemoteAttachConnector {
     private var process: Process?
     private var stdinHandle: FileHandle?
     private var readTask: Task<Void, Never>?
+    private let disconnectLock = NSLock()
+    private var didFinishDisconnect = false
 
     init(
         endpoint: RemoteEndpoint,
@@ -501,6 +573,7 @@ private final class RemoteAttachConnector {
     func start() async throws {
         let stdoutPipe = Pipe()
         let stdinPipe = Pipe()
+        let stderrPipe = Pipe()
         let process = try RemoteSSHCommandRunner.makeSSHProcess(
             target: endpoint.sshTarget,
             password: password,
@@ -508,17 +581,45 @@ private final class RemoteAttachConnector {
             acceptNewHostKey: true
         )
         process.standardOutput = stdoutPipe
-        process.standardError = Pipe()
+        process.standardError = stderrPipe
         process.standardInput = stdinPipe
 
         try process.run()
+        Self.logger.notice(
+            "Remote attach process launched endpoint=\(self.endpoint.id.uuidString, privacy: .public) target=\(self.endpoint.sshTarget, privacy: .public) pid=\(process.processIdentifier, privacy: .public)"
+        )
         self.process = process
         self.stdinHandle = stdinPipe.fileHandleForWriting
         self.readTask = Task.detached(priority: .userInitiated) { [weak self] in
             await self?.readLoop(handle: stdoutPipe.fileHandleForReading)
         }
         process.terminationHandler = { [weak self] process in
-            self?.onDisconnect(process.terminationStatus == 0 ? nil : RemoteConnectorError.sshFailure("SSH attach 已断开"))
+            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            let stderr = String(data: stderrData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let error: Error? = if process.terminationStatus == 0 {
+                nil
+            } else {
+                RemoteConnectorError.sshFailure(
+                    stderr.isEmpty ? "SSH attach 已断开" : "SSH attach 已断开: \(Self.excerpt(stderr))"
+                )
+            }
+
+            if process.terminationStatus == 0 {
+                Self.logger.notice(
+                    "Remote attach process exited cleanly endpoint=\(self?.endpoint.id.uuidString ?? "unknown", privacy: .public) status=\(process.terminationStatus, privacy: .public)"
+                )
+            } else {
+                Self.logger.error(
+                    "Remote attach process exited endpoint=\(self?.endpoint.id.uuidString ?? "unknown", privacy: .public) status=\(process.terminationStatus, privacy: .public) stderr=\(Self.excerpt(stderr), privacy: .public)"
+                )
+            }
+
+            if let self {
+                Task { @MainActor in
+                    self.finishDisconnect(error)
+                }
+            }
         }
     }
 
@@ -560,14 +661,38 @@ private final class RemoteAttachConnector {
                     let line = buffer.subdata(in: 0..<newlineRange.lowerBound)
                     buffer.removeSubrange(0...newlineRange.lowerBound)
                     guard !line.isEmpty else { continue }
-                    let message = try JSONDecoder().decode(RemoteInboundMessage.self, from: line)
-                    await onMessage(message)
+                    do {
+                        let message = try JSONDecoder().decode(RemoteInboundMessage.self, from: line)
+                        await onMessage(message)
+                    } catch {
+                        Self.logger.error(
+                            "Remote attach decode failed endpoint=\(self.endpoint.id.uuidString, privacy: .public) payload=\(Self.excerpt(String(decoding: line, as: UTF8.self)), privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                        )
+                        throw error
+                    }
                 }
             }
-            onDisconnect(nil)
+            finishDisconnect(nil)
         } catch {
-            onDisconnect(error)
+            Self.logger.error(
+                "Remote attach read loop failed endpoint=\(self.endpoint.id.uuidString, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
+            finishDisconnect(error)
         }
+    }
+
+    private func finishDisconnect(_ error: Error?) {
+        disconnectLock.lock()
+        defer { disconnectLock.unlock() }
+        guard !didFinishDisconnect else { return }
+        didFinishDisconnect = true
+        onDisconnect(error)
+    }
+
+    nonisolated private static func excerpt(_ value: String, limit: Int = 240) -> String {
+        let normalized = value.replacingOccurrences(of: "\n", with: "\\n")
+        guard normalized.count > limit else { return normalized }
+        return String(normalized.prefix(limit)) + "…"
     }
 
     private func shellQuote(_ value: String) -> String {
@@ -604,8 +729,13 @@ private struct SSHExecutionResult {
 }
 
 private enum RemoteSSHCommandRunner {
+    private static let logger = Logger(subsystem: "com.wudanwu.pingisland", category: "RemoteSSH")
+
     static func probe(target: String, password: String?) async throws -> RemoteHostProbe {
         let command = #"printf "%s\n" "$USER" "$HOSTNAME" "$HOME"; uname -s; uname -m; command -v claude >/dev/null 2>&1 && echo "__PING_ISLAND_HAS_CLAUDE__=1" || echo "__PING_ISLAND_HAS_CLAUDE__=0"; command -v tmux >/dev/null 2>&1 && echo "__PING_ISLAND_HAS_TMUX__=1" || echo "__PING_ISLAND_HAS_TMUX__=0""#
+        logger.notice(
+            "SSH probe starting target=\(target, privacy: .public) hasPassword=\(password != nil, privacy: .public)"
+        )
         let result = try await runSSH(
             target: target,
             password: password,
@@ -619,6 +749,9 @@ private enum RemoteSSHCommandRunner {
             throw RemoteConnectorError.sshFailure("远程主机返回的信息不完整")
         }
         let fingerprint = localKnownHostFingerprint(for: target)
+        logger.notice(
+            "SSH probe completed target=\(target, privacy: .public) username=\(lines[0], privacy: .public) hostname=\(lines[1], privacy: .public) os=\(lines[3], privacy: .public) arch=\(lines[4], privacy: .public)"
+        )
         return RemoteHostProbe(
             username: lines[0],
             hostname: lines[1],
@@ -652,6 +785,9 @@ private enum RemoteSSHCommandRunner {
     }
 
     static func copyFile(localURL: URL, remoteTarget: String, remotePath: String, password: String?) async throws {
+        logger.notice(
+            "SCP copy starting target=\(remoteTarget, privacy: .public) localPath=\(localURL.path, privacy: .public) remotePath=\(remotePath, privacy: .public) hasPassword=\(password != nil, privacy: .public)"
+        )
         let process = try makeSecureCopyProcess(
             localURL: localURL,
             remoteTarget: remoteTarget,
@@ -662,6 +798,9 @@ private enum RemoteSSHCommandRunner {
         guard result.exitCode == 0 else {
             throw RemoteConnectorError.sshFailure(result.stderr.isEmpty ? "SCP 复制失败" : result.stderr)
         }
+        logger.debug(
+            "SCP copy completed target=\(remoteTarget, privacy: .public) remotePath=\(remotePath, privacy: .public)"
+        )
     }
 
     static func runSSH(
@@ -671,6 +810,9 @@ private enum RemoteSSHCommandRunner {
         acceptNewHostKey: Bool,
         allowFailure: Bool = false
     ) async throws -> SSHExecutionResult {
+        logger.debug(
+            "SSH exec starting target=\(target, privacy: .public) hasPassword=\(password != nil, privacy: .public) acceptNewHostKey=\(acceptNewHostKey, privacy: .public) allowFailure=\(allowFailure, privacy: .public) command=\(excerpt(remoteCommand), privacy: .public)"
+        )
         let process = try makeSSHProcess(
             target: target,
             password: password,
@@ -678,6 +820,15 @@ private enum RemoteSSHCommandRunner {
             acceptNewHostKey: acceptNewHostKey
         )
         let result = try await run(process: process)
+        if result.exitCode == 0 {
+            logger.debug(
+                "SSH exec completed target=\(target, privacy: .public) exitCode=\(result.exitCode, privacy: .public) stdout=\(excerpt(result.stdout), privacy: .public) stderr=\(excerpt(result.stderr), privacy: .public)"
+            )
+        } else {
+            logger.error(
+                "SSH exec failed target=\(target, privacy: .public) exitCode=\(result.exitCode, privacy: .public) stdout=\(excerpt(result.stdout), privacy: .public) stderr=\(excerpt(result.stderr), privacy: .public)"
+            )
+        }
         guard allowFailure || result.exitCode == 0 else {
             let detail = result.stderr.isEmpty ? result.stdout : result.stderr
             throw RemoteConnectorError.sshFailure(detail.isEmpty ? "SSH 执行失败" : detail)
@@ -821,6 +972,12 @@ private enum RemoteSSHCommandRunner {
 
     private static func shellQuote(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
+    private static func excerpt(_ value: String, limit: Int = 240) -> String {
+        let normalized = value.replacingOccurrences(of: "\n", with: "\\n")
+        guard normalized.count > limit else { return normalized }
+        return String(normalized.prefix(limit)) + "…"
     }
 }
 

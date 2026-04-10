@@ -105,7 +105,7 @@ struct RemoteEndpoint: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
-struct RemoteEndpointRuntimeState: Equatable, Sendable {
+struct RemoteEndpointRuntimeState: Codable, Equatable, Sendable {
     var phase: RemoteEndpointConnectionPhase
     var detail: String
     var lastError: String?
@@ -125,6 +125,11 @@ struct RemoteEndpointRuntimeState: Equatable, Sendable {
         self.requiresPassword = requiresPassword
         self.agentVersion = agentVersion
     }
+}
+
+struct RemoteEndpointDiagnosticsSnapshot: Codable, Sendable {
+    let endpoint: RemoteEndpoint
+    let runtimeState: RemoteEndpointRuntimeState
 }
 
 struct RemoteHostProbe: Sendable {
