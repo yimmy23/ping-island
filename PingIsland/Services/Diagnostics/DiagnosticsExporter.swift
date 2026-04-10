@@ -5,6 +5,170 @@ struct DiagnosticsExportResult: Sendable {
     let warnings: [String]
 }
 
+struct DiagnosticsCommandResult: Sendable {
+    let output: String
+    let stderr: String?
+    let exitCode: Int32
+}
+
+enum DiagnosticsCommandError: Error, LocalizedError {
+    case executionFailed(executable: String, exitCode: Int32, stderr: String?)
+    case launchFailed(executable: String, underlying: Error)
+    case timedOut(executable: String, timeout: TimeInterval)
+
+    var errorDescription: String? {
+        switch self {
+        case .executionFailed(let executable, let exitCode, let stderr):
+            let stderrSuffix = stderr.flatMap { $0.isEmpty ? nil : $0 }.map { ": \($0)" } ?? ""
+            return "\(executable) exited with code \(exitCode)\(stderrSuffix)"
+        case .launchFailed(let executable, let underlying):
+            return "Failed to launch \(executable): \(underlying.localizedDescription)"
+        case .timedOut(let executable, let timeout):
+            return "\(executable) timed out after \(Int(timeout.rounded()))s"
+        }
+    }
+}
+
+enum DiagnosticsCommandRunner {
+    static func run(
+        executable: String,
+        arguments: [String],
+        timeout: TimeInterval? = nil
+    ) async throws -> DiagnosticsCommandResult {
+        try await withCheckedThrowingContinuation { continuation in
+            let process = Process()
+            let stdoutPipe = Pipe()
+            let stderrPipe = Pipe()
+            let state = DiagnosticsCommandState()
+
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = arguments
+            process.standardOutput = stdoutPipe
+            process.standardError = stderrPipe
+
+            stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                guard !data.isEmpty else {
+                    handle.readabilityHandler = nil
+                    return
+                }
+                state.appendStdout(data)
+            }
+
+            stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                guard !data.isEmpty else {
+                    handle.readabilityHandler = nil
+                    return
+                }
+                state.appendStderr(data)
+            }
+
+            func finish(_ result: Result<DiagnosticsCommandResult, DiagnosticsCommandError>) {
+                guard state.markFinished() else { return }
+                stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                stderrPipe.fileHandleForReading.readabilityHandler = nil
+
+                switch result {
+                case .success(let output):
+                    continuation.resume(returning: output)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+
+            do {
+                process.terminationHandler = { process in
+                    stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                    stderrPipe.fileHandleForReading.readabilityHandler = nil
+
+                    state.appendStdout(stdoutPipe.fileHandleForReading.readDataToEndOfFile())
+                    state.appendStderr(stderrPipe.fileHandleForReading.readDataToEndOfFile())
+
+                    let result = state.makeResult(exitCode: process.terminationStatus)
+                    if process.terminationStatus == 0 {
+                        finish(.success(result))
+                    } else {
+                        finish(.failure(.executionFailed(
+                            executable: executable,
+                            exitCode: process.terminationStatus,
+                            stderr: result.stderr
+                        )))
+                    }
+                }
+
+                try process.run()
+
+                if let timeout, timeout > 0 {
+                    let deadline = DispatchTime.now() + timeout
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: deadline) {
+                        guard !state.isFinished else { return }
+                        terminateDiagnosticsProcess(process)
+                        finish(.failure(.timedOut(executable: executable, timeout: timeout)))
+                    }
+                }
+            } catch {
+                finish(.failure(.launchFailed(executable: executable, underlying: error)))
+            }
+        }
+    }
+}
+
+private final class DiagnosticsCommandState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stdout = Data()
+    private var stderr = Data()
+    private(set) var isFinished = false
+
+    func appendStdout(_ data: Data) {
+        guard !data.isEmpty else { return }
+        lock.lock()
+        stdout.append(data)
+        lock.unlock()
+    }
+
+    func appendStderr(_ data: Data) {
+        guard !data.isEmpty else { return }
+        lock.lock()
+        stderr.append(data)
+        lock.unlock()
+    }
+
+    func markFinished() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isFinished else { return false }
+        isFinished = true
+        return true
+    }
+
+    func makeResult(exitCode: Int32) -> DiagnosticsCommandResult {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let outputText = String(data: stdout, encoding: .utf8) ?? ""
+        let stderrText = String(data: stderr, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return DiagnosticsCommandResult(
+            output: outputText.trimmingCharacters(in: .whitespacesAndNewlines),
+            stderr: stderrText?.isEmpty == true ? nil : stderrText,
+            exitCode: exitCode
+        )
+    }
+}
+
+private func terminateDiagnosticsProcess(_ process: Process) {
+    guard process.isRunning else { return }
+
+    process.terminate()
+
+    let deadline = Date().addingTimeInterval(0.2)
+    while process.isRunning, Date() < deadline {
+        Thread.sleep(forTimeInterval: 0.02)
+    }
+}
+
 actor DiagnosticsExporter {
     static let shared = DiagnosticsExporter()
 
@@ -273,7 +437,8 @@ actor DiagnosticsExporter {
                 "--last", "6h",
                 "--predicate", predicate,
             ],
-            to: destinationURL
+            to: destinationURL,
+            timeout: 15
         )
     }
 
@@ -289,19 +454,24 @@ actor DiagnosticsExporter {
         fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".ping-island-debug/qoder-hooks", isDirectory: true)
     }
 
-    private func writeCommandOutput(executable: String, arguments: [String], to destinationURL: URL) async throws {
+    private func writeCommandOutput(
+        executable: String,
+        arguments: [String],
+        to destinationURL: URL,
+        timeout: TimeInterval? = nil
+    ) async throws {
         try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        let result = await ProcessExecutor.shared.runWithResult(executable, arguments: arguments)
-        switch result {
-        case .success(let output):
-            try output.output.write(to: destinationURL, atomically: true, encoding: .utf8)
-            if let stderr = output.stderr, !stderr.isEmpty {
-                let stderrURL = destinationURL.deletingPathExtension().appendingPathExtension("stderr.txt")
-                try stderr.write(to: stderrURL, atomically: true, encoding: .utf8)
-            }
-        case .failure(let error):
-            throw error
+        let result = try await DiagnosticsCommandRunner.run(
+            executable: executable,
+            arguments: arguments,
+            timeout: timeout
+        )
+
+        try result.output.write(to: destinationURL, atomically: true, encoding: .utf8)
+        if let stderr = result.stderr, !stderr.isEmpty {
+            let stderrURL = destinationURL.deletingPathExtension().appendingPathExtension("stderr.txt")
+            try stderr.write(to: stderrURL, atomically: true, encoding: .utf8)
         }
     }
 

@@ -244,20 +244,6 @@ jobs:
             echo "release_title=Ping Island $RELEASE_TAG"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Upload packaged DMG artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: PingIsland-${{ steps.meta.outputs.version }}.dmg
-          path: ${{ steps.meta.outputs.dmg_path }}
-          if-no-files-found: error
-
-      - name: Upload packaged ZIP artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: PingIsland-${{ steps.meta.outputs.version }}.zip
-          path: ${{ steps.meta.outputs.zip_path }}
-          if-no-files-found: error
-
       - name: Prepare release notes body
         id: notes
         shell: bash

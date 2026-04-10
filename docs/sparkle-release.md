@@ -55,8 +55,8 @@ base64 -i developer-id-application.p12 | pbcopy
 2. Make sure the app version matches the release tag.
 3. Push a tag like `v0.0.1`, or open the workflow manually with the same tag name.
 
-The workflow will upload the signed `.dmg` and `.zip` to the matching GitHub Release and add a short note that the artifacts were signed and notarized in CI.
-The Actions run itself now exposes separate DMG, ZIP, and Linux bridge artifacts, although GitHub still wraps each artifact download in its own outer `.zip`.
+The workflow will upload the signed `.dmg`, `.zip`, and Linux bridge binary to the matching GitHub Release and add a short note that the artifacts were signed and notarized in CI.
+Use the GitHub Release assets as the canonical download surface so the DMG stays a direct `.dmg` file instead of an Actions artifact wrapped in an outer `.zip`.
 
 ## Local Sparkle release flow
 

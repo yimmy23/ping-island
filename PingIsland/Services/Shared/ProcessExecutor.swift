@@ -7,6 +7,7 @@
 
 import Foundation
 import os.log
+import Darwin
 
 /// Errors that can occur during process execution
 enum ProcessExecutorError: Error, LocalizedError {
@@ -14,6 +15,7 @@ enum ProcessExecutorError: Error, LocalizedError {
     case invalidOutput(command: String)
     case commandNotFound(String)
     case launchFailed(command: String, underlying: Error)
+    case timedOut(command: String, timeout: TimeInterval)
 
     var errorDescription: String? {
         switch self {
@@ -26,6 +28,8 @@ enum ProcessExecutorError: Error, LocalizedError {
             return "Command not found: \(command)"
         case .launchFailed(let command, let underlying):
             return "Failed to launch '\(command)': \(underlying.localizedDescription)"
+        case .timedOut(let command, let timeout):
+            return "Command '\(command)' timed out after \(Int(timeout.rounded()))s"
         }
     }
 }
@@ -43,6 +47,7 @@ struct ProcessResult: Sendable {
 protocol ProcessExecuting: Sendable {
     func run(_ executable: String, arguments: [String]) async throws -> String
     func runWithResult(_ executable: String, arguments: [String]) async -> Result<ProcessResult, ProcessExecutorError>
+    func runWithResult(_ executable: String, arguments: [String], timeout: TimeInterval?) async -> Result<ProcessResult, ProcessExecutorError>
     func runSync(_ executable: String, arguments: [String]) -> Result<String, ProcessExecutorError>
 }
 
