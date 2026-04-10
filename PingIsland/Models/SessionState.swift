@@ -503,6 +503,24 @@ struct SessionState: Equatable, Identifiable, Sendable {
         deduplicatedSecondaryBadgeLabel(clientInfo.terminalSourceDisplayName)
     }
 
+    /// Remote sessions come from the dedicated remote bridge or carry SSH/remote context.
+    nonisolated var isRemoteSession: Bool {
+        if ingress == .remoteBridge {
+            return true
+        }
+
+        if clientInfo.remoteHost?.isEmpty == false {
+            return true
+        }
+
+        guard let transport = clientInfo.transport?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              !transport.isEmpty else {
+            return false
+        }
+
+        return transport.contains("ssh") || transport.contains("remote")
+    }
+
     /// Best hint for matching window title
     nonisolated var windowHint: String {
         conversationInfo.summary ?? projectName

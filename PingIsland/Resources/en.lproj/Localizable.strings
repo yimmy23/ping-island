@@ -282,6 +282,7 @@
 "更新内容" = "What's New";
 "好" = "OK";
 "远程" = "Remote";
+"远程连接" = "Remote Connection";
 "SSH 主机与远程转发" = "SSH Hosts and Remote Forwarding";
 "远程主机" = "Remote Hosts";
 "还没有添加任何远程主机" = "No remote hosts have been added yet";

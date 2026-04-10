@@ -570,6 +570,46 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(clientInfo.terminalContextSummary, "Ghostty · ssh-remote@devbox")
     }
 
+    func testRemoteBridgeSessionIsMarkedRemote() {
+        let session = SessionState(
+            sessionId: "remote-bridge-session",
+            cwd: "/tmp/project",
+            ingress: .remoteBridge
+        )
+
+        XCTAssertTrue(session.isRemoteSession)
+    }
+
+    func testSSHContextSessionIsMarkedRemote() {
+        let session = SessionState(
+            sessionId: "ssh-session",
+            cwd: "/tmp/project",
+            clientInfo: SessionClientInfo(
+                kind: .claudeCode,
+                name: "Claude Code",
+                transport: "ssh-remote",
+                remoteHost: "devbox"
+            )
+        )
+
+        XCTAssertTrue(session.isRemoteSession)
+    }
+
+    func testLocalSessionIsNotMarkedRemote() {
+        let session = SessionState(
+            sessionId: "local-session",
+            cwd: "/tmp/project",
+            clientInfo: SessionClientInfo(
+                kind: .claudeCode,
+                name: "Claude Code",
+                terminalBundleIdentifier: "com.mitchellh.ghostty",
+                terminalProgram: "ghostty"
+            )
+        )
+
+        XCTAssertFalse(session.isRemoteSession)
+    }
+
     func testCodexCLIInteractionLabelPrefersTerminalHost() {
         let session = SessionState(
             sessionId: "codex-ghostty-interaction",

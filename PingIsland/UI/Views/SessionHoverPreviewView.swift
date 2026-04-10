@@ -493,6 +493,9 @@ private struct HoverSessionBadges: View {
                 tint: HoverPreviewStyle.providerBadgeFill(for: session),
                 foreground: .white.opacity(0.95)
             )
+            if session.isRemoteSession {
+                remoteSessionBadge()
+            }
             if let ideHostBadgeLabel = session.ideHostBadgeLabel {
                 previewBadge(
                     ideHostBadgeLabel,
@@ -528,6 +531,20 @@ private struct HoverSessionBadges: View {
                     .strokeBorder(Color.white.opacity(0.04), lineWidth: 1)
             )
             .clipShape(Capsule())
+    }
+
+    private func remoteSessionBadge() -> some View {
+        Image(systemName: "cloud.fill")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(.white.opacity(0.92))
+            .frame(width: 22, height: 22)
+            .background(Color(red: 0.42, green: 0.70, blue: 0.98).opacity(0.26))
+            .overlay(
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .clipShape(Circle())
+            .help(AppLocalization.string("远程连接"))
     }
 }
 

@@ -238,6 +238,9 @@ struct InstanceRow: View {
                             fontDesign: .monospaced
                         )
                         metaBadge(providerLabel, tint: providerColor.opacity(0.2))
+                        if session.isRemoteSession {
+                            remoteSessionBadge()
+                        }
                         if let ideHostBadgeLabel = session.ideHostBadgeLabel {
                             metaBadge(
                                 ideHostBadgeLabel,
@@ -476,6 +479,10 @@ struct InstanceRow: View {
                 compact: true
             )
 
+            if session.isRemoteSession {
+                remoteSessionBadge(compact: true)
+            }
+
             if let terminalSourceLabel {
                 metaBadge(
                     terminalSourceLabel,
@@ -686,6 +693,20 @@ struct InstanceRow: View {
             .padding(.vertical, compact ? 2 : 4)
             .background(tint)
             .clipShape(Capsule())
+    }
+
+    private func remoteSessionBadge(compact: Bool = false) -> some View {
+        Image(systemName: "cloud.fill")
+            .font(.system(size: compact ? 8 : 9, weight: .semibold))
+            .foregroundColor(.white.opacity(0.9))
+            .frame(width: compact ? 18 : 20, height: compact ? 18 : 20)
+            .background(Color(red: 0.42, green: 0.70, blue: 0.98).opacity(compact ? 0.22 : 0.26))
+            .clipShape(Circle())
+            .overlay(
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .help(AppLocalization.string("远程连接"))
     }
 
     private var compactDetailSummary: String? {

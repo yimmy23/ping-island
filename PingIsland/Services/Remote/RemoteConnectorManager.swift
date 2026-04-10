@@ -75,7 +75,7 @@ final class RemoteConnectorManager: ObservableObject {
         persistEndpoints()
     }
 
-    func connect(endpointID: UUID, password: String?, forceBootstrap: Bool = true) {
+    func connect(endpointID: UUID, password: String?, forceBootstrap: Bool = false) {
         guard let endpoint = endpoint(for: endpointID) else { return }
 
         let trimmedPassword = password?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -105,34 +105,76 @@ final class RemoteConnectorManager: ObservableObject {
                         "Remote probe succeeded endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) os=\(probe.operatingSystem, privacy: .public) arch=\(probe.architecture, privacy: .public) home=\(probe.homeDirectory, privacy: .public) hasClaude=\(probe.hasClaude, privacy: .public) hasTmux=\(probe.hasTmux, privacy: .public) fingerprintPresent=\(probe.fingerprint != nil, privacy: .public)"
                     )
                     self.applyProbe(probe, to: endpointID, passwordWasUsed: effectivePassword != nil)
-                    self.setState(
-                        for: endpointID,
-                        phase: .bootstrapping,
-                        detail: AppLocalization.format(
-                            "正在安装远程桥接… %@ (%@)",
-                            probe.operatingSystem,
-                            probe.architecture
-                        )
-                    )
                 }
 
-                stage = forceBootstrap ? "bootstrap" : "bootstrap-if-needed"
-                if forceBootstrap {
+                let shouldBootstrap = await MainActor.run {
+                    self.shouldBootstrapRemoteAgent(endpointID: endpointID, forceBootstrap: forceBootstrap)
+                }
+
+                if shouldBootstrap {
+                    await MainActor.run {
+                        self.setState(
+                            for: endpointID,
+                            phase: .bootstrapping,
+                            detail: AppLocalization.format(
+                                "正在安装远程桥接… %@ (%@)",
+                                probe.operatingSystem,
+                                probe.architecture
+                            )
+                        )
+                    }
+                    stage = forceBootstrap ? "bootstrap-forced" : "bootstrap-initial"
                     try await bootstrapRemoteAgent(endpointID: endpointID, password: effectivePassword, probe: probe)
                 } else {
                     logger.notice(
-                        "Remote bootstrap skipped endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) reason=forceBootstrap_disabled"
+                        "Remote bootstrap skipped endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) reason=reuse_existing_install"
                     )
                 }
 
+                do {
                 stage = "ensure-remote-agent"
                 try await ensureRemoteAgentRunning(endpointID: endpointID, password: effectivePassword)
+
+                stage = "attach-cleanup-local"
+                try await cleanupLocalAttachProcesses(endpointID: endpointID)
 
                 stage = "attach-cleanup"
                 try await cleanupRemoteAttachProcesses(endpointID: endpointID, password: effectivePassword)
 
-                stage = "attach"
-                try await attach(endpointID: endpointID, password: effectivePassword)
+                    stage = "attach"
+                    try await attach(endpointID: endpointID, password: effectivePassword)
+                } catch {
+                    guard !shouldBootstrap else {
+                        throw error
+                    }
+
+                    logger.notice(
+                        "Remote reuse failed, retrying bootstrap endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) failedStage=\(stage, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    )
+                    await MainActor.run {
+                        self.setState(
+                            for: endpointID,
+                            phase: .bootstrapping,
+                            detail: AppLocalization.format(
+                                "正在安装远程桥接… %@ (%@)",
+                                probe.operatingSystem,
+                                probe.architecture
+                            )
+                        )
+                    }
+
+                    stage = "bootstrap-retry"
+                    try await bootstrapRemoteAgent(endpointID: endpointID, password: effectivePassword, probe: probe)
+
+                    stage = "ensure-remote-agent"
+                    try await ensureRemoteAgentRunning(endpointID: endpointID, password: effectivePassword)
+
+                    stage = "attach-cleanup"
+                    try await cleanupRemoteAttachProcesses(endpointID: endpointID, password: effectivePassword)
+
+                    stage = "attach"
+                    try await attach(endpointID: endpointID, password: effectivePassword)
+                }
                 await MainActor.run {
                     self.persistCredentialAfterSuccessfulConnection(
                         endpointID: endpointID,
@@ -270,6 +312,47 @@ final class RemoteConnectorManager: ObservableObject {
         )
         logger.debug(
             "Remote attach cleanup completed endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
+        )
+    }
+
+    private func cleanupLocalAttachProcesses(endpointID: UUID) async throws {
+        guard let endpoint = endpoint(for: endpointID) else { return }
+
+        let escapedTarget = NSRegularExpression.escapedPattern(for: endpoint.sshTarget)
+        let escapedControlSocket = NSRegularExpression.escapedPattern(for: endpoint.remoteControlSocketPath)
+        let pattern = "ssh .*\(escapedTarget).*(remote-agent-attach|--mode remote-agent-attach).*\(escapedControlSocket)"
+
+        let pgrep = Process()
+        pgrep.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        pgrep.arguments = ["-f", pattern]
+
+        let outputPipe = Pipe()
+        pgrep.standardOutput = outputPipe
+        pgrep.standardError = Pipe()
+
+        do {
+            try pgrep.run()
+            pgrep.waitUntilExit()
+        } catch {
+            logger.error(
+                "Local attach cleanup failed to enumerate endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
+            return
+        }
+
+        let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let pids = output
+            .split(whereSeparator: \.isWhitespace)
+            .compactMap { Int32($0) }
+
+        guard !pids.isEmpty else { return }
+
+        let currentPID = Foundation.ProcessInfo.processInfo.processIdentifier
+        for pid in pids where pid != currentPID {
+            kill(pid, SIGTERM)
+        }
+        logger.debug(
+            "Local attach cleanup completed endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public) removedCount=\(pids.filter { $0 != currentPID }.count, privacy: .public)"
         )
     }
 
@@ -455,7 +538,8 @@ final class RemoteConnectorManager: ObservableObject {
                 existingData: existingConfig?.isEmpty == true ? nil : existingConfig,
                 profile: profile,
                 customCommand: remoteCommand,
-                installing: true
+                installing: true,
+                removingCommandPrefixes: ["/Users/"]
             )
             logger.debug(
                 "Remote bootstrap preparing hook config endpoint=\(endpoint.id.uuidString, privacy: .public) profile=\(profile.id, privacy: .public) remotePath=\(remoteConfigPath, privacy: .public) hasExistingConfig=\(existingConfig?.isEmpty == false, privacy: .public) updatedConfigBytes=\(updatedData.count, privacy: .public)"
@@ -511,6 +595,24 @@ final class RemoteConnectorManager: ObservableObject {
         }
         endpoints[index] = endpoint
         persistEndpoints()
+    }
+
+    func shouldBootstrapRemoteAgent(endpointID: UUID, forceBootstrap: Bool) -> Bool {
+        guard let endpoint = endpoint(for: endpointID) else {
+            return forceBootstrap
+        }
+
+        return Self.shouldBootstrapRemoteAgent(endpoint: endpoint, forceBootstrap: forceBootstrap)
+    }
+
+    static func shouldBootstrapRemoteAgent(endpoint: RemoteEndpoint, forceBootstrap: Bool) -> Bool {
+        if forceBootstrap {
+            return true
+        }
+
+        return endpoint.lastBootstrapAt == nil
+            && endpoint.lastConnectedAt == nil
+            && endpoint.agentVersion == nil
     }
 
     func hasReusablePassword(for endpointID: UUID) -> Bool {
@@ -827,6 +929,9 @@ private final class RemoteAttachConnector {
 
     private var process: Process?
     private var stdinHandle: FileHandle?
+    private var stdoutHandle: FileHandle?
+    private var stdoutReadSource: DispatchSourceRead?
+    private var stdoutBuffer = Data()
     private let disconnectLock = NSLock()
     private var didFinishDisconnect = false
 
@@ -862,10 +967,20 @@ private final class RemoteAttachConnector {
         )
         self.process = process
         self.stdinHandle = stdinPipe.fileHandleForWriting
-        let stdoutHandle = stdoutPipe.fileHandleForReading
-        readQueue.async { [weak self] in
-            self?.readLoop(handle: stdoutHandle)
+        self.stdoutHandle = stdoutPipe.fileHandleForReading
+        let readSource = DispatchSource.makeReadSource(
+            fileDescriptor: stdoutPipe.fileHandleForReading.fileDescriptor,
+            queue: readQueue
+        )
+        readSource.setEventHandler { [weak self] in
+            self?.drainStdout()
         }
+        readSource.setCancelHandler { [weak self] in
+            try? self?.stdoutHandle?.close()
+            self?.stdoutHandle = nil
+        }
+        self.stdoutReadSource = readSource
+        readSource.resume()
         process.terminationHandler = { [weak self] process in
             let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
             let stderr = String(data: stderrData, encoding: .utf8)?
@@ -897,11 +1012,15 @@ private final class RemoteAttachConnector {
     }
 
     func stop() {
+        stdoutReadSource?.cancel()
+        stdoutReadSource = nil
         if let process, process.isRunning {
             process.terminate()
         }
         process = nil
         stdinHandle = nil
+        stdoutHandle = nil
+        stdoutBuffer.removeAll(keepingCapacity: false)
     }
 
     func sendDecision(
@@ -920,38 +1039,43 @@ private final class RemoteAttachConnector {
         try stdinHandle?.write(contentsOf: data)
     }
 
-    private func readLoop(handle: FileHandle) {
-        var buffer = Data()
-
+    private func drainStdout() {
+        guard let stdoutHandle else { return }
         do {
             while true {
-                let chunk = try handle.read(upToCount: 4096) ?? Data()
-                if chunk.isEmpty { break }
-
-                buffer.append(chunk)
-                while let newlineRange = buffer.firstRange(of: Data([0x0A])) {
-                    let line = buffer.subdata(in: 0..<newlineRange.lowerBound)
-                    buffer.removeSubrange(0...newlineRange.lowerBound)
-                    guard !line.isEmpty else { continue }
-                    do {
-                        let message = try JSONDecoder().decode(RemoteInboundMessage.self, from: line)
-                        Task {
-                            await self.onMessage(message)
-                        }
-                    } catch {
-                        Self.logger.error(
-                            "Remote attach decode failed endpoint=\(self.endpoint.id.uuidString, privacy: .public) payload=\(Self.excerpt(String(decoding: line, as: UTF8.self)), privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-                        )
-                        throw error
-                    }
+                let chunk = stdoutHandle.availableData
+                if chunk.isEmpty {
+                    finishDisconnect(nil)
+                    return
                 }
+                stdoutBuffer.append(chunk)
+                try processBufferedMessages()
+                if chunk.count < 4096 { break }
             }
-            finishDisconnect(nil)
         } catch {
             Self.logger.error(
                 "Remote attach read loop failed endpoint=\(self.endpoint.id.uuidString, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
             )
             finishDisconnect(error)
+        }
+    }
+
+    private func processBufferedMessages() throws {
+        while let newlineRange = stdoutBuffer.firstRange(of: Data([0x0A])) {
+            let line = stdoutBuffer.subdata(in: 0..<newlineRange.lowerBound)
+            stdoutBuffer.removeSubrange(0...newlineRange.lowerBound)
+            guard !line.isEmpty else { continue }
+            do {
+                let message = try JSONDecoder().decode(RemoteInboundMessage.self, from: line)
+                Task {
+                    await self.onMessage(message)
+                }
+            } catch {
+                Self.logger.error(
+                    "Remote attach decode failed endpoint=\(self.endpoint.id.uuidString, privacy: .public) payload=\(Self.excerpt(String(decoding: line, as: UTF8.self)), privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                throw error
+            }
         }
     }
 

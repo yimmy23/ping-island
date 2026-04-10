@@ -1074,7 +1074,8 @@ struct HookInstaller {
         existingData: Data?,
         profile: ManagedHookClientProfile,
         customCommand: String,
-        installing: Bool
+        installing: Bool,
+        removingCommandPrefixes: [String] = []
     ) -> Data {
         var json: [String: Any] = [:]
         if let existingData,
@@ -1087,7 +1088,10 @@ struct HookInstaller {
             var hooks = json["hooks"] as? [String: Any] ?? [:]
             if installing {
                 for event in profile.events {
-                    let existingEvent = hooks[event.name] as? [[String: Any]]
+                    let existingEvent = sanitizedHookEntries(
+                        hooks[event.name] as? [[String: Any]],
+                        removingCommandPrefixes: removingCommandPrefixes
+                    )
                     hooks[event.name] = normalizedHookEntries(
                         existingEvent,
                         preferred: makeHookEntries(command: customCommand, event: event)
@@ -1122,6 +1126,34 @@ struct HookInstaller {
             options: [.prettyPrinted, .sortedKeys]
         )) ?? Data("{}".utf8)
         return data
+    }
+
+    private static func sanitizedHookEntries(
+        _ entries: [[String: Any]]?,
+        removingCommandPrefixes: [String]
+    ) -> [[String: Any]]? {
+        guard !removingCommandPrefixes.isEmpty else { return entries }
+        return entries?.filter { entry in
+            !entryContainsCommand(entry, withPrefixes: removingCommandPrefixes)
+        }
+    }
+
+    private static func entryContainsCommand(
+        _ entry: [String: Any],
+        withPrefixes prefixes: [String]
+    ) -> Bool {
+        if let command = hookCommandString(from: entry) {
+            return prefixes.contains { command.hasPrefix($0) }
+        }
+
+        if let nestedHooks = entry["hooks"] as? [[String: Any]] {
+            return nestedHooks.contains { hook in
+                guard let command = hookCommandString(from: hook) else { return false }
+                return prefixes.contains { command.hasPrefix($0) }
+            }
+        }
+
+        return false
     }
 
     private static func writeJSONObject(_ json: [String: Any], to url: URL) {
