@@ -37,7 +37,7 @@ fi
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist")
-DMG_PATH="$RELEASE_DIR/$APP_NAME-$VERSION-$BUILD.dmg"
+DMG_PATH="$RELEASE_DIR/$APP_NAME-$VERSION.dmg"
 NOTES_PATH="$NOTES_DIR/$VERSION.md"
 NOTES_ASSET_PATH="$RELEASE_DIR/$APP_NAME-$VERSION.md"
 

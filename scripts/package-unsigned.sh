@@ -72,8 +72,8 @@ codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist")
 
-ZIP_PATH="$RELEASE_DIR/$APP_PRODUCT_NAME-$VERSION-$BUILD-$BUILD_MODE_LABEL-unsigned.zip"
-DMG_PATH="$RELEASE_DIR/$APP_PRODUCT_NAME-$VERSION-$BUILD-$BUILD_MODE_LABEL-unsigned.dmg"
+ZIP_PATH="$RELEASE_DIR/$APP_PRODUCT_NAME-$VERSION-$BUILD_MODE_LABEL-unsigned.zip"
+DMG_PATH="$RELEASE_DIR/$APP_PRODUCT_NAME-$VERSION-$BUILD_MODE_LABEL-unsigned.dmg"
 
 rm -f "$ZIP_PATH" "$DMG_PATH"
 rm -rf "$STAGING_DIR"
