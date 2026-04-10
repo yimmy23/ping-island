@@ -65,6 +65,7 @@ enum DiagnosticsCommandRunner {
                 state.appendStderr(data)
             }
 
+            @Sendable
             func finish(_ result: Result<DiagnosticsCommandResult, DiagnosticsCommandError>) {
                 guard state.markFinished() else { return }
                 stdoutPipe.fileHandleForReading.readabilityHandler = nil

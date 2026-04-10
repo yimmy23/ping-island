@@ -55,7 +55,7 @@ protocol ProcessExecuting: Sendable {
 struct ProcessExecutor: ProcessExecuting {
     static let shared = ProcessExecutor()
 
-    static let logger = Logger(subsystem: "com.wudanwu.pingisland", category: "ProcessExecutor")
+    nonisolated(unsafe) static let logger = Logger(subsystem: "com.wudanwu.pingisland", category: "ProcessExecutor")
 
     private init() {}
 
@@ -72,53 +72,95 @@ struct ProcessExecutor: ProcessExecuting {
 
     /// Run a command asynchronously and return a full Result with exit code and stderr
     func runWithResult(_ executable: String, arguments: [String]) async -> Result<ProcessResult, ProcessExecutorError> {
+        await runWithResult(executable, arguments: arguments, timeout: nil)
+    }
+
+    /// Run a command asynchronously and optionally terminate it on timeout.
+    func runWithResult(
+        _ executable: String,
+        arguments: [String],
+        timeout: TimeInterval?
+    ) async -> Result<ProcessResult, ProcessExecutorError> {
         await withCheckedContinuation { continuation in
             let process = Process()
             let stdoutPipe = Pipe()
             let stderrPipe = Pipe()
+            let state = ProcessExecutionState()
 
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
             process.standardOutput = stdoutPipe
             process.standardError = stderrPipe
 
+            stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                guard !data.isEmpty else {
+                    handle.readabilityHandler = nil
+                    return
+                }
+                state.appendStdout(data)
+            }
+
+            stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                guard !data.isEmpty else {
+                    handle.readabilityHandler = nil
+                    return
+                }
+                state.appendStderr(data)
+            }
+
+            @Sendable
+            func finish(_ result: Result<ProcessResult, ProcessExecutorError>) {
+                guard state.markFinished() else { return }
+                stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                stderrPipe.fileHandleForReading.readabilityHandler = nil
+                continuation.resume(returning: result)
+            }
+
             do {
+                process.terminationHandler = { process in
+                    stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                    stderrPipe.fileHandleForReading.readabilityHandler = nil
+
+                    state.appendStdout(stdoutPipe.fileHandleForReading.readDataToEndOfFile())
+                    state.appendStderr(stderrPipe.fileHandleForReading.readDataToEndOfFile())
+
+                    let result = state.makeResult(exitCode: process.terminationStatus)
+                    if process.terminationStatus == 0 {
+                        finish(.success(result))
+                    } else {
+                        Self.logger.warning("Command failed: \(executable, privacy: .public) \(arguments.joined(separator: " "), privacy: .public) - exit code \(process.terminationStatus)")
+                        finish(.failure(.executionFailed(
+                            command: executable,
+                            exitCode: process.terminationStatus,
+                            stderr: result.stderr
+                        )))
+                    }
+                }
+
                 try process.run()
-                process.waitUntilExit()
 
-                let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-
-                let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
-                let stderr = String(data: stderrData, encoding: .utf8)
-
-                let result = ProcessResult(
-                    output: stdout,
-                    exitCode: process.terminationStatus,
-                    stderr: stderr
-                )
-
-                if process.terminationStatus == 0 {
-                    continuation.resume(returning: .success(result))
-                } else {
-                    Self.logger.warning("Command failed: \(executable) \(arguments.joined(separator: " "), privacy: .public) - exit code \(process.terminationStatus)")
-                    continuation.resume(returning: .failure(.executionFailed(
-                        command: executable,
-                        exitCode: process.terminationStatus,
-                        stderr: stderr
-                    )))
+                if let timeout, timeout > 0 {
+                    let deadline = DispatchTime.now() + timeout
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: deadline) {
+                        guard !state.isFinished else { return }
+                        terminateProcess(process)
+                        Self.logger.warning("Command timed out: \(executable, privacy: .public) after \(Int(timeout.rounded()))s")
+                        finish(.failure(.timedOut(command: executable, timeout: timeout)))
+                    }
                 }
             } catch let error as NSError {
                 if error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
                     Self.logger.error("Command not found: \(executable, privacy: .public)")
-                    continuation.resume(returning: .failure(.commandNotFound(executable)))
+                    finish(.failure(.commandNotFound(executable)))
                 } else {
                     Self.logger.error("Failed to launch command: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
-                    continuation.resume(returning: .failure(.launchFailed(command: executable, underlying: error)))
+                    finish(.failure(.launchFailed(command: executable, underlying: error)))
                 }
             } catch {
                 Self.logger.error("Failed to launch command: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
-                continuation.resume(returning: .failure(.launchFailed(command: executable, underlying: error)))
+                finish(.failure(.launchFailed(command: executable, underlying: error)))
             }
         }
     }
@@ -166,6 +208,70 @@ struct ProcessExecutor: ProcessExecuting {
             Self.logger.error("Sync command launch failed: \(executable, privacy: .public) - \(error.localizedDescription, privacy: .public)")
             return .failure(.launchFailed(command: executable, underlying: error))
         }
+    }
+}
+
+private final class ProcessExecutionState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stdout = Data()
+    private var stderr = Data()
+    private var finished = false
+
+    nonisolated var isFinished: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return finished
+    }
+
+    nonisolated func appendStdout(_ data: Data) {
+        guard !data.isEmpty else { return }
+        lock.lock()
+        stdout.append(data)
+        lock.unlock()
+    }
+
+    nonisolated func appendStderr(_ data: Data) {
+        guard !data.isEmpty else { return }
+        lock.lock()
+        stderr.append(data)
+        lock.unlock()
+    }
+
+    nonisolated func markFinished() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !finished else { return false }
+        finished = true
+        return true
+    }
+
+    nonisolated func makeResult(exitCode: Int32) -> ProcessResult {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let output = String(data: stdout, encoding: .utf8) ?? ""
+        let stderrText = String(data: stderr, encoding: .utf8)
+
+        return ProcessResult(
+            output: output,
+            exitCode: exitCode,
+            stderr: stderrText
+        )
+    }
+}
+
+private func terminateProcess(_ process: Process) {
+    guard process.isRunning else { return }
+
+    process.terminate()
+
+    let deadline = Date().addingTimeInterval(0.2)
+    while process.isRunning, Date() < deadline {
+        Thread.sleep(forTimeInterval: 0.02)
+    }
+
+    if process.isRunning {
+        kill(process.processIdentifier, SIGKILL)
     }
 }
 
