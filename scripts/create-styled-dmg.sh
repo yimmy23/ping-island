@@ -5,7 +5,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BACKGROUND_GENERATOR="$SCRIPT_DIR/generate-dmg-background.swift"
-DMG_ICON_PNG="${PING_ISLAND_DMG_ICON_PNG:-$PROJECT_DIR/PingIsland/Assets.xcassets/AppIcon.appiconset/icon_512x512.png}"
+BRAND_LOGO_SOURCE="${PING_ISLAND_DMG_LOGO_SOURCE:-$PROJECT_DIR/docs/images/ping-island-icon-transparent.svg}"
+DMG_ICON_SOURCE="${PING_ISLAND_DMG_ICON_SOURCE:-$BRAND_LOGO_SOURCE}"
+FALLBACK_ICON_PNG="$PROJECT_DIR/PingIsland/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png"
 
 VOLNAME=""
 SOURCE_DIR=""
@@ -18,6 +20,40 @@ APP_X="${PING_ISLAND_DMG_APP_X:-138}"
 APP_Y="${PING_ISLAND_DMG_APP_Y:-168}"
 APPLICATIONS_X="${PING_ISLAND_DMG_APPLICATIONS_X:-388}"
 APPLICATIONS_Y="${PING_ISLAND_DMG_APPLICATIONS_Y:-168}"
+
+resolve_image_source() {
+  local requested_source="$1"
+
+  if [[ -n "$requested_source" && -f "$requested_source" ]]; then
+    printf '%s\n' "$requested_source"
+    return 0
+  fi
+
+  if [[ -f "$FALLBACK_ICON_PNG" ]]; then
+    printf '%s\n' "$FALLBACK_ICON_PNG"
+    return 0
+  fi
+
+  return 1
+}
+
+rasterize_to_png() {
+  local source_path="$1"
+  local output_path="$2"
+
+  case "$source_path" in
+    *.svg|*.SVG)
+      sips -s format png "$source_path" --out "$output_path" >/dev/null
+      ;;
+    *.png|*.PNG)
+      cp "$source_path" "$output_path"
+      ;;
+    *)
+      echo "Unsupported DMG image source: $source_path" >&2
+      return 1
+      ;;
+  esac
+}
 
 usage() {
   cat <<'EOF'
@@ -88,6 +124,7 @@ MOUNT_POINT="$TMP_DIR/mount"
 BACKGROUND_PATH="$TMP_DIR/background.png"
 ICON_WORK_PNG="$TMP_DIR/dmg-icon.png"
 ICON_RESOURCE_PATH="$TMP_DIR/dmg-icon.rsrc"
+BRAND_LOGO_PNG="$TMP_DIR/brand-logo.png"
 LAYOUT_READY=0
 ATTACHED=0
 
@@ -103,10 +140,20 @@ SOURCE_SIZE_MB=$(du -sk "$SOURCE_DIR" | awk '{ printf "%d", ($1 / 1024) + 80 }')
 mkdir -p "$MOUNT_POINT"
 rm -f "$OUTPUT_DMG"
 
-swift "$BACKGROUND_GENERATOR" --output "$BACKGROUND_PATH" --width "$WINDOW_WIDTH" --height "$WINDOW_HEIGHT"
+if logo_source="$(resolve_image_source "$BRAND_LOGO_SOURCE")"; then
+  rasterize_to_png "$logo_source" "$BRAND_LOGO_PNG"
+fi
 
-if [[ -f "$DMG_ICON_PNG" ]]; then
-  cp "$DMG_ICON_PNG" "$ICON_WORK_PNG"
+background_args=(
+  --output "$BACKGROUND_PATH"
+  --width "$WINDOW_WIDTH"
+  --height "$WINDOW_HEIGHT"
+)
+
+swift "$BACKGROUND_GENERATOR" "${background_args[@]}"
+
+if icon_source="$(resolve_image_source "$DMG_ICON_SOURCE")"; then
+  rasterize_to_png "$icon_source" "$ICON_WORK_PNG"
   sips -i "$ICON_WORK_PNG" >/dev/null
   DeRez -only icns "$ICON_WORK_PNG" > "$ICON_RESOURCE_PATH"
 fi

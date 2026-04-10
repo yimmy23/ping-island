@@ -127,9 +127,9 @@ func drawInstallArrow(from start: CGPoint, to end: CGPoint) {
 
 func makeLayout(width: CGFloat, height: CGFloat) -> Layout {
     Layout(
-        titleFontSize: width <= 700 ? 40 : 72,
-        titleY: width <= 700 ? height * 0.77 : height * 0.79,
-        titleHeight: width <= 700 ? 54 : 100,
+        titleFontSize: width <= 700 ? 34 : 64,
+        titleY: width <= 700 ? height * 0.68 : height * 0.69,
+        titleHeight: width <= 700 ? 46 : 82,
         cornerInset: width <= 700 ? 18 : 46,
         cornerLength: width <= 700 ? 28 : 48,
         cornerStroke: width <= 700 ? 3 : 4,
