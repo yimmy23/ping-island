@@ -128,6 +128,9 @@ final class RemoteConnectorManager: ObservableObject {
                 stage = "ensure-remote-agent"
                 try await ensureRemoteAgentRunning(endpointID: endpointID, password: effectivePassword)
 
+                stage = "attach-cleanup"
+                try await cleanupRemoteAttachProcesses(endpointID: endpointID, password: effectivePassword)
+
                 stage = "attach"
                 try await attach(endpointID: endpointID, password: effectivePassword)
                 await MainActor.run {
@@ -251,6 +254,22 @@ final class RemoteConnectorManager: ObservableObject {
         )
         logger.notice(
             "Remote attach connected endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
+        )
+    }
+
+    private func cleanupRemoteAttachProcesses(endpointID: UUID, password: String?) async throws {
+        guard let endpoint = endpoint(for: endpointID) else { return }
+
+        _ = try await RemoteSSHCommandRunner.runSSH(
+            target: endpoint.sshTarget,
+            password: password,
+            remoteCommand: """
+            pkill -f \(quoted("\(endpoint.remoteInstallRoot)/bin/[P]ingIslandBridge --mode remote-agent-attach")) >/dev/null 2>&1 || true
+            """,
+            acceptNewHostKey: true
+        )
+        logger.debug(
+            "Remote attach cleanup completed endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
         )
     }
 
