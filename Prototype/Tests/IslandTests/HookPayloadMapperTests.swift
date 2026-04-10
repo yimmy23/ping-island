@@ -132,6 +132,31 @@ func mapsClaudeIDEAndRemoteContextFromEnvironment() throws {
 }
 
 @Test
+func mapsSSHRemoteHostFromHostnameEnvironmentBeforeConnectionIP() throws {
+    let payload = """
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "ssh-hostname-1"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: ["island-bridge", "--source", "claude"],
+        environment: [
+            "SSH_CONNECTION": "192.168.1.2 49822 10.0.0.10 22",
+            "HOSTNAME": "devbox",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.terminalContext.transport == "ssh")
+    #expect(envelope.terminalContext.remoteHost == "devbox")
+    #expect(envelope.metadata["remote_host"] == "devbox")
+}
+
+@Test
 func mapsQoderIDEContextAheadOfGenericVSCodeDetection() throws {
     let payload = """
     {

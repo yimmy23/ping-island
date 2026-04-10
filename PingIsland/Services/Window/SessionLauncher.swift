@@ -38,6 +38,12 @@ actor SessionLauncher {
             return true
         }
 
+        if session.isRemoteSession,
+           await activateRemoteCarrierTerminal(session) {
+            Self.logger.debug("Activated remote carrier terminal for session \(session.sessionId, privacy: .public)")
+            return true
+        }
+
         if !session.isInTmux,
            let tty = session.tty,
            await activateTerminal(
@@ -430,7 +436,8 @@ actor SessionLauncher {
         forProcess pid: Int,
         clientInfo: SessionClientInfo,
         workspacePath: String,
-        launchURL: String?
+        launchURL: String?,
+        remoteHostHint: String? = nil
     ) async -> Bool {
         let tree = ProcessTreeBuilder.shared.buildTree()
         guard let terminalPid = ProcessTreeBuilder.shared.findTerminalPid(forProcess: pid, tree: tree) else {
@@ -458,7 +465,8 @@ actor SessionLauncher {
             sessionId: sessionId,
             clientInfo: clientInfo,
             workspacePath: workspacePath,
-            launchURL: launchURL
+            launchURL: launchURL,
+            remoteHostHint: remoteHostHint
         ) {
             Self.logger.debug("PID-focused terminal session pid=\(pid, privacy: .public) terminalPid=\(terminalPid, privacy: .public)")
             await FocusDiagnosticsStore.shared.record(
@@ -478,7 +486,8 @@ actor SessionLauncher {
         forTTY tty: String,
         clientInfo: SessionClientInfo,
         workspacePath: String,
-        launchURL: String?
+        launchURL: String?,
+        remoteHostHint: String? = nil
     ) async -> Bool {
         let tree = ProcessTreeBuilder.shared.buildTree()
         let candidateProcessIDs = ProcessTreeBuilder.shared.candidateProcessIDs(forTTY: tty, tree: tree)
@@ -499,7 +508,8 @@ actor SessionLauncher {
             sessionId: sessionId,
             clientInfo: clientInfo,
             workspacePath: workspacePath,
-            launchURL: launchURL
+            launchURL: launchURL,
+            remoteHostHint: remoteHostHint
         ) {
             Self.logger.debug("TTY-focused terminal session tty=\(tty, privacy: .public) terminalPid=\(terminalPid, privacy: .public)")
             await FocusDiagnosticsStore.shared.record(
@@ -513,6 +523,50 @@ actor SessionLauncher {
             "SessionLauncher tty-terminal fallback-app session=\(sessionId) tty=\(tty) terminalPid=\(terminalPid)"
         )
         return await activateApplication(processIdentifier: terminalPid, activateAllWindows: false)
+    }
+
+    private func activateRemoteCarrierTerminal(_ session: SessionState) async -> Bool {
+        let tree = ProcessTreeBuilder.shared.buildTree()
+        guard let carrier = ProcessTreeBuilder.shared.findInteractiveSSHCarrier(
+            remoteHostHint: session.clientInfo.remoteHost,
+            tree: tree
+        ) else {
+            await FocusDiagnosticsStore.shared.record(
+                "SessionLauncher remote-carrier unresolved session=\(session.sessionId) remoteHost=\(session.clientInfo.remoteHost ?? "nil")"
+            )
+            return false
+        }
+
+        await FocusDiagnosticsStore.shared.record(
+            "SessionLauncher remote-carrier matched session=\(session.sessionId) remoteHost=\(session.clientInfo.remoteHost ?? "nil") sshPid=\(carrier.sshPid) terminalPid=\(carrier.terminalPid) tty=\(carrier.tty ?? "nil")"
+        )
+
+        if let tty = carrier.tty,
+           await activateTerminal(
+               sessionId: session.sessionId,
+               forTTY: tty,
+               clientInfo: session.clientInfo,
+               workspacePath: session.cwd,
+               launchURL: session.clientInfo.launchURL,
+               remoteHostHint: session.clientInfo.remoteHost
+           ) {
+            return true
+        }
+
+        if await TerminalSessionFocuser.shared.focusSession(
+            terminalPid: carrier.terminalPid,
+            tty: carrier.tty,
+            candidateProcessIDs: carrier.candidateProcessIDs,
+            sessionId: session.sessionId,
+            clientInfo: session.clientInfo,
+            workspacePath: session.cwd,
+            launchURL: session.clientInfo.launchURL,
+            remoteHostHint: session.clientInfo.remoteHost
+        ) {
+            return true
+        }
+
+        return await activateApplication(processIdentifier: carrier.terminalPid, activateAllWindows: false)
     }
 
     private func findTmuxClientTerminal(forSession session: String, tree: [Int: ProcessInfo]) async -> Int? {

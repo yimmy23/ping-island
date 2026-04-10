@@ -925,12 +925,10 @@ private final class RemoteAttachConnector {
     private let password: String?
     private let onMessage: @Sendable (RemoteInboundMessage) async -> Void
     private let onDisconnect: @Sendable (Error?) -> Void
-    private let readQueue = DispatchQueue(label: "com.wudanwu.pingisland.remote-attach", qos: .userInitiated)
 
     private var process: Process?
     private var stdinHandle: FileHandle?
     private var stdoutHandle: FileHandle?
-    private var stdoutReadSource: DispatchSourceRead?
     private var stdoutBuffer = Data()
     private let disconnectLock = NSLock()
     private var didFinishDisconnect = false
@@ -968,19 +966,9 @@ private final class RemoteAttachConnector {
         self.process = process
         self.stdinHandle = stdinPipe.fileHandleForWriting
         self.stdoutHandle = stdoutPipe.fileHandleForReading
-        let readSource = DispatchSource.makeReadSource(
-            fileDescriptor: stdoutPipe.fileHandleForReading.fileDescriptor,
-            queue: readQueue
-        )
-        readSource.setEventHandler { [weak self] in
-            self?.drainStdout()
+        stdoutPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            self?.drainStdout(from: handle)
         }
-        readSource.setCancelHandler { [weak self] in
-            try? self?.stdoutHandle?.close()
-            self?.stdoutHandle = nil
-        }
-        self.stdoutReadSource = readSource
-        readSource.resume()
         process.terminationHandler = { [weak self] process in
             let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
             let stderr = String(data: stderrData, encoding: .utf8)?
@@ -1012,8 +1000,7 @@ private final class RemoteAttachConnector {
     }
 
     func stop() {
-        stdoutReadSource?.cancel()
-        stdoutReadSource = nil
+        stdoutHandle?.readabilityHandler = nil
         if let process, process.isRunning {
             process.terminate()
         }
@@ -1039,19 +1026,16 @@ private final class RemoteAttachConnector {
         try stdinHandle?.write(contentsOf: data)
     }
 
-    private func drainStdout() {
-        guard let stdoutHandle else { return }
+    private func drainStdout(from handle: FileHandle) {
         do {
-            while true {
-                let chunk = stdoutHandle.availableData
-                if chunk.isEmpty {
-                    finishDisconnect(nil)
-                    return
-                }
-                stdoutBuffer.append(chunk)
-                try processBufferedMessages()
-                if chunk.count < 4096 { break }
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+                finishDisconnect(nil)
+                return
             }
+            stdoutBuffer.append(chunk)
+            try processBufferedMessages()
         } catch {
             Self.logger.error(
                 "Remote attach read loop failed endpoint=\(self.endpoint.id.uuidString, privacy: .public) error=\(error.localizedDescription, privacy: .public)"

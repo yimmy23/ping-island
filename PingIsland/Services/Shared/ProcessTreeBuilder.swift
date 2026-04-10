@@ -28,11 +28,18 @@ struct ProcessTreeBuilder: Sendable {
     nonisolated static let shared = ProcessTreeBuilder()
     nonisolated static let logger = Logger(subsystem: "com.wudanwu.pingisland", category: "ProcessTree")
 
+    struct SSHCarrierMatch: Equatable, Sendable {
+        let sshPid: Int
+        let terminalPid: Int
+        let tty: String?
+        let candidateProcessIDs: [Int]
+    }
+
     private nonisolated init() {}
 
     /// Build a process tree mapping PID -> ProcessInfo
     nonisolated func buildTree() -> [Int: ProcessInfo] {
-        guard let output = ProcessExecutor.shared.runSyncOrNil("/bin/ps", arguments: ["-eo", "pid,ppid,tty,comm"]) else {
+        guard let output = ProcessExecutor.shared.runSyncOrNil("/bin/ps", arguments: ["-eo", "pid,ppid,tty,args"]) else {
             return [:]
         }
 
@@ -115,6 +122,70 @@ struct ProcessTreeBuilder: Sendable {
         return nil
     }
 
+    nonisolated func findInteractiveSSHCarrier(
+        remoteHostHint: String?,
+        tree: [Int: ProcessInfo]
+    ) -> SSHCarrierMatch? {
+        let hostTokens = remoteHostTokens(from: remoteHostHint)
+
+        let matches = tree.values.compactMap { info -> (match: SSHCarrierMatch, score: Int)? in
+            guard isInteractiveSSHProcess(info.command) else { return nil }
+            guard let terminalPid = findTerminalPid(forProcess: info.pid, tree: tree) else { return nil }
+
+            let loweredCommand = info.command.lowercased()
+            let hostMatchCount = hostTokens.filter { loweredCommand.contains($0) }.count
+            if !hostTokens.isEmpty, hostMatchCount == 0 {
+                return nil
+            }
+
+            let tty = info.tty
+            let candidatePIDs: [Int]
+            if let tty {
+                candidatePIDs = self.candidateProcessIDs(forTTY: tty, tree: tree)
+            } else {
+                candidatePIDs = Array(Set([info.pid, terminalPid])).sorted()
+            }
+
+            var score = hostMatchCount * 100
+            if tty != nil {
+                score += 10
+            }
+
+            return (
+                SSHCarrierMatch(
+                    sshPid: info.pid,
+                    terminalPid: terminalPid,
+                    tty: tty,
+                    candidateProcessIDs: candidatePIDs
+                ),
+                score
+            )
+        }
+
+        if matches.isEmpty {
+            return nil
+        }
+
+        if hostTokens.isEmpty {
+            guard matches.count == 1 else { return nil }
+            return matches[0].match
+        }
+
+        let sortedMatches = matches.sorted { lhs, rhs in
+            if lhs.score != rhs.score {
+                return lhs.score > rhs.score
+            }
+            return lhs.match.sshPid > rhs.match.sshPid
+        }
+
+        guard let best = sortedMatches.first else { return nil }
+        if sortedMatches.dropFirst().contains(where: { $0.score == best.score }) {
+            return nil
+        }
+
+        return best.match
+    }
+
     nonisolated func candidateProcessIDs(forTTY tty: String, tree: [Int: ProcessInfo]) -> [Int] {
         let normalizedTTY = tty.replacingOccurrences(of: "/dev/", with: "")
         return candidateProcesses(forTTY: normalizedTTY, tree: tree).map(\.pid)
@@ -189,6 +260,58 @@ struct ProcessTreeBuilder: Sendable {
         }
 
         return 1
+    }
+
+    private nonisolated func isInteractiveSSHProcess(_ command: String) -> Bool {
+        let lower = command.lowercased()
+        guard lower.contains("ssh") else { return false }
+        guard !lower.contains("sshd") else { return false }
+        guard !lower.contains("ssh-agent") else { return false }
+        guard !lower.contains("scp ") else { return false }
+        guard !lower.contains("sftp ") else { return false }
+        guard !lower.contains("remote-agent-attach") else { return false }
+        return true
+    }
+
+    private nonisolated func remoteHostTokens(from remoteHostHint: String?) -> [String] {
+        guard let remoteHostHint = remoteHostHint?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+            !remoteHostHint.isEmpty else {
+            return []
+        }
+
+        let withoutUser = remoteHostHint.split(separator: "@").last.map(String.init) ?? remoteHostHint
+        let withoutBrackets = withoutUser
+            .replacingOccurrences(of: "[", with: "")
+            .replacingOccurrences(of: "]", with: "")
+        let withoutPort: String
+        if let colonIndex = withoutBrackets.lastIndex(of: ":"),
+           withoutBrackets[withoutBrackets.index(after: colonIndex)...].allSatisfy(\.isNumber) {
+            withoutPort = String(withoutBrackets[..<colonIndex])
+        } else {
+            withoutPort = withoutBrackets
+        }
+
+        let shortHost = withoutPort.split(separator: ".").first.map(String.init)
+        return Array(
+            Set(
+                [
+                    remoteHostHint,
+                    withoutUser,
+                    withoutBrackets,
+                    withoutPort,
+                    shortHost
+                ]
+                .compactMap { value in
+                    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                          !value.isEmpty else {
+                        return nil
+                    }
+                    return value
+                }
+            )
+        )
     }
 
     private nonisolated func candidateProcesses(forTTY normalizedTTY: String, tree: [Int: ProcessInfo]) -> [ProcessInfo] {

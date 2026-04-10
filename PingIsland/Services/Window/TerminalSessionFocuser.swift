@@ -30,7 +30,8 @@ actor TerminalSessionFocuser {
         sessionId: String? = nil,
         clientInfo: SessionClientInfo? = nil,
         workspacePath: String? = nil,
-        launchURL: String? = nil
+        launchURL: String? = nil,
+        remoteHostHint: String? = nil
     ) async -> Bool {
         guard let appInfo = await MainActor.run(body: {
             NSRunningApplication(processIdentifier: pid_t(terminalPid)).map {
@@ -174,7 +175,8 @@ actor TerminalSessionFocuser {
             return await focusGhosttyTerminal(
                 terminalPid: terminalPid,
                 terminalSessionIdentifier: ghosttyTerminalIdentifier,
-                workspacePath: workspacePath
+                workspacePath: workspacePath,
+                titleHint: remoteHostHint
             )
         default:
             logger.debug("No scripted focuser for bundle \(bundleIdentifier, privacy: .public)")
@@ -390,11 +392,13 @@ actor TerminalSessionFocuser {
     private func focusGhosttyTerminal(
         terminalPid: Int,
         terminalSessionIdentifier: String?,
-        workspacePath: String?
+        workspacePath: String?,
+        titleHint: String?
     ) async -> Bool {
         let result = await runAppleScript(lines: Self.ghosttySelectionScriptLines(
             terminalSessionIdentifier: Self.normalizedGhosttyTerminalIdentifier(terminalSessionIdentifier),
-            workspacePath: workspacePath
+            workspacePath: workspacePath,
+            titleHint: titleHint
         ))
         await FocusDiagnosticsStore.shared.record(
             "TerminalFocus ghostty select-result terminalPid=\(terminalPid) success=\(result)"
@@ -526,7 +530,8 @@ actor TerminalSessionFocuser {
 
     static func ghosttySelectionScriptLines(
         terminalSessionIdentifier: String?,
-        workspacePath: String?
+        workspacePath: String?,
+        titleHint: String? = nil
     ) -> [String] {
         var lines = [
             "tell application id \"com.mitchellh.ghostty\""
@@ -565,6 +570,18 @@ actor TerminalSessionFocuser {
                 "focus (item 1 of nameMatches)",
                 "return \"ok\"",
                 "end if",
+                "end if"
+            ])
+        }
+
+        if let titleHint = titleHint?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !titleHint.isEmpty {
+            lines.append(contentsOf: [
+                "set remoteTitleHint to \(appleScriptStringLiteral(titleHint))",
+                "set titleMatches to every terminal whose name contains remoteTitleHint",
+                "if (count of titleMatches) is 1 then",
+                "focus (item 1 of titleMatches)",
+                "return \"ok\"",
                 "end if"
             ])
         }

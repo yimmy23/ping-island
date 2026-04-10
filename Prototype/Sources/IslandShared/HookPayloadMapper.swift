@@ -530,6 +530,13 @@ public enum HookPayloadMapper {
         }
 
         if let sshConnection {
+            let preferredHost = nonEmpty(environment["HOSTNAME"])
+                ?? nonEmpty(environment["HOST"])
+                ?? nonEmpty(ProcessInfo.processInfo.hostName)
+            if let preferredHost {
+                return ("ssh", preferredHost)
+            }
+
             let parts = sshConnection.split(separator: " ").map(String.init)
             if parts.count >= 3 {
                 return ("ssh", nonEmpty(parts[2]))

@@ -37,6 +37,18 @@ final class TerminalSessionFocuserTests: XCTestCase {
         XCTAssertTrue(script.contains("if (count of nameMatches) is 1 then"))
     }
 
+    func testGhosttySelectionScriptFallsBackToRemoteHostTitleHint() {
+        let lines = TerminalSessionFocuser.ghosttySelectionScriptLines(
+            terminalSessionIdentifier: nil,
+            workspacePath: nil,
+            titleHint: "devbox"
+        )
+        let script = lines.joined(separator: "\n")
+
+        XCTAssertTrue(script.contains("set remoteTitleHint to \"devbox\""))
+        XCTAssertTrue(script.contains("set titleMatches to every terminal whose name contains remoteTitleHint"))
+    }
+
     func testGhosttyFrontmostTerminalSnapshotScriptTargetsFocusedTerminal() {
         let lines = TerminalSessionFocuser.ghosttyFrontmostTerminalSnapshotScriptLines()
         let script = lines.joined(separator: "\n")
