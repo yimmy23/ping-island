@@ -126,7 +126,7 @@ class SessionMonitor: ObservableObject {
             }
 
             let sessionPhase = event.sessionPhase
-            if event.provider == .claude, sessionPhase == .processing {
+            if Self.shouldWatchTranscript(for: event, phase: sessionPhase) {
                 Task {
                     let session = await SessionStore.shared.session(for: event.sessionId)
                     await MainActor.run {
@@ -139,7 +139,7 @@ class SessionMonitor: ObservableObject {
                 }
             }
 
-            if event.provider == .claude, event.status == "ended" {
+            if Self.shouldStopWatchingTranscript(for: event) {
                 Task { @MainActor in
                     InterruptWatcherManager.shared.stopWatching(sessionId: event.sessionId)
                 }
@@ -572,6 +572,34 @@ class SessionMonitor: ObservableObject {
         }
 
         return snapshot
+    }
+
+    nonisolated static func shouldWatchTranscript(for event: HookEvent, phase: SessionPhase) -> Bool {
+        switch event.provider {
+        case .claude:
+            return phase == .processing
+        case .codex:
+            guard event.ingress == .hookBridge else { return false }
+            switch event.event {
+            case "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse":
+                return event.status != "ended"
+            default:
+                return phase == .processing || phase == .waitingForInput || phase.isWaitingForApproval
+            }
+        default:
+            return false
+        }
+    }
+
+    nonisolated static func shouldStopWatchingTranscript(for event: HookEvent) -> Bool {
+        switch event.provider {
+        case .claude:
+            return event.status == "ended"
+        case .codex:
+            return event.status == "ended" || event.event == "Stop"
+        default:
+            return false
+        }
     }
 }
 

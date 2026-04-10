@@ -65,7 +65,12 @@ final class CodexRolloutParserTests: XCTestCase {
         let snapshot = await CodexRolloutParser.shared.parseThread(
             threadId: threadId,
             fallbackCwd: "/Users/wudanwu/github/CodeIsland",
-            clientInfo: SessionClientInfo(kind: .codexCLI, profileID: "codex-cli", name: "Codex")
+            clientInfo: SessionClientInfo(
+                kind: .codexCLI,
+                profileID: "codex-cli",
+                name: "Codex",
+                sessionFilePath: rolloutURL.path
+            )
         )
 
         XCTAssertEqual(snapshot?.phase, .waitingForInput)
