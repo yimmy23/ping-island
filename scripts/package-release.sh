@@ -157,7 +157,6 @@ fi
 
 log_section "Verifying App Signature"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-spctl --assess --type execute -vv "$APP_PATH"
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist")
@@ -177,6 +176,11 @@ log_section "Notarizing App Bundle"
 ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$NOTARY_ZIP_PATH"
 notarize_and_staple "$NOTARY_ZIP_PATH" "$APP_PATH"
 rm -f "$NOTARY_ZIP_PATH"
+
+if [ "$SKIP_NOTARIZATION" != "1" ]; then
+    log_section "Assessing Notarized App"
+    spctl --assess --type execute -vv "$APP_PATH"
+fi
 
 log_section "Creating ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_PATH"
