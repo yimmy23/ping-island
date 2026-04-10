@@ -6,6 +6,14 @@ import Darwin
 import Glibc
 #endif
 
+#if canImport(Darwin)
+private let islandStreamSocketType: Int32 = SOCK_STREAM
+private let islandShutdownWrite: Int32 = SHUT_WR
+#elseif canImport(Glibc)
+private let islandStreamSocketType: Int32 = Int32(SOCK_STREAM.rawValue)
+private let islandShutdownWrite: Int32 = Int32(SHUT_WR)
+#endif
+
 @main
 struct IslandBridgeMain {
     private static let stdinInitialPollTimeoutMs = 100
@@ -458,7 +466,7 @@ private enum BridgeRuntimeMode: String {
 
 private enum SocketClient {
     static func send(envelope: BridgeEnvelope, socketPath: String) throws -> BridgeResponse {
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        let fd = socket(AF_UNIX, islandStreamSocketType, 0)
         guard fd >= 0 else {
             throw BridgeError.connectionFailed
         }
@@ -484,7 +492,7 @@ private enum SocketClient {
         _ = data.withUnsafeBytes { buffer in
             write(fd, buffer.baseAddress, buffer.count)
         }
-        shutdown(fd, SHUT_WR)
+        shutdown(fd, islandShutdownWrite)
 
         var buffer = [UInt8](repeating: 0, count: 4096)
         let count = read(fd, &buffer, buffer.count)
@@ -495,7 +503,7 @@ private enum SocketClient {
     }
 }
 
-private final class RemoteAgentService {
+private final class RemoteAgentService: @unchecked Sendable {
     private let hookSocketPath: String
     private let controlSocketPath: String
     private let queue = DispatchQueue(label: "com.wudanwu.pingisland.remote-agent", qos: .userInitiated)
@@ -546,7 +554,7 @@ private final class RemoteAgentService {
 
     private func makeListeningSocket(path: String) throws -> Int32 {
         unlink(path)
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        let fd = socket(AF_UNIX, islandStreamSocketType, 0)
         guard fd >= 0 else {
             throw BridgeError.connectionFailed
         }
@@ -743,7 +751,7 @@ private final class RemoteAgentService {
 
 private enum RemoteAgentAttach {
     static func run(controlSocketPath: String) throws {
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        let fd = socket(AF_UNIX, islandStreamSocketType, 0)
         guard fd >= 0 else {
             throw BridgeError.connectionFailed
         }
@@ -769,7 +777,7 @@ private enum RemoteAgentAttach {
         group.enter()
         DispatchQueue.global(qos: .userInitiated).async {
             relay(from: FileHandle.standardInput.fileDescriptor, to: fd)
-            shutdown(fd, SHUT_WR)
+            shutdown(fd, islandShutdownWrite)
             group.leave()
         }
 
