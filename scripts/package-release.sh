@@ -77,7 +77,33 @@ notarize_and_staple() {
     fi
 
     echo "Submitting $(basename "$submit_path") for notarization..."
-    xcrun notarytool submit "$submit_path" "${notary_args[@]}" --wait
+    local submit_result
+    submit_result=$(xcrun notarytool submit "$submit_path" "${notary_args[@]}" --wait --output-format json)
+
+    local submission_id
+    submission_id=$(python3 - <<'PY' "$submit_result"
+import json, sys
+payload = json.loads(sys.argv[1])
+print(payload.get("id", ""))
+PY
+)
+
+    local status
+    status=$(python3 - <<'PY' "$submit_result"
+import json, sys
+payload = json.loads(sys.argv[1])
+print(payload.get("status", ""))
+PY
+)
+
+    if [ "$status" != "Accepted" ]; then
+        echo "ERROR: Notarization failed with status: $status"
+        if [ -n "$submission_id" ]; then
+            echo "Fetching notarization log for submission: $submission_id"
+            xcrun notarytool log "$submission_id" "${notary_args[@]}" || true
+        fi
+        exit 1
+    fi
 
     echo "Stapling $(basename "$staple_path")..."
     xcrun stapler staple "$staple_path"
