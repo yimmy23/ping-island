@@ -34,7 +34,8 @@ archive_args=(
     -archivePath "$ARCHIVE_PATH"
     -destination "generic/platform=macOS"
     ENABLE_HARDENED_RUNTIME="$ENABLE_HARDENED_RUNTIME"
-    CODE_SIGN_STYLE=Automatic
+    CODE_SIGN_STYLE=Manual
+    CODE_SIGN_IDENTITY="$SIGNING_CERTIFICATE"
 )
 
 if [ -n "$TEAM_ID" ]; then
