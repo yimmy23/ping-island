@@ -1,6 +1,10 @@
 import Foundation
 import IslandShared
+#if canImport(Darwin)
 import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 @main
 struct IslandBridgeMain {
@@ -9,43 +13,64 @@ struct IslandBridgeMain {
 
     static func main() async {
         do {
-            let source = try parseSource(arguments: CommandLine.arguments)
-            let stdinData = readStandardInputPayload()
-            var environment = ProcessInfo.processInfo.environment
-            if environment["TTY"]?.isEmpty != false, let tty = detectTTY(parentPID: getppid()) {
-                environment["TTY"] = tty
-            }
-            let envelope = HookPayloadMapper.makeEnvelope(
-                source: source,
-                arguments: CommandLine.arguments,
-                environment: environment,
-                stdinData: stdinData
-            )
-            try? BridgeDebugLogger.logIfNeeded(
-                envelope: envelope,
-                arguments: CommandLine.arguments,
-                environment: environment,
-                stdinData: stdinData
-            )
-
-            let response = try sendEnvelopeIfPossible(
-                envelope: envelope,
-                socketPath: environment["ISLAND_SOCKET_PATH"] ?? "/tmp/island.sock"
-            )
-
-            if let response, response.decision != nil {
-                let payload = HookPayloadMapper.stdoutPayload(
-                    for: source,
-                    response: response,
-                    eventType: envelope.eventType,
-                    metadata: envelope.metadata
+            switch try parseMode(arguments: CommandLine.arguments) {
+            case .hook:
+                let source = try parseSource(arguments: CommandLine.arguments)
+                let stdinData = readStandardInputPayload()
+                var environment = ProcessInfo.processInfo.environment
+                if environment["TTY"]?.isEmpty != false, let tty = detectTTY(parentPID: getppid()) {
+                    environment["TTY"] = tty
+                }
+                let envelope = HookPayloadMapper.makeEnvelope(
+                    source: source,
+                    arguments: CommandLine.arguments,
+                    environment: environment,
+                    stdinData: stdinData
                 )
-                FileHandle.standardOutput.write(Data(payload.utf8))
+                try? BridgeDebugLogger.logIfNeeded(
+                    envelope: envelope,
+                    arguments: CommandLine.arguments,
+                    environment: environment,
+                    stdinData: stdinData
+                )
+
+                let response = try sendEnvelopeIfPossible(
+                    envelope: envelope,
+                    socketPath: environment["ISLAND_SOCKET_PATH"] ?? "/tmp/island.sock"
+                )
+
+                if let response, response.decision != nil {
+                    let payload = HookPayloadMapper.stdoutPayload(
+                        for: source,
+                        response: response,
+                        eventType: envelope.eventType,
+                        metadata: envelope.metadata
+                    )
+                    FileHandle.standardOutput.write(Data(payload.utf8))
+                }
+            case .remoteAgentService:
+                let hookSocket = try requiredArgument("--hook-socket", arguments: CommandLine.arguments)
+                let controlSocket = try requiredArgument("--control-socket", arguments: CommandLine.arguments)
+                let service = try RemoteAgentService(hookSocketPath: hookSocket, controlSocketPath: controlSocket)
+                service.run()
+            case .remoteAgentAttach:
+                let controlSocket = try requiredArgument("--control-socket", arguments: CommandLine.arguments)
+                try RemoteAgentAttach.run(controlSocketPath: controlSocket)
             }
         } catch {
             FileHandle.standardError.write(Data("PingIslandBridge error: \(error.localizedDescription)\n".utf8))
             Foundation.exit(1)
         }
+    }
+
+    private static func parseMode(arguments: [String]) throws -> BridgeRuntimeMode {
+        guard let index = arguments.firstIndex(of: "--mode"), arguments.indices.contains(index + 1) else {
+            return .hook
+        }
+        guard let mode = BridgeRuntimeMode(rawValue: arguments[index + 1]) else {
+            throw BridgeError.invalidArguments
+        }
+        return mode
     }
 
     private static func parseSource(arguments: [String]) throws -> AgentProvider {
@@ -196,6 +221,13 @@ struct IslandBridgeMain {
             return nil
         }
     }
+
+    private static func requiredArgument(_ name: String, arguments: [String]) throws -> String {
+        guard let index = arguments.firstIndex(of: name), arguments.indices.contains(index + 1) else {
+            throw BridgeError.invalidArguments
+        }
+        return arguments[index + 1]
+    }
 }
 
 private enum StdinDrainResult {
@@ -330,8 +362,8 @@ private enum BridgeDebugLogger {
         }
 
         let handle = try FileHandle(forWritingTo: fileURL)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
+        defer { handle.closeFile() }
+        handle.seekToEndOfFile()
         handle.write(data)
         handle.write(Data("\n".utf8))
     }
@@ -418,6 +450,12 @@ private enum BridgeError: Error {
     case connectionFailed
 }
 
+private enum BridgeRuntimeMode: String {
+    case hook
+    case remoteAgentService = "remote-agent-service"
+    case remoteAgentAttach = "remote-agent-attach"
+}
+
 private enum SocketClient {
     static func send(envelope: BridgeEnvelope, socketPath: String) throws -> BridgeResponse {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -454,5 +492,544 @@ private enum SocketClient {
             return BridgeResponse(requestID: envelope.id)
         }
         return try BridgeCodec.decodeResponse(Data(buffer.prefix(count)))
+    }
+}
+
+private final class RemoteAgentService {
+    private let hookSocketPath: String
+    private let controlSocketPath: String
+    private let queue = DispatchQueue(label: "com.wudanwu.pingisland.remote-agent", qos: .userInitiated)
+
+    private var hookServerSocket: Int32 = -1
+    private var controlServerSocket: Int32 = -1
+    private var hookAcceptSource: DispatchSourceRead?
+    private var controlAcceptSource: DispatchSourceRead?
+    private var controlClientSocket: Int32 = -1
+    private var controlClientReadSource: DispatchSourceRead?
+    private var controlReadBuffer = Data()
+    private var pendingRequests: [UUID: PendingRemoteBridgeRequest] = [:]
+    private var queuedMessages: [Data] = []
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(hookSocketPath: String, controlSocketPath: String) throws {
+        self.hookSocketPath = hookSocketPath
+        self.controlSocketPath = controlSocketPath
+    }
+
+    func run() {
+        do {
+            try startServers()
+            dispatchMain()
+        } catch {
+            FileHandle.standardError.write(Data("Remote agent failed: \(error.localizedDescription)\n".utf8))
+            Foundation.exit(1)
+        }
+    }
+
+    private func startServers() throws {
+        hookServerSocket = try makeListeningSocket(path: hookSocketPath)
+        controlServerSocket = try makeListeningSocket(path: controlSocketPath)
+
+        hookAcceptSource = DispatchSource.makeReadSource(fileDescriptor: hookServerSocket, queue: queue)
+        hookAcceptSource?.setEventHandler { [weak self] in
+            self?.acceptHookConnection()
+        }
+        hookAcceptSource?.resume()
+
+        controlAcceptSource = DispatchSource.makeReadSource(fileDescriptor: controlServerSocket, queue: queue)
+        controlAcceptSource?.setEventHandler { [weak self] in
+            self?.acceptControlConnection()
+        }
+        controlAcceptSource?.resume()
+    }
+
+    private func makeListeningSocket(path: String) throws -> Int32 {
+        unlink(path)
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else {
+            throw BridgeError.connectionFailed
+        }
+
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        path.withCString { ptr in
+            withUnsafeMutablePointer(to: &addr.sun_path) { pathPtr in
+                let pathBufferPtr = UnsafeMutableRawPointer(pathPtr)
+                    .assumingMemoryBound(to: CChar.self)
+                strcpy(pathBufferPtr, ptr)
+            }
+        }
+
+        let bindResult = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                bind(fd, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        guard bindResult == 0 else {
+            close(fd)
+            throw BridgeError.connectionFailed
+        }
+
+        chmod(path, 0o700)
+        guard listen(fd, 10) == 0 else {
+            close(fd)
+            throw BridgeError.connectionFailed
+        }
+        return fd
+    }
+
+    private func acceptHookConnection() {
+        let clientSocket = accept(hookServerSocket, nil, nil)
+        guard clientSocket >= 0 else { return }
+
+        queue.async { [weak self] in
+            self?.handleHookClient(clientSocket)
+        }
+    }
+
+    private func handleHookClient(_ clientSocket: Int32) {
+        defer {
+            if pendingRequests.values.contains(where: { $0.clientSocket == clientSocket }) == false {
+                close(clientSocket)
+            }
+        }
+
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = read(clientSocket, &buffer, buffer.count)
+            if count > 0 {
+                data.append(buffer, count: count)
+                continue
+            }
+            break
+        }
+
+        guard let envelope = try? BridgeCodec.decodeEnvelope(data) else {
+            return
+        }
+        let payload = RemoteBridgeMessageBuilder.payload(from: envelope)
+        let message = RemoteHookEventMessage(type: "hook_event", payload: payload)
+
+        if payload.expectsResponse {
+            pendingRequests[payload.requestID] = PendingRemoteBridgeRequest(
+                requestID: payload.requestID,
+                sessionID: payload.sessionID,
+                toolUseID: payload.toolUseID,
+                clientSocket: clientSocket
+            )
+        }
+
+        enqueue(message)
+
+        if payload.expectsResponse == false {
+            close(clientSocket)
+        }
+    }
+
+    private func acceptControlConnection() {
+        let clientSocket = accept(controlServerSocket, nil, nil)
+        guard clientSocket >= 0 else { return }
+
+        if controlClientSocket >= 0 {
+            close(controlClientSocket)
+            controlClientReadSource?.cancel()
+            controlClientReadSource = nil
+        }
+
+        controlClientSocket = clientSocket
+        sendHello()
+        flushQueuedMessages()
+
+        controlClientReadSource = DispatchSource.makeReadSource(fileDescriptor: clientSocket, queue: queue)
+        controlClientReadSource?.setEventHandler { [weak self] in
+            self?.readControlMessages()
+        }
+        controlClientReadSource?.setCancelHandler { [weak self] in
+            if let socket = self?.controlClientSocket, socket >= 0 {
+                close(socket)
+                self?.controlClientSocket = -1
+            }
+        }
+        controlClientReadSource?.resume()
+    }
+
+    private func readControlMessages() {
+        guard controlClientSocket >= 0 else { return }
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        let count = read(controlClientSocket, &buffer, buffer.count)
+        guard count > 0 else {
+            controlClientReadSource?.cancel()
+            controlClientReadSource = nil
+            controlReadBuffer.removeAll()
+            return
+        }
+
+        controlReadBuffer.append(buffer, count: count)
+        while let newlineRange = controlReadBuffer.firstRange(of: Data([0x0A])) {
+            let lineData = controlReadBuffer.subdata(in: 0..<newlineRange.lowerBound)
+            controlReadBuffer.removeSubrange(0...newlineRange.lowerBound)
+            guard !lineData.isEmpty,
+                  let message = try? decoder.decode(RemoteDecisionEnvelope.self, from: lineData) else {
+                continue
+            }
+            handleDecision(message)
+        }
+    }
+
+    private func handleDecision(_ decision: RemoteDecisionEnvelope) {
+        guard let pending = pendingRequests.removeValue(forKey: decision.requestID) else {
+            return
+        }
+
+        let bridgeResponse = BridgeResponse(
+            requestID: pending.requestID,
+            decision: RemoteBridgeMessageBuilder.bridgeDecision(
+                for: decision.decision,
+                updatedInput: decision.updatedInput
+            ),
+            reason: decision.reason,
+            updatedInput: decision.updatedInput,
+            errorMessage: nil
+        )
+
+        guard let data = try? BridgeCodec.encodeResponse(bridgeResponse) else {
+            close(pending.clientSocket)
+            return
+        }
+
+        _ = data.withUnsafeBytes { buffer in
+            write(pending.clientSocket, buffer.baseAddress, buffer.count)
+        }
+        close(pending.clientSocket)
+    }
+
+    private func sendHello() {
+        let hello = RemoteDaemonHello(
+            type: "hello",
+            version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev",
+            hostname: ProcessInfo.processInfo.hostName
+        )
+        enqueue(hello, flushImmediately: true)
+    }
+
+    private func enqueue<T: Encodable>(_ message: T, flushImmediately: Bool = false) {
+        guard let data = try? encoder.encode(message) + Data("\n".utf8) else {
+            return
+        }
+        queuedMessages.append(data)
+        if queuedMessages.count > 128 {
+            queuedMessages.removeFirst(queuedMessages.count - 128)
+        }
+
+        if flushImmediately {
+            flushQueuedMessages()
+        } else if controlClientSocket >= 0 {
+            flushQueuedMessages()
+        }
+    }
+
+    private func flushQueuedMessages() {
+        guard controlClientSocket >= 0 else { return }
+        while let message = queuedMessages.first {
+            _ = message.withUnsafeBytes { buffer in
+                write(controlClientSocket, buffer.baseAddress, buffer.count)
+            }
+            queuedMessages.removeFirst()
+        }
+    }
+}
+
+private enum RemoteAgentAttach {
+    static func run(controlSocketPath: String) throws {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else {
+            throw BridgeError.connectionFailed
+        }
+        defer { close(fd) }
+
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        let utf8 = controlSocketPath.utf8CString.map(UInt8.init(bitPattern:))
+        withUnsafeMutableBytes(of: &address.sun_path) { buffer in
+            buffer.copyBytes(from: utf8)
+        }
+
+        let result = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        guard result == 0 else {
+            throw BridgeError.connectionFailed
+        }
+
+        let group = DispatchGroup()
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            relay(from: FileHandle.standardInput.fileDescriptor, to: fd)
+            shutdown(fd, SHUT_WR)
+            group.leave()
+        }
+
+        relay(from: fd, to: FileHandle.standardOutput.fileDescriptor)
+        group.wait()
+    }
+
+    private static func relay(from inputFD: Int32, to outputFD: Int32) {
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = read(inputFD, &buffer, buffer.count)
+            guard count > 0 else { break }
+            _ = buffer.withUnsafeBytes { rawBuffer in
+                write(outputFD, rawBuffer.baseAddress, count)
+            }
+        }
+    }
+}
+
+private struct PendingRemoteBridgeRequest {
+    let requestID: UUID
+    let sessionID: String
+    let toolUseID: String?
+    let clientSocket: Int32
+}
+
+private struct RemoteHookClientInfoPayload: Codable {
+    let kind: String
+    let profileID: String?
+    let name: String?
+    let bundleIdentifier: String?
+    let launchURL: String?
+    let origin: String?
+    let originator: String?
+    let threadSource: String?
+    let transport: String?
+    let remoteHost: String?
+    let sessionFilePath: String?
+    let terminalBundleIdentifier: String?
+    let terminalProgram: String?
+    let terminalSessionIdentifier: String?
+    let iTermSessionIdentifier: String?
+    let tmuxSessionIdentifier: String?
+    let tmuxPaneIdentifier: String?
+    let processName: String?
+}
+
+private struct RemoteHookEventPayload: Codable {
+    let requestID: UUID
+    let sessionID: String
+    let cwd: String
+    let event: String
+    let status: String
+    let provider: String
+    let pid: Int?
+    let tty: String?
+    let tool: String?
+    let toolInput: [String: JSONValue]?
+    let toolUseID: String?
+    let notificationType: String?
+    let message: String?
+    let expectsResponse: Bool
+    let clientInfo: RemoteHookClientInfoPayload
+}
+
+private struct RemoteHookEventMessage: Codable {
+    let type: String
+    let payload: RemoteHookEventPayload
+}
+
+private struct RemoteDaemonHello: Codable {
+    let type: String
+    let version: String
+    let hostname: String
+}
+
+private struct RemoteDecisionEnvelope: Codable {
+    let type: String
+    let requestID: UUID
+    let decision: String
+    let reason: String?
+    let updatedInput: [String: JSONValue]?
+}
+
+private enum RemoteBridgeMessageBuilder {
+    static func payload(from envelope: BridgeEnvelope) -> RemoteHookEventPayload {
+        let metadata = envelope.metadata
+        let toolInput = decodeToolInput(from: metadata["tool_input_json"])
+        let terminalContext = envelope.terminalContext
+        let sessionID = resolvedSessionID(for: envelope)
+        let remoteHost = firstNonEmpty(metadata["remote_host"], terminalContext.remoteHost)
+        let transport = firstNonEmpty(metadata["connection_transport"], terminalContext.transport)
+        let toolUseID = metadata["tool_use_id"]
+
+        return RemoteHookEventPayload(
+            requestID: envelope.id,
+            sessionID: sessionID,
+            cwd: envelope.cwd ?? terminalContext.currentDirectory ?? metadata["cwd"] ?? "",
+            event: envelope.eventType,
+            status: mapStatus(eventType: envelope.eventType, status: envelope.status?.kind, notificationType: metadata["notification_type"]),
+            provider: envelope.provider.rawValue,
+            pid: Int(metadata["pid"] ?? ""),
+            tty: terminalContext.tty,
+            tool: normalizedToolName(metadata["tool_name"] ?? envelope.title),
+            toolInput: toolInput,
+            toolUseID: toolUseID,
+            notificationType: metadata["notification_type"],
+            message: metadata["message"] ?? envelope.preview,
+            expectsResponse: envelope.expectsResponse,
+            clientInfo: RemoteHookClientInfoPayload(
+                kind: clientKind(for: envelope),
+                profileID: metadata["client_kind"],
+                name: firstNonEmpty(metadata["client_name"], metadata["client_title"], metadata["client"]),
+                bundleIdentifier: firstNonEmpty(metadata["client_bundle_id"], metadata["source_bundle_id"]),
+                launchURL: firstNonEmpty(metadata["launch_url"], metadata["deeplink"], metadata["deep_link"]),
+                origin: metadata["client_origin"],
+                originator: firstNonEmpty(metadata["client_originator"], metadata["originator"], metadata["source_title"], terminalContext.ideName),
+                threadSource: firstNonEmpty(metadata["thread_source"], metadata["session_start_source"], metadata["codex_session_start_source"]),
+                transport: transport,
+                remoteHost: remoteHost,
+                sessionFilePath: firstNonEmpty(metadata["session_file_path"], metadata["rollout_path"], metadata["transcript_path"]),
+                terminalBundleIdentifier: firstNonEmpty(terminalContext.ideBundleID, terminalContext.terminalBundleID),
+                terminalProgram: terminalContext.terminalProgram,
+                terminalSessionIdentifier: terminalContext.terminalSessionID,
+                iTermSessionIdentifier: terminalContext.iTermSessionID,
+                tmuxSessionIdentifier: terminalContext.tmuxSession,
+                tmuxPaneIdentifier: terminalContext.tmuxPane,
+                processName: firstNonEmpty(metadata["source_process_name"], metadata["process_name"])
+            )
+        )
+    }
+
+    static func bridgeDecision(for value: String, updatedInput: [String: JSONValue]?) -> InterventionDecision? {
+        switch value {
+        case "allow", "approve":
+            return .approve
+        case "approveForSession":
+            return .approveForSession
+        case "deny":
+            return .deny
+        case "cancel":
+            return .cancel
+        case "answer":
+            let answers = updatedInput?
+                .compactMapValues { value -> String? in
+                    switch value {
+                    case .string(let string):
+                        return string
+                    default:
+                        return nil
+                    }
+                } ?? [:]
+            return .answer(answers)
+        default:
+            return nil
+        }
+    }
+
+    private static func resolvedSessionID(for envelope: BridgeEnvelope) -> String {
+        let sessionId = envelope.metadata["session_id"]
+            ?? envelope.metadata["thread_id"]
+            ?? envelope.metadata["threadId"]
+            ?? envelope.sessionKey.components(separatedBy: ":").dropFirst().joined(separator: ":")
+        return sessionId.isEmpty ? envelope.sessionKey : sessionId
+    }
+
+    private static func decodeToolInput(from json: String?) -> [String: JSONValue]? {
+        guard let json, let data = json.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSONDecoder().decode([String: JSONValue].self, from: data)
+    }
+
+    private static func normalizedToolName(_ rawToolName: String?) -> String? {
+        guard let rawToolName else { return nil }
+        switch rawToolName.lowercased() {
+        case "ask_user_question", "askuserquestion":
+            return "AskUserQuestion"
+        default:
+            return rawToolName
+        }
+    }
+
+    private static func mapStatus(
+        eventType: String,
+        status: SessionStatusKind?,
+        notificationType: String?
+    ) -> String {
+        if eventType == "Notification", notificationType == "idle_prompt" {
+            return "waiting_for_input"
+        }
+
+        switch status {
+        case .waitingForApproval:
+            return "waiting_for_approval"
+        case .waitingForInput:
+            return "waiting_for_input"
+        case .runningTool:
+            return "running_tool"
+        case .compacting:
+            return "compacting"
+        case .completed:
+            return "ended"
+        case .notification:
+            return "notification"
+        case .interrupted:
+            return "waiting_for_input"
+        case .idle:
+            return "idle"
+        case .thinking, .active, .error, .none:
+            break
+        }
+
+        switch eventType {
+        case "SessionEnd":
+            return "ended"
+        case "SessionStart", "Stop", "SubagentStop":
+            return "waiting_for_input"
+        case "UserPromptSubmit", "PostToolUse":
+            return "processing"
+        case "PreToolUse":
+            return "running_tool"
+        case "PreCompact":
+            return "compacting"
+        case "Notification":
+            return "notification"
+        default:
+            return "processing"
+        }
+    }
+
+    private static func clientKind(for envelope: BridgeEnvelope) -> String {
+        let metadata = envelope.metadata
+        let explicitKind = (
+            metadata["client_kind"]
+                ?? metadata["client_type"]
+                ?? metadata["client"]
+        )?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        switch envelope.provider {
+        case .claude:
+            return "claudeCode"
+        case .codex:
+            if explicitKind?.contains("cli") == true
+                || envelope.terminalContext.tty != nil
+                || envelope.terminalContext.terminalProgram != nil
+                || envelope.terminalContext.terminalBundleID != nil {
+                return "codexCLI"
+            }
+            return "codexApp"
+        case .copilot:
+            return "custom"
+        }
+    }
+
+    private static func firstNonEmpty(_ values: String?...) -> String? {
+        values.compactMap { value -> String? in
+            guard let value else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }.first
     }
 }

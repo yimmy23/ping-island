@@ -55,7 +55,7 @@ actor SessionStore {
         session.title = title ?? session.title
         session.preview = preview ?? session.preview
         session.status = status
-        session.updatedAt = .now
+        session.updatedAt = Date()
         session.metadata.merge(metadata) { _, new in new }
         sessions[sessionID] = session
         if selectedSessionID == nil {

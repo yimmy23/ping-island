@@ -19,6 +19,7 @@ enum SessionProvider: String, Codable, Equatable, Sendable {
 
 enum SessionIngress: String, Equatable, Sendable {
     case hookBridge
+    case remoteBridge
     case codexAppServer
 }
 

@@ -187,7 +187,7 @@ actor SessionStore {
         session.provider = event.provider
         session.clientInfo = session.clientInfo.merged(with: event.clientInfo)
         session.clientInfo = normalizedClientInfo(session.clientInfo, provider: event.provider, sessionId: sessionId)
-        session.ingress = .hookBridge
+        session.ingress = event.ingress
         session.pid = event.pid
         if let pid = event.pid {
             session.isInTmux = ProcessTreeBuilder.shared.isInTmux(pid: pid, tree: tree)
@@ -335,7 +335,7 @@ actor SessionStore {
             projectName: projectName,
             provider: event.provider,
             clientInfo: resolvedClientInfo,
-            ingress: .hookBridge,
+            ingress: event.ingress,
             sessionName: restoredAssociation?.sessionName,
             pid: event.pid,
             tty: event.tty?.replacingOccurrences(of: "/dev/", with: ""),
@@ -2650,6 +2650,8 @@ actor SessionStore {
 
         switch session.ingress {
         case .hookBridge:
+            return codexHookPlaceholderPruneDelayNs
+        case .remoteBridge:
             return codexHookPlaceholderPruneDelayNs
         case .codexAppServer:
             return codexAppServerPlaceholderPruneDelayNs

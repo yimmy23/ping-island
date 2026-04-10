@@ -1036,6 +1036,94 @@ struct HookInstaller {
 
     // MARK: - JSON Utilities
 
+    nonisolated static func remoteBridgeBinaryURL() -> URL? {
+        let bundledBridgeURL = Bundle.main.executableURL?
+            .deletingLastPathComponent()
+            .appendingPathComponent(bridgeBinaryName)
+        if let bundledBridgeURL,
+           FileManager.default.isReadableFile(atPath: bundledBridgeURL.path) {
+            return bundledBridgeURL
+        }
+
+        let fallbackURL = URL(fileURLWithPath: "/Users/wudanwu/Island/Prototype/.build/debug/\(bridgeBinaryName)")
+        if FileManager.default.isReadableFile(atPath: fallbackURL.path) {
+            return fallbackURL
+        }
+
+        return nil
+    }
+
+    nonisolated static func managedBridgeCommand(
+        source: String,
+        extraArguments: [String],
+        launcherPath: String,
+        socketPath: String?
+    ) -> String {
+        var components: [String] = []
+        if let socketPath, !socketPath.isEmpty {
+            components.append("ISLAND_SOCKET_PATH=\(shellQuoted(socketPath))")
+        }
+        components.append(shellQuoted(launcherPath))
+        components.append("--source")
+        components.append(source)
+        components.append(contentsOf: extraArguments.map(shellQuoted))
+        return components.joined(separator: " ")
+    }
+
+    nonisolated static func updatedConfigurationData(
+        existingData: Data?,
+        profile: ManagedHookClientProfile,
+        customCommand: String,
+        installing: Bool
+    ) -> Data {
+        var json: [String: Any] = [:]
+        if let existingData,
+           let existing = HookConfigParser.parseJSONObject(from: existingData) {
+            json = existing
+        }
+
+        switch profile.installationKind {
+        case .jsonHooks:
+            var hooks = json["hooks"] as? [String: Any] ?? [:]
+            if installing {
+                for event in profile.events {
+                    let existingEvent = hooks[event.name] as? [[String: Any]]
+                    hooks[event.name] = normalizedHookEntries(
+                        existingEvent,
+                        preferred: makeHookEntries(command: customCommand, event: event)
+                    )
+                }
+            } else {
+                for (event, value) in hooks {
+                    guard var entries = value as? [[String: Any]] else { continue }
+                    entries.removeAll { entry in
+                        isIslandManagedHookEntry(entry)
+                    }
+                    if entries.isEmpty {
+                        hooks.removeValue(forKey: event)
+                    } else {
+                        hooks[event] = entries
+                    }
+                }
+            }
+
+            if hooks.isEmpty {
+                json.removeValue(forKey: "hooks")
+            } else {
+                json["hooks"] = hooks
+            }
+
+        case .pluginFile:
+            break
+        }
+
+        let data = (try? JSONSerialization.data(
+            withJSONObject: json,
+            options: [.prettyPrinted, .sortedKeys]
+        )) ?? Data("{}".utf8)
+        return data
+    }
+
     private static func writeJSONObject(_ json: [String: Any], to url: URL) {
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
@@ -1048,5 +1136,9 @@ struct HookInstaller {
         ) {
             try? data.write(to: url)
         }
+    }
+
+    private nonisolated static func shellQuoted(_ string: String) -> String {
+        "'" + string.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
     }
 }

@@ -29,8 +29,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  linux-bridge:
+    name: Build Linux remote bridge
+    runs-on: ubuntu-24.04
+    container: swift:6.1-jammy
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Build Linux PingIslandBridge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          swift build --package-path Prototype -c release --product PingIslandBridge
+
+          mkdir -p releases/unsigned
+          cp Prototype/.build/release/PingIslandBridge releases/unsigned/PingIslandBridge-linux-x86_64
+          chmod +x releases/unsigned/PingIslandBridge-linux-x86_64
+
+      - name: Upload Linux bridge artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PingIsland-linux-bridge
+          path: releases/unsigned/PingIslandBridge-linux-x86_64
+          if-no-files-found: error
+
   release:
     name: Build and publish signed packages
+    needs: linux-bridge
     runs-on: macos-15
     timeout-minutes: 45
     env:
@@ -138,6 +170,12 @@ jobs:
           PING_ISLAND_NOTARY_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: ./scripts/package-release.sh
 
+      - name: Download Linux bridge artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: PingIsland-linux-bridge
+          path: releases/bridge
+
       - name: Collect release metadata
         id: meta
         shell: bash
@@ -147,6 +185,7 @@ jobs:
           shopt -s nullglob
           dmg_assets=(releases/signed/*.dmg)
           zip_assets=(releases/signed/*.zip)
+          linux_bridge_assets=(releases/bridge/PingIslandBridge-linux-*)
 
           if [ "${#dmg_assets[@]}" -ne 1 ]; then
             echo "::error::Expected exactly one DMG asset in releases/signed, found ${#dmg_assets[@]}"
@@ -159,6 +198,10 @@ jobs:
           fi
 
           app_path="build/release/export/Ping Island.app"
+          if [ "${#linux_bridge_assets[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one Linux bridge asset in releases/bridge, found ${#linux_bridge_assets[@]}"
+            exit 1
+          fi
           if [ ! -d "$app_path" ]; then
             echo "::error::Expected built app bundle at $app_path"
             exit 1
@@ -185,6 +228,7 @@ jobs:
             echo "build=$build"
             echo "dmg_path=${dmg_assets[0]}"
             echo "zip_path=${zip_assets[0]}"
+            echo "linux_bridge_path=${linux_bridge_assets[0]}"
             echo "notes_path=$notes_path"
             echo "has_notes=$has_notes"
             echo "release_title=Ping Island $RELEASE_TAG"
@@ -197,6 +241,7 @@ jobs:
           path: |
             ${{ steps.meta.outputs.dmg_path }}
             ${{ steps.meta.outputs.zip_path }}
+            ${{ steps.meta.outputs.linux_bridge_path }}
           if-no-files-found: error
 
       - name: Prepare release notes body
@@ -212,10 +257,11 @@ jobs:
             cp "${{ steps.meta.outputs.notes_path }}" "$notes_file"
             printf '\n\n%s\n' "$release_block" >> "$notes_file"
           else
-            printf 'Release build for %s.\n\nIncluded assets:\n- %s\n- %s\n\n%s\n' \
+            printf 'Release build for %s.\n\nIncluded assets:\n- %s\n- %s\n- %s\n\n%s\n' \
               "$RELEASE_TAG" \
               "$(basename "${{ steps.meta.outputs.dmg_path }}")" \
               "$(basename "${{ steps.meta.outputs.zip_path }}")" \
+              "$(basename "${{ steps.meta.outputs.linux_bridge_path }}")" \
               "$release_block" \
               > "$notes_file"
           fi
@@ -263,6 +309,7 @@ jobs:
           retry gh release upload "$RELEASE_TAG" \
             "${{ steps.meta.outputs.dmg_path }}" \
             "${{ steps.meta.outputs.zip_path }}" \
+            "${{ steps.meta.outputs.linux_bridge_path }}" \
             --repo "$repo" \
             --clobber
 

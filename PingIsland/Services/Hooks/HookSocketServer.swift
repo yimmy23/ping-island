@@ -26,6 +26,7 @@ struct HookEvent: Sendable {
     let toolUseId: String?
     let notificationType: String?
     let message: String?
+    let ingress: SessionIngress
 
     init(
         sessionId: String,
@@ -40,7 +41,8 @@ struct HookEvent: Sendable {
         toolInput: [String: AnyCodable]?,
         toolUseId: String?,
         notificationType: String?,
-        message: String?
+        message: String?,
+        ingress: SessionIngress = .hookBridge
     ) {
         self.sessionId = sessionId
         self.cwd = cwd
@@ -55,9 +57,10 @@ struct HookEvent: Sendable {
         self.toolUseId = toolUseId
         self.notificationType = notificationType
         self.message = message
+        self.ingress = ingress
     }
 
-    var sessionPhase: SessionPhase {
+    nonisolated var sessionPhase: SessionPhase {
         if event == "PreCompact" {
             return .compacting
         }
@@ -109,7 +112,8 @@ private extension HookEvent {
             toolInput: toolInput,
             toolUseId: toolUseId,
             notificationType: notificationType,
-            message: message
+            message: message,
+            ingress: ingress
         )
     }
 }

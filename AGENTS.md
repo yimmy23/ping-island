@@ -29,6 +29,8 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
   - Hook-less fallback parsing for Codex sessions lives in `PingIsland/Services/Codex/CodexRolloutParser.swift`
 - Terminal and focus control: `PingIsland/Services/Tmux/`, `PingIsland/Services/Window/`, `PingIsland/Utilities/TerminalVisibilityDetector.swift`
   - Terminal focus flows currently cover iTerm2, Ghostty, Terminal.app, tmux, and IDE-hosted terminals
+- Remote SSH forwarding and remote-host management: `PingIsland/Services/Remote/`
+  - Remote hosts can bootstrap a bridge on the SSH target, rewrite remote Claude hooks, and attach a bidirectional forwarding channel back into PingIsland
 - Provider/client routing: bridge envelopes are normalized in `PingIsland/Services/Hooks/HookSocketServer.swift`, stored on `SessionState`, and launched via `PingIsland/Services/Window/SessionLauncher.swift`
 - Client profile registry: installable hook clients and runtime client branding / recognition are centralized in `PingIsland/Models/ClientProfile.swift`
 - VS Code-compatible IDE focus extension install / URI launch: `PingIsland/Services/Window/IDEExtensionInstaller.swift`, `PingIsland/Services/Window/TerminalSessionFocuser.swift`
@@ -43,6 +45,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - `PingIsland/Core`: notch geometry, shared state, app settings, selectors
 - `PingIsland/Models`: domain models for sessions, events, tools, phases
 - `PingIsland/Services`: ingestion, socket handling, state management, tmux, windows, updates
+- `PingIsland/Services/Remote`: remote endpoint persistence, SSH bootstrap / attach, and remote hook forwarding
 - `PingIsland/Services/Update`: Sparkle updater bridge, appcast/release-notes loading, update state publishing
 - `PingIsland/Services/Window/IDEExtensionInstaller.swift`: installs the VS Code-compatible terminal-focus extension used by Cursor / VS Code / CodeBuddy / Qoder style IDE hosts (`QoderWork` is hook-only, not an IDE extension host)
 - `PingIsland/UI`: SwiftUI views, reusable components, AppKit-backed window controllers
@@ -107,7 +110,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
   - `./scripts/package-unsigned.sh`
   - `./scripts/create-release.sh`
   - `./scripts/generate-keys.sh`
-  - GitHub Actions: `.github/workflows/release-packages.yml` imports a Developer ID certificate from repository secrets, notarizes the exported app, and publishes signed `dmg` / `zip` assets to the matching GitHub Release for a `v*` tag or manual dispatch
+  - GitHub Actions: `.github/workflows/release-packages.yml` imports a Developer ID certificate from repository secrets, notarizes the exported app, and publishes signed `dmg` / `zip` assets plus a Linux `PingIslandBridge` remote-agent binary to the matching GitHub Release for a `v*` tag or manual dispatch
 - Release scripts assume local signing and notarization tooling. They may modify `build/`, `releases/`, and `.sparkle-keys/`.
 
 ## Working Rules
@@ -144,4 +147,5 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - The main shipping target is the Xcode project, not the Swift package under `Prototype/`.
 - The root project now includes `PingIslandTests` and `PingIslandUITests` targets for app-level state and settings-window coverage.
 - `Prototype/Tests` remains the fastest place for logic-level unit tests plus process/socket e2e coverage.
+- Sparkle update discovery is expected to use the GitHub Releases `latest/download/appcast.xml` asset unless a local override explicitly replaces it.
 - The worktree may already be dirty. Check `git status` before broad edits.

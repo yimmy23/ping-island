@@ -10,6 +10,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
     case mascot
     case sound
     case integration
+    case remote
     case about
 
     var id: String { rawValue }
@@ -21,6 +22,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
         case .mascot: return "宠物"
         case .sound: return "声音"
         case .integration: return "集成"
+        case .remote: return "远程"
         case .about: return "关于"
         }
     }
@@ -32,6 +34,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
         case .mascot: return "客户端宠物与动作"
         case .sound: return "通知与提示音"
         case .integration: return "Hooks 与 IDE 扩展"
+        case .remote: return "SSH 主机与远程转发"
         case .about: return "版本与更新"
         }
     }
@@ -43,6 +46,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
         case .mascot: return "face.smiling.fill"
         case .sound: return "speaker.wave.2.fill"
         case .integration: return "link.circle.fill"
+        case .remote: return "network.badge.shield.half.filled"
         case .about: return "info.circle.fill"
         }
     }
@@ -54,6 +58,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
         case .mascot: return Color(red: 0.91, green: 0.27, blue: 0.81)  // Pink
         case .sound: return Color(red: 0.22, green: 0.83, blue: 0.42)
         case .integration: return Color(red: 0.16, green: 0.76, blue: 0.72)
+        case .remote: return Color(red: 0.95, green: 0.54, blue: 0.20)
         case .about: return Color(red: 0.17, green: 0.60, blue: 0.96)
         }
     }
@@ -349,7 +354,9 @@ private struct SettingsGlassSurface: NSViewRepresentable {
 }
 
 private enum SettingsPanelMetrics {
-    static let windowSize = CGSize(width: 648, height: 522)
+    static let windowSize = AppSettings.defaultSettingsWindowSize
+    static let windowMinSize = AppSettings.minimumSettingsWindowSize
+    static let windowMaxSize = AppSettings.maximumSettingsWindowSize
     static let popoverSize = CGSize(width: 760, height: 620)
     static let windowSidebarWidth: CGFloat = 236
     static let popoverSidebarWidth: CGFloat = 212
@@ -368,9 +375,11 @@ private struct SettingsPanelContentView: View {
     @ObservedObject private var screenSelector = ScreenSelector.shared
     @ObservedObject private var soundPacks = SoundPackCatalog.shared
     @ObservedObject private var updateManager = UpdateManager.shared
+    @ObservedObject private var remoteManager = RemoteConnectorManager.shared
     @State private var selectedCategory: SettingsCategory? = .general
     @State private var pendingHookReinstallProfile: ManagedHookClientProfile?
     @State private var showingCustomHookInstallSheet = false
+    @State private var showingRemoteHostSheet = false
 
     var body: some View {
         ZStack {
@@ -388,8 +397,10 @@ private struct SettingsPanelContentView: View {
             .frame(
                 minWidth: minimumWidth,
                 idealWidth: idealWidth,
+                maxWidth: maximumWidth,
                 minHeight: minimumHeight,
                 idealHeight: idealHeight,
+                maxHeight: maximumHeight,
                 alignment: .topLeading
             )
         }
@@ -397,6 +408,14 @@ private struct SettingsPanelContentView: View {
         .ignoresSafeArea()
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: Color.black.opacity(0.22), radius: 30, y: 18)
+        .overlay(alignment: .bottomTrailing) {
+            if presentation == .window {
+                SettingsResizeHandle()
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 12)
+                    .allowsHitTesting(false)
+            }
+        }
         .preferredColorScheme(.dark)
         .onAppear {
             viewModel.refresh()
@@ -437,12 +456,26 @@ private struct SettingsPanelContentView: View {
                 showingCustomHookInstallSheet = false
             }
         }
+        .sheet(isPresented: $showingRemoteHostSheet) {
+            AddRemoteHostSheet(remoteManager: remoteManager) {
+                showingRemoteHostSheet = false
+            }
+        }
     }
 
     private var minimumWidth: CGFloat {
         switch presentation {
         case .window:
-            return SettingsPanelMetrics.windowSize.width
+            return SettingsPanelMetrics.windowMinSize.width
+        case .popover:
+            return SettingsPanelMetrics.popoverSize.width
+        }
+    }
+
+    private var maximumWidth: CGFloat {
+        switch presentation {
+        case .window:
+            return SettingsPanelMetrics.windowMaxSize.width
         case .popover:
             return SettingsPanelMetrics.popoverSize.width
         }
@@ -460,7 +493,16 @@ private struct SettingsPanelContentView: View {
     private var minimumHeight: CGFloat {
         switch presentation {
         case .window:
-            return SettingsPanelMetrics.windowSize.height
+            return SettingsPanelMetrics.windowMinSize.height
+        case .popover:
+            return SettingsPanelMetrics.popoverSize.height
+        }
+    }
+
+    private var maximumHeight: CGFloat {
+        switch presentation {
+        case .window:
+            return SettingsPanelMetrics.windowMaxSize.height
         case .popover:
             return SettingsPanelMetrics.popoverSize.height
         }
@@ -501,7 +543,7 @@ private struct SettingsPanelContentView: View {
         [
             SettingsSidebarSection(
                 title: nil,
-                categories: [.general, .display, .mascot, .sound, .integration, .about]
+                categories: [.general, .display, .mascot, .sound, .integration, .remote, .about]
             )
         ]
     }
@@ -646,6 +688,8 @@ private struct SettingsPanelContentView: View {
                     soundContent
                 case .integration:
                     integrationContent
+                case .remote:
+                    remoteContent
                 case .about:
                     aboutContent
                 }
@@ -1153,6 +1197,72 @@ private struct SettingsPanelContentView: View {
         }
     }
 
+    private var remoteContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            SettingsSectionCard(title: "远程主机") {
+                if remoteManager.endpoints.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(appLocalized: "还没有添加任何远程主机")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text(appLocalized: "添加后，Island 会通过 SSH 安装远程 bridge、改写远程 Claude hooks，并建立一个双向转发通道。")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.58))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .padding(.bottom, 8)
+                } else {
+                    let endpoints = remoteManager.endpoints
+                    ForEach(Array(endpoints.enumerated()), id: \.element.id) { index, endpoint in
+                        RemoteHostManagementLine(
+                            endpoint: endpoint,
+                            runtimeState: remoteManager.runtimeStates[endpoint.id] ?? RemoteEndpointRuntimeState(),
+                            connectAction: { password in
+                                remoteManager.connect(endpointID: endpoint.id, password: password)
+                            },
+                            disconnectAction: { remoteManager.disconnect(endpointID: endpoint.id) },
+                            removeAction: { remoteManager.removeEndpoint(id: endpoint.id) }
+                        )
+
+                        if index < endpoints.count - 1 {
+                            SettingsLineDivider()
+                        }
+                    }
+                }
+
+                SettingsLineDivider()
+
+                HStack {
+                    Spacer()
+                    Button(action: { showingRemoteHostSheet = true }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(appLocalized: "添加远程主机")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                }
+                .padding(.vertical, 12)
+            }
+
+            SettingsSectionCard(title: "说明") {
+                SettingsValueLine(title: "支持协议", value: AppLocalization.string("SSH"))
+                SettingsLineDivider()
+                SettingsValueLine(title: "首连能力", value: AppLocalization.string("检测 + 安装 bridge + 改写 Claude hooks"))
+                SettingsLineDivider()
+                SettingsValueLine(title: "密码模式", value: AppLocalization.string("仅保留在当前 app 会话内，不落盘"))
+            }
+        }
+    }
+
     private var screenPicker: some View {
         Picker("显示器", selection: screenSelectionBinding) {
             Text(appLocalized: "自动").tag("automatic")
@@ -1487,6 +1597,24 @@ private struct WindowControlButton: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct SettingsResizeHandle: View {
+    var body: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(.white.opacity(0.34))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.black.opacity(0.16))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
     }
 }
 
@@ -1926,6 +2054,329 @@ private struct HookManagementIcon: View {
         return profile.prefersBundledLogoOverAppIcon || resolvedAppIcon == nil
             ? logoAssetName
             : nil
+    }
+}
+
+private struct RemoteHostManagementLine: View {
+    let endpoint: RemoteEndpoint
+    let runtimeState: RemoteEndpointRuntimeState
+    let connectAction: (String?) -> Void
+    let disconnectAction: () -> Void
+    let removeAction: () -> Void
+
+    @State private var showingPasswordSheet = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: "network")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.orange.opacity(0.24))
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(endpoint.resolvedTitle)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+
+                        Text(appLocalized: runtimeState.phase.titleKey)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(statusTint)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(statusTint.opacity(0.18))
+                            )
+                    }
+
+                    Text(endpoint.sshTarget)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.52))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    Text(detailText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.60))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+            }
+
+            HStack(spacing: 10) {
+                if runtimeState.phase == .connected {
+                    HookManagementButton(title: "断开", tint: TerminalColors.amber, action: disconnectAction)
+                } else {
+                    HookManagementButton(
+                        title: endpoint.authMode == .passwordSession ? "输入密码并连接" : "连接",
+                        tint: TerminalColors.blue
+                    ) {
+                        if endpoint.authMode == .passwordSession {
+                            showingPasswordSheet = true
+                        } else {
+                            connectAction(nil)
+                        }
+                    }
+                }
+
+                HookManagementButton(title: "删除", tint: TerminalColors.amber, action: removeAction)
+            }
+
+            if let lastError = runtimeState.lastError, !lastError.isEmpty {
+                Text(verbatim: AppLocalization.string(lastError))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(TerminalColors.amber)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .sheet(isPresented: $showingPasswordSheet) {
+            RemotePasswordPromptSheet(endpoint: endpoint) { password in
+                showingPasswordSheet = false
+                connectAction(password)
+            } onDismiss: {
+                showingPasswordSheet = false
+            }
+        }
+    }
+
+    private var detailText: String {
+        var parts: [String] = [runtimeState.detail]
+        if let detectedHostname = endpoint.detectedHostname, !detectedHostname.isEmpty {
+            parts.append(detectedHostname)
+        }
+        parts.append(AppLocalization.string(endpoint.authMode.titleKey))
+        if let agentVersion = runtimeState.agentVersion ?? endpoint.agentVersion {
+            parts.append("Agent \(agentVersion)")
+        }
+        return parts.map { AppLocalization.string($0) }.joined(separator: " · ")
+    }
+
+    private var statusTint: Color {
+        switch runtimeState.phase {
+        case .connected:
+            return TerminalColors.green
+        case .failed, .degraded:
+            return TerminalColors.amber
+        case .connecting, .probing, .bootstrapping:
+            return TerminalColors.blue
+        case .disconnected:
+            return .white.opacity(0.68)
+        }
+    }
+}
+
+private struct AddRemoteHostSheet: View {
+    @ObservedObject var remoteManager: RemoteConnectorManager
+    let onDismiss: () -> Void
+
+    @State private var displayName = ""
+    @State private var sshTarget = ""
+    @State private var password = ""
+
+    private var canAdd: Bool {
+        !sshTarget.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text(appLocalized: "添加远程主机")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+
+                VStack(alignment: .leading, spacing: 14) {
+                remoteField(title: "显示名称（可选）", placeholder: "例如 GPU Box", text: $displayName)
+                remoteField(title: "SSH 目标", placeholder: "例如 dev@10.0.0.8 或 my-server", text: $sshTarget)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(appLocalized: "密码（可选）")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+
+                    SecureField("", text: $password, prompt: Text(appLocalized: "仅用于本次连接，不会保存到磁盘"))
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(.white.opacity(0.06))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(.white.opacity(0.1), lineWidth: 1)
+                        )
+                }
+            }
+
+            HStack(spacing: 12) {
+                Spacer()
+
+                Button(action: onDismiss) {
+                    Text(appLocalized: "取消")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(.white.opacity(0.06))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(.white.opacity(0.1), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: addAndConnect) {
+                    Text(appLocalized: "保存并连接")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(canAdd ? .white : .white.opacity(0.4))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(canAdd ? TerminalColors.blue.opacity(0.5) : .white.opacity(0.04))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(canAdd ? TerminalColors.blue.opacity(0.5) : .white.opacity(0.08), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(!canAdd)
+            }
+        }
+        .padding(24)
+        .frame(width: 460)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder
+    private func remoteField(title: String, placeholder: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(appLocalized: title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.7))
+
+            TextField("", text: text, prompt: Text(appLocalized: placeholder))
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(.white.opacity(0.06))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(.white.opacity(0.1), lineWidth: 1)
+                )
+        }
+    }
+
+    private func addAndConnect() {
+        guard canAdd else { return }
+        let endpoint = remoteManager.addEndpoint(displayName: displayName, sshTarget: sshTarget)
+        remoteManager.connect(
+            endpointID: endpoint.id,
+            password: password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : password
+        )
+        onDismiss()
+    }
+}
+
+private struct RemotePasswordPromptSheet: View {
+    let endpoint: RemoteEndpoint
+    let onSubmit: (String) -> Void
+    let onDismiss: () -> Void
+
+    @State private var password = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text(verbatim: AppLocalization.format("连接 %@", endpoint.resolvedTitle))
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+
+            Text(endpoint.sshTarget)
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundColor(.white.opacity(0.56))
+
+            SecureField("", text: $password, prompt: Text(appLocalized: "输入 SSH 密码"))
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(.white.opacity(0.06))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(.white.opacity(0.1), lineWidth: 1)
+                )
+
+            HStack(spacing: 12) {
+                Spacer()
+
+                Button(action: onDismiss) {
+                    Text(appLocalized: "取消")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(.white.opacity(0.06))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(.white.opacity(0.1), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {
+                    guard !password.isEmpty else { return }
+                    onSubmit(password)
+                }) {
+                    Text(appLocalized: "连接")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(password.isEmpty ? .white.opacity(0.4) : .white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(password.isEmpty ? .white.opacity(0.04) : TerminalColors.blue.opacity(0.5))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(password.isEmpty ? .white.opacity(0.08) : TerminalColors.blue.opacity(0.5), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(password.isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 420)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .preferredColorScheme(.dark)
     }
 }
 

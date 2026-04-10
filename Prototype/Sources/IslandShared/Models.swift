@@ -154,7 +154,7 @@ public struct AgentSession: Codable, Equatable, Sendable, Identifiable {
         preview: String,
         cwd: String? = nil,
         status: SessionStatus,
-        updatedAt: Date = .now,
+        updatedAt: Date = Date(),
         terminalContext: TerminalContext = TerminalContext(),
         intervention: InterventionRequest? = nil,
         metadata: [String: String] = [:]
@@ -200,7 +200,7 @@ public struct BridgeEnvelope: Codable, Equatable, Sendable, Identifiable {
         intervention: InterventionRequest? = nil,
         expectsResponse: Bool = false,
         metadata: [String: String] = [:],
-        sentAt: Date = .now
+        sentAt: Date = Date()
     ) {
         self.id = id
         self.provider = provider
