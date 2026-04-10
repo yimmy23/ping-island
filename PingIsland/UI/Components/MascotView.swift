@@ -1102,14 +1102,18 @@ private struct FloatingZOverlay: View {
                 let opacity = progress < 0.82
                     ? 0.72 - Double(index) * 0.12
                     : max(0, (1.0 - progress) * (2.9 - Double(index) * 0.4))
+                let horizontalDrift = -0.06
+                    + Double(index) * 0.05
+                    + sin(progress * .pi * 2) * 0.02
+                let verticalOffset = 0.03 + progress * 0.28
+                let xOffset = size * CGFloat(horizontalDrift)
+                let yOffset = -size * CGFloat(verticalOffset)
+                let textColor = Color.white.opacity(opacity)
 
                 Text("z")
                     .font(.system(size: fontSize, weight: .black, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(opacity))
-                    .offset(
-                        x: size * CGFloat(-0.06 + Double(index) * 0.05 + sin(progress * .pi * 2) * 0.02),
-                        y: -size * CGFloat(0.03 + progress * 0.28)
-                    )
+                    .foregroundStyle(textColor)
+                    .offset(x: xOffset, y: yOffset)
             }
         }
         .frame(width: size, height: size, alignment: .top)
