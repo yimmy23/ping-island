@@ -2180,6 +2180,10 @@ private struct AddRemoteHostSheet: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white)
+                        .submitLabel(.go)
+                        .onSubmit {
+                            addAndConnect()
+                        }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                         .background(
@@ -2229,6 +2233,7 @@ private struct AddRemoteHostSheet: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
                 .disabled(!canAdd)
             }
         }
@@ -2294,6 +2299,10 @@ private struct RemotePasswordPromptSheet: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white)
+                .submitLabel(.go)
+                .onSubmit {
+                    submitPassword()
+                }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .background(
@@ -2325,10 +2334,7 @@ private struct RemotePasswordPromptSheet: View {
                 }
                 .buttonStyle(.plain)
 
-                Button(action: {
-                    guard !password.isEmpty else { return }
-                    onSubmit(password)
-                }) {
+                Button(action: submitPassword) {
                     Text(appLocalized: "连接")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(password.isEmpty ? .white.opacity(0.4) : .white)
@@ -2344,6 +2350,7 @@ private struct RemotePasswordPromptSheet: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
                 .disabled(password.isEmpty)
             }
         }
@@ -2351,6 +2358,11 @@ private struct RemotePasswordPromptSheet: View {
         .frame(width: 420)
         .background(Color(nsColor: .windowBackgroundColor))
         .preferredColorScheme(.dark)
+    }
+
+    private func submitPassword() {
+        guard !password.isEmpty else { return }
+        onSubmit(password)
     }
 }
 

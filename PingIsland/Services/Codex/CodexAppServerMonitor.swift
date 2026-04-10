@@ -367,6 +367,26 @@ actor CodexAppServerMonitor {
                 intervention: pendingRequestsByThread[threadId]?.intervention
             )
 
+        case "item/autoApprovalReview/started":
+            guard let threadId = params["threadId"] as? String,
+                  let intervention = Self.guardianReviewIntervention(from: params) else {
+                return
+            }
+
+            await SessionStore.shared.upsertCodexSession(
+                sessionId: threadId,
+                name: nil,
+                preview: intervention.message,
+                cwd: nil,
+                phase: .waitingForInput,
+                intervention: intervention
+            )
+
+        case "item/autoApprovalReview/completed":
+            guard let threadId = params["threadId"] as? String else { return }
+            await SessionStore.shared.resolveCodexIntervention(sessionId: threadId, nextPhase: .processing)
+            _ = try? await readThread(threadId: threadId, includeTurns: true)
+
         case "thread/started":
             if let thread = params["thread"] as? [String: Any] {
                 let startedThreadId = (thread["id"] as? String) ?? "unknown"
@@ -575,13 +595,13 @@ actor CodexAppServerMonitor {
             "params": params
         ]
 
-        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        let message = try Self.webSocketTextMessage(from: payload)
 
         return try await withCheckedThrowingContinuation { continuation in
             pendingResponses[id] = continuation
             Task {
                 do {
-                    try await websocket.send(.data(data))
+                    try await websocket.send(.string(message))
                 } catch {
                     if let continuation = pendingResponses.removeValue(forKey: id) {
                         continuation.resume(throwing: error)
@@ -600,12 +620,12 @@ actor CodexAppServerMonitor {
             "result": result
         ]
 
-        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]) else {
+        guard let message = try? Self.webSocketTextMessage(from: payload) else {
             return
         }
 
         do {
-            try await websocket.send(.data(data))
+            try await websocket.send(.string(message))
         } catch {
             logger.error("Failed to send Codex response: \(error.localizedDescription, privacy: .public)")
         }
@@ -744,6 +764,7 @@ actor CodexAppServerMonitor {
         var latestFinalText: String?
         var latestFinalPhase: String?
         var latestTurnId: String?
+        var inferredIntervention: SessionIntervention?
         var itemOffset: TimeInterval = 0
 
         for (turnIndex, turn) in turns.enumerated() {
@@ -786,6 +807,52 @@ actor CodexAppServerMonitor {
                     let type: ChatHistoryItemType = messagePhase == "commentary" ? .thinking(text) : .assistant(text)
                     historyItems.append(ChatHistoryItem(id: itemId, type: type, timestamp: timestamp))
 
+                case "mcpToolCall":
+                    let server = sanitizedText(item["server"] as? String) ?? "unknown"
+                    let tool = sanitizedText(item["tool"] as? String) ?? "tool"
+                    let statusValue = item["status"] as? String
+                    let toolStatus: ToolStatus
+                    switch statusValue {
+                    case "completed":
+                        toolStatus = .success
+                    case "failed":
+                        toolStatus = .error
+                    default:
+                        toolStatus = .running
+                    }
+                    let input = stringifyDictionary(item["arguments"] as? [String: Any] ?? [:])
+                    let result = normalizedToolResultString(item["result"])
+                    let toolName = "mcp__\(server)__\(tool)"
+                    historyItems.append(ChatHistoryItem(
+                        id: itemId,
+                        type: .toolCall(ToolCallItem(
+                            name: toolName,
+                            input: input,
+                            status: toolStatus,
+                            result: result,
+                            structuredResult: nil,
+                            subagentTools: []
+                        )),
+                        timestamp: timestamp
+                    ))
+                    if toolStatus == .running {
+                        inferredIntervention = SessionIntervention(
+                            id: "mcp-pending-\(server)-\(tool)",
+                            kind: .question,
+                            title: "MCP Tool Approval Needed",
+                            message: "Allow the \(server) MCP server to run tool \"\(tool)\"?",
+                            options: [],
+                            questions: [],
+                            supportsSessionScope: false,
+                            metadata: [
+                                "responseMode": "external_only",
+                                "source": "app_server_pending_mcp",
+                                "server": server,
+                                "toolName": tool
+                            ]
+                        )
+                    }
+
                 default:
                     continue
                 }
@@ -809,9 +876,10 @@ actor CodexAppServerMonitor {
             preview: preview,
             cwd: (thread["cwd"] as? String) ?? "/",
             clientInfo: makeClientInfo(from: thread, threadId: threadId),
+            intervention: inferredIntervention,
             createdAt: createdAt,
             updatedAt: updatedAt,
-            phase: phase,
+            phase: inferredIntervention != nil ? .waitingForInput : phase,
             historyItems: historyItems,
             conversationInfo: conversationInfo,
             latestTurnId: latestTurnId,
@@ -863,6 +931,90 @@ actor CodexAppServerMonitor {
         }
 
         return .idle
+    }
+
+    static func guardianReviewIntervention(from params: [String: Any]) -> SessionIntervention? {
+        func normalized(_ value: String?) -> String? {
+            guard let value else { return nil }
+            let collapsed = value
+                .replacingOccurrences(of: "\r\n", with: "\n")
+                .replacingOccurrences(of: "\r", with: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return collapsed.isEmpty ? nil : collapsed
+        }
+
+        guard let review = params["review"] as? [String: Any],
+              (review["status"] as? String) == "inProgress",
+              let action = params["action"] as? [String: Any],
+              let actionType = action["type"] as? String else {
+            return nil
+        }
+
+        let title: String
+        let message: String
+        var metadata: [String: String] = [
+            "responseMode": "external_only",
+            "source": "guardian_review",
+            "guardianActionType": actionType
+        ]
+
+        switch actionType {
+        case "mcpToolCall":
+            let server = normalized(action["server"] as? String) ?? "unknown"
+            let toolName = normalized(action["toolName"] as? String) ?? "tool"
+            let toolTitle = normalized(action["toolTitle"] as? String)
+            title = "MCP Tool Approval Needed"
+            message = "Allow the \(server) MCP server to run tool \"\(toolTitle ?? toolName)\"?"
+            metadata["server"] = server
+            metadata["toolName"] = toolName
+            if let toolTitle {
+                metadata["toolTitle"] = toolTitle
+            }
+
+        case "command":
+            let command = normalized(action["command"] as? String) ?? "command"
+            title = "Command Approval Needed"
+            message = "Allow command:\n\(command)"
+            metadata["command"] = command
+
+        case "execve":
+            let program = normalized(action["program"] as? String) ?? "command"
+            let argv = (action["argv"] as? [String] ?? []).joined(separator: " ")
+            title = "Command Approval Needed"
+            message = argv.isEmpty ? "Allow command:\n\(program)" : "Allow command:\n\(program) \(argv)"
+            metadata["command"] = message
+
+        case "applyPatch":
+            let cwd = normalized(action["cwd"] as? String) ?? ""
+            let files = (action["files"] as? [String] ?? []).joined(separator: "\n")
+            title = "Patch Approval Needed"
+            message = files.isEmpty
+                ? "Allow file changes\(cwd.isEmpty ? "" : " in \(cwd)")?"
+                : "Allow file changes to:\n\(files)"
+            if !cwd.isEmpty {
+                metadata["cwd"] = cwd
+            }
+
+        case "networkAccess":
+            let target = normalized(action["target"] as? String) ?? "network target"
+            title = "Network Approval Needed"
+            message = "Allow network access to \(target)?"
+            metadata["target"] = target
+
+        default:
+            return nil
+        }
+
+        return SessionIntervention(
+            id: (params["targetItemId"] as? String) ?? UUID().uuidString,
+            kind: .question,
+            title: title,
+            message: message,
+            options: [],
+            questions: [],
+            supportsSessionScope: false,
+            metadata: metadata
+        )
     }
 
     private func parseQuestions(_ rawQuestions: [[String: Any]]) -> [SessionInterventionQuestion] {
@@ -960,6 +1112,35 @@ actor CodexAppServerMonitor {
         return parts.isEmpty ? "Codex requested extra permissions." : parts.joined(separator: "\n")
     }
 
+    private func normalizedToolResultString(_ value: Any?) -> String? {
+        if let text = sanitizedText(value as? String) {
+            return text
+        }
+        guard let value,
+              JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return text
+    }
+
+    private func stringifyDictionary(_ value: [String: Any]) -> [String: String] {
+        var result: [String: String] = [:]
+        for (key, raw) in value {
+            if let text = sanitizedText(raw as? String) {
+                result[key] = text
+            } else if JSONSerialization.isValidJSONObject(raw),
+                      let data = try? JSONSerialization.data(withJSONObject: raw, options: [.sortedKeys]),
+                      let text = String(data: data, encoding: .utf8) {
+                result[key] = text
+            } else {
+                result[key] = String(describing: raw)
+            }
+        }
+        return result
+    }
+
     private func parseUserMessageText(_ content: [[String: Any]]) -> String? {
         let fragments = content.compactMap { item -> String? in
             switch item["type"] as? String {
@@ -1004,6 +1185,16 @@ actor CodexAppServerMonitor {
             return Date(timeIntervalSince1970: TimeInterval(value))
         }
         return nil
+    }
+
+    static func webSocketTextMessage(from payload: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        guard let message = String(data: data, encoding: .utf8) else {
+            throw NSError(domain: "CodexAppServer", code: 4, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to encode websocket payload as UTF-8 text"
+            ])
+        }
+        return message
     }
 
     private func stringify(_ value: Any) -> String {

@@ -6,6 +6,7 @@ struct CodexThreadSnapshot: Equatable, Sendable {
     let preview: String?
     let cwd: String
     let clientInfo: SessionClientInfo?
+    let intervention: SessionIntervention?
     let createdAt: Date
     let updatedAt: Date
     let phase: SessionPhase

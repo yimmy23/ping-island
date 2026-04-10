@@ -75,6 +75,7 @@ actor CodexRolloutParser {
         var latestFinalText: String?
         var latestFinalPhase: String?
         var phase: SessionPhase = .idle
+        var intervention: SessionIntervention?
         var sessionName: String?
         var origin: String?
         var originator: String?
@@ -276,6 +277,11 @@ actor CodexRolloutParser {
             phase = .idle
         }
 
+        if let inferredIntervention = Self.pendingMCPApprovalIntervention(from: historyItems) {
+            intervention = inferredIntervention
+            phase = .waitingForInput
+        }
+
         let preview = latestFinalText ?? latestAgentText ?? latestUserText ?? firstUserMessage
         let conversationInfo = ConversationInfo(
             summary: sessionName ?? firstUserMessage,
@@ -330,6 +336,7 @@ actor CodexRolloutParser {
             preview: preview,
             cwd: resolvedCwd,
             clientInfo: resolvedClientInfo,
+            intervention: intervention,
             createdAt: createdAt ?? Date(),
             updatedAt: updatedAt ?? createdAt ?? Date(),
             phase: phase,
@@ -376,6 +383,39 @@ actor CodexRolloutParser {
             return false
         }
         return tool.status == .running || tool.status == .waitingForApproval
+    }
+
+    private static func pendingMCPApprovalIntervention(from historyItems: [ChatHistoryItem]) -> SessionIntervention? {
+        for item in historyItems.reversed() {
+            guard case .toolCall(let tool) = item.type,
+                  tool.status == .running,
+                  tool.name.hasPrefix("mcp__") else {
+                continue
+            }
+
+            let parts = tool.name.split(separator: "__", omittingEmptySubsequences: false)
+            guard parts.count >= 3 else { continue }
+            let server = String(parts[1])
+            let toolName = parts[2...].joined(separator: "__")
+
+            return SessionIntervention(
+                id: "mcp-pending-\(server)-\(toolName)",
+                kind: .question,
+                title: "MCP Tool Approval Needed",
+                message: "Allow the \(server) MCP server to run tool \"\(toolName)\"?",
+                options: [],
+                questions: [],
+                supportsSessionScope: false,
+                metadata: [
+                    "responseMode": "external_only",
+                    "source": "rollout_pending_mcp",
+                    "server": server,
+                    "toolName": toolName
+                ]
+            )
+        }
+
+        return nil
     }
 
     private func parseJSONStringDictionary(_ value: Any?) -> [String: String] {

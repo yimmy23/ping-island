@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing git tag to package and publish, for example v1.2.3
+        description: Existing git tag to package into a GitHub Release, for example v1.2.3
         required: true
         type: string
       draft:
@@ -67,14 +67,14 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Build and publish signed packages
+    name: Build signed packages
     needs: linux-bridge
     runs-on: macos-15
     timeout-minutes: 45
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-      RELEASE_DRAFT: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || 'false' }}
+      RELEASE_DRAFT: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || 'true' }}
       RELEASE_PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || 'false' }}
 
     steps:
@@ -85,6 +85,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Validate release signing secrets
+        id: validate
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
@@ -94,6 +95,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           SPARKLE_APPCAST_URL: ${{ secrets.SPARKLE_APPCAST_URL }}
           SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
         shell: bash
         run: |
           set -euo pipefail
@@ -114,14 +116,27 @@ jobs:
             fi
           done
 
-          if [ -n "${SPARKLE_APPCAST_URL:-}" ] && [ -z "${SPARKLE_PUBLIC_ED_KEY:-}" ]; then
-            echo "::error::SPARKLE_PUBLIC_ED_KEY is required when SPARKLE_APPCAST_URL is set"
+          sparkle_names=(
+            SPARKLE_APPCAST_URL
+            SPARKLE_PUBLIC_ED_KEY
+            SPARKLE_PRIVATE_ED_KEY
+          )
+          sparkle_count=0
+          for name in "${sparkle_names[@]}"; do
+            if [ -n "${!name:-}" ]; then
+              sparkle_count=$((sparkle_count + 1))
+            fi
+          done
+
+          if [ "$sparkle_count" -ne 0 ] && [ "$sparkle_count" -ne "${#sparkle_names[@]}" ]; then
+            echo "::error::SPARKLE_APPCAST_URL, SPARKLE_PUBLIC_ED_KEY, and SPARKLE_PRIVATE_ED_KEY must all be set together"
             exit 1
           fi
 
-          if [ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ] && [ -z "${SPARKLE_APPCAST_URL:-}" ]; then
-            echo "::error::SPARKLE_APPCAST_URL is required when SPARKLE_PUBLIC_ED_KEY is set"
-            exit 1
+          if [ "$sparkle_count" -eq "${#sparkle_names[@]}" ]; then
+            echo "sparkle_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sparkle_enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Import Developer ID certificate
@@ -169,6 +184,20 @@ jobs:
             "$SPARKLE_PUBLIC_ED_KEY" \
             > Config/LocalSecrets.xcconfig
 
+      - name: Write Sparkle private key
+        id: sparkle_private_key
+        if: ${{ steps.validate.outputs.sparkle_enabled == 'true' }}
+        shell: bash
+        env:
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          set -euo pipefail
+
+          private_key_path="$RUNNER_TEMP/sparkle_private_ed_key"
+          printf '%s' "$SPARKLE_PRIVATE_ED_KEY" > "$private_key_path"
+          chmod 600 "$private_key_path"
+          echo "path=$private_key_path" >> "$GITHUB_OUTPUT"
+
       - name: Build signed DMG and ZIP packages
         env:
           PING_ISLAND_BUILD_DIR: ${{ github.workspace }}/build/release
@@ -178,7 +207,16 @@ jobs:
           PING_ISLAND_NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
           PING_ISLAND_NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           PING_ISLAND_NOTARY_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: ./scripts/package-release.sh
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ steps.validate.outputs.sparkle_enabled }}" = "true" ]; then
+            export PING_ISLAND_GENERATE_APPCAST=1
+            export PING_ISLAND_SPARKLE_PRIVATE_KEY_PATH="${{ steps.sparkle_private_key.outputs.path }}"
+          fi
+
+          ./scripts/package-release.sh
 
       - name: Download Linux bridge artifact
         uses: actions/download-artifact@v4
@@ -195,6 +233,8 @@ jobs:
           shopt -s nullglob
           dmg_assets=(releases/signed/*.dmg)
           zip_assets=(releases/signed/*.zip)
+          notes_assets=(releases/signed/*.md)
+          appcast_assets=(releases/signed/appcast/*.xml)
           linux_bridge_assets=(releases/bridge/PingIslandBridge-linux-*)
 
           if [ "${#dmg_assets[@]}" -ne 1 ]; then
@@ -233,6 +273,32 @@ jobs:
             has_notes=false
           fi
 
+          if [ "${#notes_assets[@]}" -gt 1 ]; then
+            echo "::error::Expected at most one top-level Markdown release notes asset in releases/signed, found ${#notes_assets[@]}"
+            exit 1
+          fi
+
+          if [ "${#appcast_assets[@]}" -gt 1 ]; then
+            echo "::error::Expected at most one appcast asset in releases/signed/appcast, found ${#appcast_assets[@]}"
+            exit 1
+          fi
+
+          if [ "${#notes_assets[@]}" -eq 1 ]; then
+            has_notes_asset=true
+            notes_asset_path="${notes_assets[0]}"
+          else
+            has_notes_asset=false
+            notes_asset_path=
+          fi
+
+          if [ "${#appcast_assets[@]}" -eq 1 ]; then
+            has_appcast=true
+            appcast_path="${appcast_assets[0]}"
+          else
+            has_appcast=false
+            appcast_path=
+          fi
+
           {
             echo "version=$version"
             echo "build=$build"
@@ -241,8 +307,21 @@ jobs:
             echo "linux_bridge_path=${linux_bridge_assets[0]}"
             echo "notes_path=$notes_path"
             echo "has_notes=$has_notes"
+            echo "notes_asset_path=$notes_asset_path"
+            echo "has_notes_asset=$has_notes_asset"
+            echo "appcast_path=$appcast_path"
+            echo "has_appcast=$has_appcast"
             echo "release_title=Ping Island $RELEASE_TAG"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Upload signed macOS packages artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PingIsland-signed-packages-${{ steps.meta.outputs.version }}
+          path: |
+            ${{ steps.meta.outputs.dmg_path }}
+            ${{ steps.meta.outputs.zip_path }}
+          if-no-files-found: error
 
       - name: Prepare release notes body
         id: notes
@@ -306,10 +385,22 @@ jobs:
 
           retry ensure_release_exists
 
+          assets=(
+            "${{ steps.meta.outputs.dmg_path }}"
+            "${{ steps.meta.outputs.zip_path }}"
+            "${{ steps.meta.outputs.linux_bridge_path }}"
+          )
+
+          if [ "${{ steps.meta.outputs.has_notes_asset }}" = "true" ]; then
+            assets+=("${{ steps.meta.outputs.notes_asset_path }}")
+          fi
+
+          if [ "${{ steps.meta.outputs.has_appcast }}" = "true" ]; then
+            assets+=("${{ steps.meta.outputs.appcast_path }}")
+          fi
+
           retry gh release upload "$RELEASE_TAG" \
-            "${{ steps.meta.outputs.dmg_path }}" \
-            "${{ steps.meta.outputs.zip_path }}" \
-            "${{ steps.meta.outputs.linux_bridge_path }}" \
+            "${assets[@]}" \
             --repo "$repo" \
             --clobber
 
@@ -330,4 +421,5 @@ jobs:
 
           rm -f Config/LocalSecrets.xcconfig
           rm -f "$RUNNER_TEMP/build_certificate.p12"
+          rm -f "$RUNNER_TEMP/sparkle_private_ed_key"
           security delete-keychain "$RUNNER_TEMP/ping-island-signing.keychain-db" || true

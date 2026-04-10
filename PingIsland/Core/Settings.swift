@@ -621,8 +621,8 @@ final class AppSettingsStore: ObservableObject {
 enum AppSettings {
     static var shared: AppSettingsStore { AppSettingsStore.shared }
     private static var bundledSoundCache: [String: NSSound] = [:]
-    nonisolated static let defaultSettingsWindowSize = CGSize(width: 920, height: 560)
-    nonisolated static let minimumSettingsWindowSize = CGSize(width: 820, height: 560)
+    nonisolated static let defaultSettingsWindowSize = CGSize(width: 648, height: 522)
+    nonisolated static let minimumSettingsWindowSize = CGSize(width: 648, height: 522)
     nonisolated static let maximumSettingsWindowSize = CGSize(width: 1440, height: 1100)
 
     static var notificationSound: NotificationSound {

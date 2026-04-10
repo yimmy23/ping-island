@@ -11,8 +11,9 @@ The repo ships `.github/workflows/release-packages.yml` for GitHub-hosted releas
   - Use the `.dmg` as the primary manual-install artifact.
   - Keep the `.zip` available for update/distribution workflows that still expect it.
 - It applies the repo-tracked DMG installer layout and generated branded background during packaging, so local and CI builds share the same installer presentation without depending on a checked-in static poster image.
-- It publishes those assets to the matching GitHub Release for a `v*` tag.
-- It is safe to rerun after a partially failed publish; the workflow reuses the existing tag release, re-uploads assets with `--clobber`, and then updates the final draft / prerelease state.
+- It creates or updates the matching GitHub Release for a `v*` tag and leaves it in draft by default so you can review it before publishing.
+- When Sparkle secrets are configured, it also signs and uploads `appcast.xml` plus the versioned Markdown release notes asset that the app uses for in-app update history.
+- It is safe to rerun after a partially failed release upload; the workflow reuses the existing tag release, re-uploads assets with `--clobber`, and then updates the final draft / prerelease state.
 
 If you have an individual Apple Developer account, that is fine: you do not need a company account for this flow. You do need a `Developer ID Application` certificate. A plain `Apple Development` certificate is not enough for signed, notarized downloads distributed outside the Mac App Store.
 
@@ -33,8 +34,11 @@ Optional secrets:
 
 | Secret | Purpose |
 | --- | --- |
-| `SPARKLE_APPCAST_URL` | Feed URL compiled into the app for Sparkle update checks |
+| `SPARKLE_APPCAST_URL` | Feed URL compiled into the app for Sparkle update checks. Recommended: `https://github.com/<owner>/<repo>/releases/latest/download/appcast.xml` |
 | `SPARKLE_PUBLIC_ED_KEY` | Public EdDSA key compiled into the app for Sparkle validation |
+| `SPARKLE_PRIVATE_ED_KEY` | Private EdDSA key content used in CI to sign the generated `appcast.xml` and release note assets |
+
+If you configure Sparkle updates in CI, set all three Sparkle secrets together. If you leave them unset, the workflow still produces signed `.dmg` / `.zip` packages, but it will skip appcast generation and upload.
 
 ### Export the signing certificate
 
@@ -54,8 +58,14 @@ base64 -i developer-id-application.p12 | pbcopy
    - Use `releases/notes/README.md` as the authoring template.
 2. Make sure the app version matches the release tag.
 3. Push a tag like `v0.0.1`, or open the workflow manually with the same tag name.
+4. Publish the GitHub Release manually after reviewing the generated draft, or uncheck the `draft` input when you intentionally want the manual workflow run to publish immediately.
 
-The workflow will upload the signed `.dmg`, `.zip`, and Linux bridge binary to the matching GitHub Release and add a short note that the artifacts were signed and notarized in CI.
+The workflow will upload the signed `.dmg`, `.zip`, and Linux bridge binary to the matching GitHub Release draft and add a short note that the artifacts were signed and notarized in CI.
+When Sparkle secrets are present, the same draft Release will also include:
+
+- `appcast.xml`
+- `PingIsland-<version>.md`
+
 Use the GitHub Release assets as the canonical download surface so the DMG stays a direct `.dmg` file instead of an Actions artifact wrapped in an outer `.zip`.
 
 ## Local Sparkle release flow

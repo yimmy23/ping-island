@@ -1451,11 +1451,30 @@ actor SessionStore {
             try? await Task.sleep(nanoseconds: syncDebounceNs)
             guard !Task.isCancelled else { return }
 
+            let appServerSnapshot: CodexThreadSnapshot?
+            do {
+                appServerSnapshot = try await CodexAppServerMonitor.shared.readThread(
+                    threadId: sessionId,
+                    includeTurns: true
+                )
+            } catch {
+                appServerSnapshot = nil
+                // Fall back to rollout parsing when the app-server is unavailable
+                // or the thread hasn't been materialized there yet.
+            }
+
             guard let snapshot = await CodexRolloutParser.shared.parseThread(
                 threadId: sessionId,
                 fallbackCwd: cwd,
                 clientInfo: clientInfo
             ) else {
+                return
+            }
+
+            if let appServerSnapshot,
+               snapshot.intervention == nil,
+               snapshot.historyItems.count <= appServerSnapshot.historyItems.count,
+               snapshot.updatedAt <= appServerSnapshot.updatedAt {
                 return
             }
 
@@ -1756,7 +1775,12 @@ actor SessionStore {
         }
         session.chatItems = snapshot.historyItems
         session.conversationInfo = snapshot.conversationInfo
+        if snapshot.intervention != nil || !snapshot.phase.needsAttention {
+            session.intervention = snapshot.intervention
+        }
         if case .none = session.intervention {
+            session.phase = snapshot.phase
+        } else if snapshot.phase.needsAttention {
             session.phase = snapshot.phase
         }
         let hasIntervention: Bool
