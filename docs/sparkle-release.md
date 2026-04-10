@@ -10,6 +10,7 @@ The repo ships `.github/workflows/release-packages.yml` for GitHub-hosted releas
 - It notarizes the exported app bundle, staples it, then creates signed `.zip` and `.dmg` artifacts.
   - Use the `.dmg` as the primary manual-install artifact.
   - Keep the `.zip` available for update/distribution workflows that still expect it.
+- It applies the repo-tracked DMG installer layout and background from `docs/images/ping-island-mascot-poster.png` during packaging, so local and CI builds share the same installer presentation.
 - It publishes those assets to the matching GitHub Release for a `v*` tag.
 - It is safe to rerun after a partially failed publish; the workflow reuses the existing tag release, re-uploads assets with `--clobber`, and then updates the final draft / prerelease state.
 
@@ -55,6 +56,7 @@ base64 -i developer-id-application.p12 | pbcopy
 3. Push a tag like `v0.0.1`, or open the workflow manually with the same tag name.
 
 The workflow will upload the signed `.dmg` and `.zip` to the matching GitHub Release and add a short note that the artifacts were signed and notarized in CI.
+The Actions run itself now exposes separate DMG, ZIP, and Linux bridge artifacts, although GitHub still wraps each artifact download in its own outer `.zip`.
 
 ## Local Sparkle release flow
 

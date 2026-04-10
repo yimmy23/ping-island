@@ -4,6 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/lib/dmg-layout.sh"
+
 BUILD_DIR="${PING_ISLAND_BUILD_DIR:-$PROJECT_DIR/build/release}"
 DERIVED_DATA_PATH="$BUILD_DIR/DerivedData"
 EXPORT_PATH="$BUILD_DIR/export"
@@ -11,7 +13,6 @@ RELEASE_DIR="${PING_ISLAND_RELEASE_DIR:-$PROJECT_DIR/releases/signed}"
 NOTES_DIR="$PROJECT_DIR/releases/notes"
 KEYS_DIR="$PROJECT_DIR/.sparkle-keys"
 STAGING_DIR="$BUILD_DIR/dmg-staging"
-DMG_HELPER="$SCRIPT_DIR/create-styled-dmg.sh"
 
 APP_BUNDLE_NAME="Ping Island.app"
 APP_PRODUCT_NAME="PingIsland"
@@ -214,17 +215,7 @@ log_section "Creating ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_PATH"
 
 log_section "Creating DMG"
-mkdir -p "$STAGING_DIR"
-cp -R "$APP_PATH" "$STAGING_DIR/"
-ln -s /Applications "$STAGING_DIR/Applications"
-
-"$DMG_HELPER" \
-    --volname "Ping Island" \
-    --source "$STAGING_DIR" \
-    --output "$DMG_PATH" \
-    --app-name "$APP_BUNDLE_NAME"
-
-rm -rf "$STAGING_DIR"
+create_styled_dmg "$APP_PATH" "$DMG_PATH" "Ping Island" "$STAGING_DIR" "$PROJECT_DIR"
 
 notarize_and_staple "$DMG_PATH" "$DMG_PATH"
 if [ "$SKIP_NOTARIZATION" != "1" ]; then

@@ -4,11 +4,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/lib/dmg-layout.sh"
+
 BUILD_DIR="$PROJECT_DIR/build/unsigned"
 DERIVED_DATA_PATH="$BUILD_DIR/DerivedData"
 STAGING_DIR="$BUILD_DIR/dmg-staging"
 RELEASE_DIR="$PROJECT_DIR/releases/unsigned"
-DMG_HELPER="$SCRIPT_DIR/create-styled-dmg.sh"
 
 APP_BUNDLE_NAME="Ping Island.app"
 APP_PRODUCT_NAME="PingIsland"
@@ -76,24 +77,13 @@ DMG_PATH="$RELEASE_DIR/$APP_PRODUCT_NAME-$VERSION-$BUILD-$BUILD_MODE_LABEL-unsig
 
 rm -f "$ZIP_PATH" "$DMG_PATH"
 rm -rf "$STAGING_DIR"
-mkdir -p "$STAGING_DIR"
 
 echo ""
 echo "Creating ZIP..."
 ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
 
-echo "Preparing DMG contents..."
-cp -R "$APP_PATH" "$STAGING_DIR/"
-ln -s /Applications "$STAGING_DIR/Applications"
-
 echo "Creating DMG..."
-"$DMG_HELPER" \
-    --volname "Ping Island" \
-    --source "$STAGING_DIR" \
-    --output "$DMG_PATH" \
-    --app-name "$APP_BUNDLE_NAME"
-
-rm -rf "$STAGING_DIR"
+create_styled_dmg "$APP_PATH" "$DMG_PATH" "Ping Island" "$STAGING_DIR" "$PROJECT_DIR"
 
 echo ""
 echo "=== Unsigned Package Ready ==="
