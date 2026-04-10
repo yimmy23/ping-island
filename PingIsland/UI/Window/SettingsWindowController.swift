@@ -9,15 +9,26 @@ final class SettingsPanelWindow: NSWindow {
 @MainActor
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static let shared = SettingsWindowController()
-    private let fixedContentSize = NSSize(width: 648, height: 522)
+    private let defaultContentSize = NSSize(
+        width: AppSettings.defaultSettingsWindowSize.width,
+        height: AppSettings.defaultSettingsWindowSize.height
+    )
+    private let minimumContentSize = NSSize(
+        width: AppSettings.minimumSettingsWindowSize.width,
+        height: AppSettings.minimumSettingsWindowSize.height
+    )
+    private let maximumContentSize = NSSize(
+        width: AppSettings.maximumSettingsWindowSize.width,
+        height: AppSettings.maximumSettingsWindowSize.height
+    )
 
     private init() {
         let hostingController = NSHostingController(
             rootView: SettingsWindowView()
         )
         let window = SettingsPanelWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 648, height: 522),
-            styleMask: [.borderless],
+            contentRect: NSRect(origin: .zero, size: defaultContentSize),
+            styleMask: [.borderless, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -30,9 +41,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
-        window.minSize = fixedContentSize
-        window.maxSize = fixedContentSize
-        window.setContentSize(fixedContentSize)
+        window.minSize = minimumContentSize
+        window.maxSize = maximumContentSize
+        window.setContentSize(defaultContentSize)
         window.identifier = NSUserInterfaceItemIdentifier("settings.window")
         window.center()
         window.toolbar = nil
@@ -62,9 +73,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     func present() {
         guard let window else { return }
 
-        window.setContentSize(fixedContentSize)
-        window.minSize = fixedContentSize
-        window.maxSize = fixedContentSize
+        window.minSize = minimumContentSize
+        window.maxSize = maximumContentSize
         NSApp.activate(ignoringOtherApps: true)
         if !window.isVisible {
             window.center()

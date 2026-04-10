@@ -875,8 +875,10 @@ private enum RemoteSSHCommandRunner {
     private static func run(process: Process) async throws -> SSHExecutionResult {
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
+        let stdinPipe = Pipe()
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
+        process.standardInput = stdinPipe
 
         return try await withCheckedThrowingContinuation { continuation in
             process.terminationHandler = { process in
@@ -895,6 +897,7 @@ private enum RemoteSSHCommandRunner {
 
             do {
                 try process.run()
+                try? stdinPipe.fileHandleForWriting.close()
             } catch {
                 continuation.resume(throwing: error)
             }

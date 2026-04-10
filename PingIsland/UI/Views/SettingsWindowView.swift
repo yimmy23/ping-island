@@ -408,14 +408,6 @@ private struct SettingsPanelContentView: View {
         .ignoresSafeArea()
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: Color.black.opacity(0.22), radius: 30, y: 18)
-        .overlay(alignment: .bottomTrailing) {
-            if presentation == .window {
-                SettingsResizeHandle()
-                    .padding(.trailing, 14)
-                    .padding(.bottom, 12)
-                    .allowsHitTesting(false)
-            }
-        }
         .preferredColorScheme(.dark)
         .onAppear {
             viewModel.refresh()
@@ -1597,24 +1589,6 @@ private struct WindowControlButton: View {
                 )
         }
         .buttonStyle(.plain)
-    }
-}
-
-private struct SettingsResizeHandle: View {
-    var body: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(.system(size: 11, weight: .bold))
-            .foregroundColor(.white.opacity(0.34))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color.black.opacity(0.16))
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-                    )
-            )
     }
 }
 

@@ -10,7 +10,7 @@ The repo ships `.github/workflows/release-packages.yml` for GitHub-hosted releas
 - It notarizes the exported app bundle, staples it, then creates signed `.zip` and `.dmg` artifacts.
   - Use the `.dmg` as the primary manual-install artifact.
   - Keep the `.zip` available for update/distribution workflows that still expect it.
-- It applies the repo-tracked DMG installer layout and background from `docs/images/ping-island-mascot-poster.png` during packaging, so local and CI builds share the same installer presentation.
+- It applies the repo-tracked DMG installer layout and generated branded background during packaging, so local and CI builds share the same installer presentation without depending on a checked-in static poster image.
 - It publishes those assets to the matching GitHub Release for a `v*` tag.
 - It is safe to rerun after a partially failed publish; the workflow reuses the existing tag release, re-uploads assets with `--clobber`, and then updates the final draft / prerelease state.
 
