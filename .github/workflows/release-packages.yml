@@ -146,13 +146,17 @@ jobs:
           security find-identity -v -p codesigning "$keychain_path"
 
       - name: Inject Sparkle release config
-        if: ${{ secrets.SPARKLE_APPCAST_URL != '' && secrets.SPARKLE_PUBLIC_ED_KEY != '' }}
         shell: bash
         env:
           SPARKLE_APPCAST_URL: ${{ secrets.SPARKLE_APPCAST_URL }}
           SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
         run: |
           set -euo pipefail
+
+          if [ -z "${SPARKLE_APPCAST_URL:-}" ] || [ -z "${SPARKLE_PUBLIC_ED_KEY:-}" ]; then
+            echo "Sparkle release config not provided; skipping LocalSecrets.xcconfig injection."
+            exit 0
+          fi
 
           printf 'SPARKLE_APPCAST_URL = %s\nSPARKLE_PUBLIC_ED_KEY = %s\n' \
             "$SPARKLE_APPCAST_URL" \
