@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 struct DiagnosticsExportResult: Sendable {
     let archiveURL: URL
@@ -118,7 +119,13 @@ private final class DiagnosticsCommandState: @unchecked Sendable {
     private let lock = NSLock()
     private var stdout = Data()
     private var stderr = Data()
-    private(set) var isFinished = false
+    private var finished = false
+
+    var isFinished: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return finished
+    }
 
     func appendStdout(_ data: Data) {
         guard !data.isEmpty else { return }
@@ -137,8 +144,8 @@ private final class DiagnosticsCommandState: @unchecked Sendable {
     func markFinished() -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard !isFinished else { return false }
-        isFinished = true
+        guard !finished else { return false }
+        finished = true
         return true
     }
 
@@ -166,6 +173,10 @@ private func terminateDiagnosticsProcess(_ process: Process) {
     let deadline = Date().addingTimeInterval(0.2)
     while process.isRunning, Date() < deadline {
         Thread.sleep(forTimeInterval: 0.02)
+    }
+
+    if process.isRunning {
+        kill(process.processIdentifier, SIGKILL)
     }
 }
 
@@ -434,7 +445,7 @@ actor DiagnosticsExporter {
                 "--style", "compact",
                 "--debug",
                 "--info",
-                "--last", "6h",
+                "--last", "10m",
                 "--predicate", predicate,
             ],
             to: destinationURL,

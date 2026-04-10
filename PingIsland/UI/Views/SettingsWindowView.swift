@@ -76,7 +76,7 @@ final class SettingsPanelViewModel: ObservableObject {
     @Published private(set) var ideExtensionInstallationStates: [String: Bool] = [:]
     @Published var accessibilityEnabled = false
     @Published var isExportingLogs = false
-    @Published var logExportStatus = AppLocalization.string("导出最近 6 小时的 Island 诊断日志与配置")
+    @Published var logExportStatus = AppLocalization.string("导出最近 10 分钟的 Island 诊断日志与配置")
     @Published private(set) var reinstallingHookProfileID: String?
     @Published private(set) var hookReinstallFeedbacks: [String: HookReinstallFeedback] = [:]
     @Published private(set) var customHookInstallations: [HookInstaller.CustomHookInstallation] = []
@@ -116,7 +116,7 @@ final class SettingsPanelViewModel: ObservableObject {
 
     func refreshLocalizedState() {
         guard !isExportingLogs else { return }
-        logExportStatus = AppLocalization.string("导出最近 6 小时的 Island 诊断日志与配置")
+        logExportStatus = AppLocalization.string("导出最近 10 分钟的 Island 诊断日志与配置")
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {

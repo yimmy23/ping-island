@@ -155,7 +155,7 @@
 "最新" = "Latest";
 "链接" = "Links";
 "导出诊断日志" = "Export diagnostics";
-"导出最近 6 小时的 Island 诊断日志与配置" = "Export Island diagnostics and configuration from the last 6 hours";
+"导出最近 10 分钟的 Island 诊断日志与配置" = "Export Island diagnostics and configuration from the last 10 minutes";
 "正在导出日志…" = "Exporting logs...";
 "已导出到 %@" = "Exported to %@";
 "已导出，附带 %lld 条警告" = "Exported with %lld warning(s)";
