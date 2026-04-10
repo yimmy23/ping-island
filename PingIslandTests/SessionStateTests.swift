@@ -584,8 +584,9 @@ final class SessionStateTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(session.clientDisplayName, "Codex")
+        XCTAssertEqual(session.clientDisplayName, "Ghostty")
         XCTAssertEqual(session.interactionDisplayName, "Ghostty")
+        XCTAssertNil(session.terminalSourceBadgeLabel)
     }
 
     func testCodexAppMessageBadgeUsesProviderName() {
@@ -613,6 +614,29 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(appSession.providerDisplayName, "Codex")
         XCTAssertEqual(appSession.messageBadgeDisplayName, "Codex")
         XCTAssertEqual(cliSession.messageBadgeDisplayName, cliSession.clientDisplayName)
+    }
+
+    func testTerminalHostedCodexCLIUsesITermAsPrimaryBadge() {
+        let session = SessionState(
+            sessionId: "codex-iterm-session",
+            cwd: "/tmp/project",
+            provider: .codex,
+            clientInfo: SessionClientInfo(
+                kind: .codexCLI,
+                profileID: "codex-cli",
+                name: "Codex CLI",
+                originator: "iTerm2",
+                terminalBundleIdentifier: "com.googlecode.iterm2",
+                terminalProgram: "iTerm.app",
+                terminalSessionIdentifier: "iterm-session-1"
+            )
+        )
+
+        XCTAssertEqual(session.providerDisplayName, "Codex")
+        XCTAssertEqual(session.clientDisplayName, "iTerm2")
+        XCTAssertEqual(session.messageBadgeDisplayName, "iTerm2")
+        XCTAssertEqual(session.interactionDisplayName, "iTerm2")
+        XCTAssertNil(session.terminalSourceBadgeLabel)
     }
 
     func testCodexTerminalSourceBadgeIsHiddenWhenItDuplicatesPrimaryBadge() {

@@ -157,6 +157,11 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
 
     nonisolated func badgeLabel(for provider: SessionProvider) -> String {
         let profile = resolvedProfile(for: provider)
+        if provider == .codex,
+           kind == .codexCLI,
+           let terminalSourceDisplayName {
+            return terminalSourceDisplayName
+        }
         if let name {
             return Self.normalizedBadgeLabel(name, provider: provider, kind: kind) ?? name
         }

@@ -43,8 +43,6 @@ actor AppleTerminalLocator: TerminalLocator {
             return "dev.warp.Warp-Stable"
         case "wezterm", "wezterm-gui":
             return "com.github.wez.wezterm"
-        case "codex":
-            return "com.openai.codex"
         default:
             return nil
         }

@@ -96,9 +96,10 @@ actor CodexRolloutParser {
                 resolvedThreadId = stringValue(payload["id"]) ?? resolvedThreadId
                 resolvedCwd = stringValue(payload["cwd"]) ?? resolvedCwd
                 sessionName = stringValue(payload["title"]) ?? sessionName
-                origin = "desktop"
+                let source = stringValue(payload["source"])
+                origin = stringValue(payload["origin"]) ?? (source == "cli" ? "cli" : origin)
                 originator = stringValue(payload["originator"]) ?? originator
-                threadSource = stringValue(payload["source"]) ?? threadSource
+                threadSource = source ?? threadSource
 
             case "turn_context":
                 let payload = json["payload"] as? [String: Any] ?? [:]
@@ -285,16 +286,30 @@ actor CodexRolloutParser {
             lastUserMessageDate: lastUserMessageDate
         )
 
-        let resolvedClientInfo = SessionClientInfo.codexApp(threadId: resolvedThreadId).merged(with: SessionClientInfo(
-            kind: .codexApp,
+        let prefersCLIContext = clientInfo?.kind == .codexCLI
+            || origin == "cli"
+            || threadSource == "cli"
+            || (clientInfo?.terminalBundleIdentifier?.isEmpty == false
+                && clientInfo?.terminalBundleIdentifier != "com.openai.codex")
+            || clientInfo?.terminalSessionIdentifier?.isEmpty == false
+            || clientInfo?.iTermSessionIdentifier?.isEmpty == false
+
+        let baseClientInfo = prefersCLIContext
+            ? SessionClientInfo.codexCLI()
+            : SessionClientInfo.codexApp(threadId: resolvedThreadId)
+
+        let resolvedClientInfo = baseClientInfo.merged(with: SessionClientInfo(
+            kind: prefersCLIContext ? .codexCLI : .codexApp,
             name: originator ?? clientInfo?.name,
-            bundleIdentifier: clientInfo?.bundleIdentifier ?? "com.openai.codex",
-            launchURL: clientInfo?.launchURL ?? SessionClientInfo.appLaunchURL(
-                bundleIdentifier: clientInfo?.bundleIdentifier ?? "com.openai.codex",
-                sessionId: resolvedThreadId,
-                workspacePath: resolvedCwd
-            ),
-            origin: origin ?? clientInfo?.origin ?? "desktop",
+            bundleIdentifier: prefersCLIContext ? clientInfo?.bundleIdentifier : (clientInfo?.bundleIdentifier ?? "com.openai.codex"),
+            launchURL: prefersCLIContext
+                ? clientInfo?.launchURL
+                : (clientInfo?.launchURL ?? SessionClientInfo.appLaunchURL(
+                    bundleIdentifier: clientInfo?.bundleIdentifier ?? "com.openai.codex",
+                    sessionId: resolvedThreadId,
+                    workspacePath: resolvedCwd
+                )),
+            origin: origin ?? clientInfo?.origin ?? (prefersCLIContext ? "cli" : "desktop"),
             originator: originator ?? clientInfo?.originator,
             threadSource: threadSource ?? clientInfo?.threadSource,
             transport: clientInfo?.transport,

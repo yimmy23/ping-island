@@ -36,8 +36,7 @@ struct TerminalAppRegistry: Sendable {
         "warp": "dev.warp.Warp-Stable",
         "warpterminal": "dev.warp.Warp-Stable",
         "wezterm": "com.github.wez.wezterm",
-        "wezterm-gui": "com.github.wez.wezterm",
-        "codex": "com.openai.codex"
+        "wezterm-gui": "com.github.wez.wezterm"
     ]
 
     nonisolated static let ideBundleIdentifiers: Set<String> = [

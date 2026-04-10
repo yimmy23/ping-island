@@ -73,6 +73,29 @@ func mapsWezTermTerminalContextFromEnvironment() throws {
 }
 
 @Test
+func doesNotInferCodexAppBundleFromCodexCliTerminalProgram() throws {
+    let payload = """
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "codex-cli-1"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .codex,
+        arguments: ["island-bridge", "--source", "codex"],
+        environment: [
+            "TERM_PROGRAM": "codex",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.terminalContext.terminalProgram == "codex")
+    #expect(envelope.terminalContext.terminalBundleID == nil)
+}
+
+@Test
 func mapsClaudeIDEAndRemoteContextFromEnvironment() throws {
     let payload = """
     {
