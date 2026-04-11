@@ -17,6 +17,9 @@ struct PingIslandApp: App {
             SettingsWindowView()
                 .environment(\.locale, settings.locale)
         }
-        .defaultSize(width: 648, height: 522)
+        .defaultSize(
+            width: SettingsWindowDefaults.defaultContentSize.width,
+            height: SettingsWindowDefaults.defaultContentSize.height
+        )
     }
 }
