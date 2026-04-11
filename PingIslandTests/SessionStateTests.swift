@@ -726,7 +726,7 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(normalized.interactionLabel(for: .claude), "Qoder")
     }
 
-    func testQoderWorkDoesNotShowQoderTerminalBadge() {
+    func testQoderWorkDoesNotResolveToIDEExtensionHost() {
         let normalized = SessionClientInfo(
             kind: .qoder,
             profileID: "qoderwork",
@@ -738,12 +738,12 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(normalized.name, "QoderWork")
         XCTAssertEqual(normalized.badgeLabel(for: .claude), "QoderWork")
         XCTAssertEqual(normalized.interactionLabel(for: .claude), "QoderWork")
-        XCTAssertEqual(normalized.ideHostProfile?.id, "qoderwork-extension")
-        XCTAssertTrue(normalized.isHostedInIDE)
+        XCTAssertNil(normalized.ideHostProfile)
+        XCTAssertFalse(normalized.isHostedInIDE)
         XCTAssertNil(normalized.ideHostBadgeLabel(for: .claude))
     }
 
-    func testQoderWorkExtensionProfileMatchesBundleAndName() {
+    func testQoderWorkDoesNotMatchAnyIDEExtensionProfile() {
         let bundleProfile = ClientProfileRegistry.ideExtensionProfile(
             bundleIdentifier: "com.qoder.work",
             appName: "QoderWork"
@@ -752,17 +752,14 @@ final class SessionStateTests: XCTestCase {
             bundleIdentifier: nil,
             appName: "QoderWork"
         )
+        let spacedNameProfile = ClientProfileRegistry.ideExtensionProfile(
+            bundleIdentifier: nil,
+            appName: "Qoder Work"
+        )
 
-        XCTAssertEqual(bundleProfile?.id, "qoderwork-extension")
-        XCTAssertEqual(bundleProfile?.uriScheme, "qoder-work")
-        XCTAssertEqual(nameOnlyProfile?.id, "qoderwork-extension")
-    }
-
-    func testQoderWorkExtensionProfileStaysHiddenFromSettings() {
-        let profile = ClientProfileRegistry.ideExtensionProfile(id: "qoderwork-extension")
-
-        XCTAssertEqual(profile?.id, "qoderwork-extension")
-        XCTAssertEqual(profile?.showsInSettings, false)
+        XCTAssertNil(bundleProfile)
+        XCTAssertNil(nameOnlyProfile)
+        XCTAssertNil(spacedNameProfile)
     }
 
     func testIDEExtensionInstallerPrefersInstalledAppDataFolderName() throws {

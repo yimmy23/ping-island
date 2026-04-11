@@ -2600,8 +2600,6 @@ private func ideTint(_ profileID: String) -> Color {
         return Color(red: 0.98, green: 0.61, blue: 0.28)
     case "qoder-extension":
         return Color(red: 0.12, green: 0.88, blue: 0.56)
-    case "qoderwork-extension":
-        return Color(red: 0.12, green: 0.88, blue: 0.56)
     default:
         return Color.white.opacity(0.72)
     }

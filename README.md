@@ -74,7 +74,7 @@ Ping Island focuses on the moments that actually interrupt coding flow, then kee
   <img src="docs/images/ping-island-mascot-poster.png" width="960" alt="Ping Island supported tools poster">
 </p>
 
-Ping Island also ships VS Code-compatible focus extensions for VS Code, Cursor, CodeBuddy, Qoder, and QoderWork. `QoderWork` remains hook-first and is only treated as an IDE extension host when that environment is actually available.
+Ping Island also ships VS Code-compatible focus extensions for VS Code, Cursor, CodeBuddy, and Qoder. `QoderWork` is hook-only today and does not participate in the IDE extension path.
 
 SSH support is a core workflow, not a sidecar script. Ping Island can bootstrap a bridge onto a remote macOS or Linux host, rewrite the remote Claude-compatible hook config to use that bridge, and keep a bidirectional forwarding path back into the local menu-bar UI. That means approvals, follow-up questions, notifications, and jump-back routing from remote SSH terminals still land in the same Island surface on your Mac.
 

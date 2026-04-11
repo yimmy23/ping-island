@@ -980,22 +980,6 @@ enum ClientProfileRegistry {
             bundleIdentifierKeywords: ["qoder.ide"],
             appNameKeywords: ["qoder"]
         ),
-        ManagedIDEExtensionProfile(
-            id: "qoderwork-extension",
-            title: "QoderWork",
-            subtitle: "安装 Ping Island，支持会话跳转与终端精准聚焦",
-            showsInSettings: false,
-            logoAssetName: "QoderWorkLogo",
-            prefersBundledLogoOverAppIcon: true,
-            sessionFocusStrategy: .qoderChatHistory,
-            localAppBundleIdentifiers: ["com.qoder.work"],
-            iconSymbolName: "bolt.horizontal.circle.fill",
-            extensionRootRelativePath: ".qoderwork/extensions",
-            uriScheme: "qoder-work",
-            exactBundleIdentifiers: ["com.qoder.work"],
-            bundleIdentifierKeywords: ["qoder.work"],
-            appNameKeywords: ["qoderwork", "qoder work"]
-        ),
     ]
 
     nonisolated static func managedHookProfile(id: String) -> ManagedHookClientProfile? {
@@ -1025,6 +1009,13 @@ enum ClientProfileRegistry {
         let normalizedName = appName?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
+        let collapsedName = normalizedName?
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "")
+
+        if normalizedBundle == "com.qoder.work" || collapsedName == "qoderwork" {
+            return nil
+        }
 
         if let normalizedBundle {
             let exactBundleMatch = ideExtensionProfiles.first { profile in

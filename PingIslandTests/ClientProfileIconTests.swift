@@ -31,7 +31,6 @@ final class ClientProfileIconTests: XCTestCase {
             "cursor-extension": "CursorLogo",
             "codebuddy-extension": "CodeBuddyLogo",
             "qoder-extension": "QoderLogo",
-            "qoderwork-extension": "QoderWorkLogo",
         ]
 
         for (profileID, assetName) in expectedAssets {
