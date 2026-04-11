@@ -88,6 +88,7 @@ final class OpenCodeIntegrationTests: XCTestCase {
         XCTAssertEqual(profile?.brand, .opencode)
         XCTAssertEqual(profile?.localAppBundleIdentifiers, ["ai.opencode.desktop"])
         XCTAssertEqual(profile?.primaryConfigurationURL.path, NSHomeDirectory() + "/.config/opencode/plugins/ping-island.js")
+        XCTAssertEqual(profile?.activationConfigurationURL?.path, NSHomeDirectory() + "/.config/opencode/config.json")
         XCTAssertTrue(profile?.reinstallDescriptionFormat.contains("插件文件") == true)
     }
 
@@ -107,6 +108,61 @@ final class OpenCodeIntegrationTests: XCTestCase {
         XCTAssertTrue(source.contains("stdout: captureResponse ? \"pipe\" : \"ignore\""))
         XCTAssertTrue(source.contains("_env: collectBridgeEnv()"))
         XCTAssertTrue(source.contains("_tty: detectedTTY"))
+    }
+
+    func testOpenCodeActivationConfigInstallsPluginEntryWithoutRemovingOthers() throws {
+        let existingJSON = """
+        {
+          "$schema": "https://opencode.ai/config.json",
+          "plugin": [
+            "file:///Users/wudanwu/.config/opencode/plugins/open-island.js"
+          ]
+        }
+        """.data(using: .utf8)
+
+        let profile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "opencode-hooks"))
+        let data = HookInstaller.updatedConfigurationData(
+            existingData: existingJSON,
+            profile: profile,
+            customCommand: "",
+            installing: true
+        )
+
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let plugins = try XCTUnwrap(object["plugin"] as? [String])
+
+        XCTAssertTrue(plugins.contains("file:///Users/wudanwu/.config/opencode/plugins/open-island.js"))
+        XCTAssertTrue(plugins.contains(profile.primaryConfigurationURL.absoluteURL.absoluteString))
+        XCTAssertEqual(
+            plugins.filter { $0 == profile.primaryConfigurationURL.absoluteURL.absoluteString }.count,
+            1
+        )
+    }
+
+    func testOpenCodeActivationConfigRemovesOnlyPingIslandPluginEntry() throws {
+        let existingJSON = """
+        {
+          "$schema": "https://opencode.ai/config.json",
+          "plugin": [
+            "file:///Users/wudanwu/.config/opencode/plugins/open-island.js",
+            "file:///Users/wudanwu/.config/opencode/plugins/ping-island.js"
+          ]
+        }
+        """.data(using: .utf8)
+
+        let profile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "opencode-hooks"))
+        let data = HookInstaller.updatedConfigurationData(
+            existingData: existingJSON,
+            profile: profile,
+            customCommand: "",
+            installing: false
+        )
+
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let plugins = try XCTUnwrap(object["plugin"] as? [String])
+
+        XCTAssertTrue(plugins.contains("file:///Users/wudanwu/.config/opencode/plugins/open-island.js"))
+        XCTAssertFalse(plugins.contains(profile.primaryConfigurationURL.absoluteURL.absoluteString))
     }
 
     func testOpenCodeRuntimeProfileResolvesBrandAndMascot() {

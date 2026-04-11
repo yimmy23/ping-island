@@ -261,6 +261,7 @@ struct HookInstaller {
             return profile.configurationURLs.contains { containsManagedHooks(at: $0) }
         case .pluginFile:
             return profile.configurationURLs.contains { containsManagedPlugin(at: $0, profile: profile) }
+                && isManagedPluginEnabled(profile)
         case .hookDirectory:
             return profile.configurationURLs.contains { containsManagedHookDirectory(at: $0, profile: profile) }
                 && isInternalHookEnabled(profile)
@@ -300,6 +301,7 @@ struct HookInstaller {
             for url in installationTargets(for: profile) {
                 writeManagedPlugin(at: url, profile: profile)
             }
+            setManagedPluginEnabled(true, for: profile)
         case .hookDirectory:
             for url in installationTargets(for: profile) {
                 writeManagedHookDirectory(at: url, profile: profile)
@@ -328,6 +330,7 @@ struct HookInstaller {
             for url in profile.configurationURLs {
                 removeManagedPlugin(at: url, profile: profile)
             }
+            setManagedPluginEnabled(false, for: profile)
         case .hookDirectory:
             for url in profile.configurationURLs {
                 removeManagedHookDirectory(at: url, profile: profile)
@@ -395,6 +398,17 @@ struct HookInstaller {
         return isInternalHookEnabled(existingData: data, entryName: entryName)
     }
 
+    private static func isManagedPluginEnabled(_ profile: ManagedHookClientProfile) -> Bool {
+        guard let url = profile.activationConfigurationURL,
+              let data = try? Data(contentsOf: url) else {
+            return false
+        }
+        return isManagedPluginEnabled(
+            existingData: data,
+            pluginURL: profile.primaryConfigurationURL
+        )
+    }
+
     private static func setInternalHookEnabled(_ enabled: Bool, for profile: ManagedHookClientProfile, customConfigURL: URL? = nil) {
         guard let entryName = profile.activationEntryName else {
             return
@@ -410,6 +424,29 @@ struct HookInstaller {
             existingData: existingData,
             entryName: entryName,
             installing: enabled
+        )
+        writeData(data, to: url)
+    }
+
+    private static func setManagedPluginEnabled(
+        _ enabled: Bool,
+        for profile: ManagedHookClientProfile,
+        customConfigURL: URL? = nil,
+        pluginURL: URL? = nil
+    ) {
+        let url = customConfigURL ?? profile.activationConfigurationURL
+        let pluginURL = pluginURL ?? profile.primaryConfigurationURL
+        guard let url else {
+            return
+        }
+
+        let existingData = try? Data(contentsOf: url)
+        let data = updatedConfigurationData(
+            existingData: existingData,
+            profile: profile,
+            customCommand: "",
+            installing: enabled,
+            pluginURL: pluginURL
         )
         writeData(data, to: url)
     }
@@ -1581,6 +1618,7 @@ struct HookInstaller {
             updateHooks(at: url, profile: profile)
         case .pluginFile:
             writeManagedPlugin(at: url, profile: profile)
+            setManagedPluginEnabled(true, for: profile, customConfigURL: activationConfigURL, pluginURL: url)
         case .hookDirectory:
             writeManagedHookDirectory(at: url, profile: profile)
             setInternalHookEnabled(true, for: profile, customConfigURL: activationConfigURL)
@@ -1613,6 +1651,7 @@ struct HookInstaller {
                 removeManagedHooks(at: url)
             case .pluginFile:
                 removeManagedPlugin(at: url, profile: profile)
+                setManagedPluginEnabled(false, for: profile, customConfigURL: activationConfigURL, pluginURL: url)
             case .hookDirectory:
                 removeManagedHookDirectory(at: url, profile: profile)
                 setInternalHookEnabled(false, for: profile, customConfigURL: activationConfigURL)
@@ -1738,7 +1777,8 @@ struct HookInstaller {
         profile: ManagedHookClientProfile,
         customCommand: String,
         installing: Bool,
-        removingCommandPrefixes: [String] = []
+        removingCommandPrefixes: [String] = [],
+        pluginURL: URL? = nil
     ) -> Data {
         var json: [String: Any] = [:]
         if let existingData,
@@ -1781,7 +1821,21 @@ struct HookInstaller {
             }
 
         case .pluginFile:
-            break
+            let targetPluginURL = pluginURL ?? profile.primaryConfigurationURL
+            let pluginSpecifier = targetPluginURL.absoluteURL.absoluteString
+            let pluginPath = targetPluginURL.path
+            let existingPlugins = json["plugin"] as? [Any] ?? []
+            let filteredPlugins = existingPlugins.filter { entry in
+                !pluginEntry(entry, matches: pluginSpecifier, pluginPath: pluginPath)
+            }
+
+            if installing {
+                json["plugin"] = filteredPlugins + [pluginSpecifier]
+            } else if filteredPlugins.isEmpty {
+                json.removeValue(forKey: "plugin")
+            } else {
+                json["plugin"] = filteredPlugins
+            }
         case .hookDirectory:
             break
         }
@@ -1862,8 +1916,16 @@ struct HookInstaller {
     }
 
     private static func customActivationConfigurationURL(for profile: ManagedHookClientProfile, baseDirectory: URL) -> URL? {
-        guard profile.installationKind == .hookDirectory else {
+        switch profile.installationKind {
+        case .pluginFile:
+            if baseDirectory.lastPathComponent == "plugins" {
+                return baseDirectory.deletingLastPathComponent().appendingPathComponent("config.json")
+            }
+            return baseDirectory.appendingPathComponent("config.json")
+        case .jsonHooks:
             return nil
+        case .hookDirectory:
+            break
         }
 
         let selectedName = baseDirectory.lastPathComponent
@@ -1877,8 +1939,13 @@ struct HookInstaller {
     }
 
     private static func customActivationConfigurationURL(for profile: ManagedHookClientProfile, installedURL: URL) -> URL? {
-        guard profile.installationKind == .hookDirectory else {
+        switch profile.installationKind {
+        case .pluginFile:
+            return installedURL.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("config.json")
+        case .jsonHooks:
             return nil
+        case .hookDirectory:
+            break
         }
         let parent = installedURL.deletingLastPathComponent()
         if parent.lastPathComponent == "hooks" {
@@ -1898,5 +1965,40 @@ struct HookInstaller {
 
     private nonisolated static func shellQuoted(_ string: String) -> String {
         "'" + string.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
+    nonisolated static func isManagedPluginEnabled(existingData: Data?, pluginURL: URL) -> Bool {
+        guard let existingData,
+              let json = HookConfigParser.parseJSONObject(from: existingData),
+              let plugins = json["plugin"] as? [Any] else {
+            return false
+        }
+
+        let pluginSpecifier = pluginURL.absoluteURL.absoluteString
+        let pluginPath = pluginURL.path
+        return plugins.contains { pluginEntry($0, matches: pluginSpecifier, pluginPath: pluginPath) }
+    }
+
+    private static func pluginEntry(_ entry: Any, matches pluginSpecifier: String, pluginPath: String) -> Bool {
+        if let string = entry as? String {
+            return normalizedPluginLocation(string) == normalizedPluginLocation(pluginSpecifier)
+                || normalizedPluginLocation(string) == normalizedPluginLocation(pluginPath)
+        }
+
+        if let pair = entry as? [Any],
+           let string = pair.first as? String {
+            return normalizedPluginLocation(string) == normalizedPluginLocation(pluginSpecifier)
+                || normalizedPluginLocation(string) == normalizedPluginLocation(pluginPath)
+        }
+
+        return false
+    }
+
+    private static func normalizedPluginLocation(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: trimmed), url.isFileURL {
+            return url.standardizedFileURL.path
+        }
+        return URL(fileURLWithPath: trimmed).standardizedFileURL.path
     }
 }

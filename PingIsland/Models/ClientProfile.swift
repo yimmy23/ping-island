@@ -658,6 +658,7 @@ enum ClientProfileRegistry {
             localAppBundleIdentifiers: ["ai.opencode.desktop"],
             iconSymbolName: "waveform.path.ecg.text",
             configurationRelativePath: ".config/opencode/plugins/ping-island.js",
+            activationConfigurationRelativePath: ".config/opencode/config.json",
             bridgeSource: "claude",
             bridgeExtraArguments: [
                 "--client-kind", "opencode",
