@@ -440,7 +440,7 @@ struct InstanceRow: View {
         if isWaitingForApproval {
             return TerminalColors.amber.opacity(isHovered ? 0.15 : 0.09)
         }
-        if session.presentsActiveInUI {
+        if session.phase.isActive {
             return Color.white.opacity(isHovered ? 0.08 : 0.04)
         }
         return isHovered ? Color.white.opacity(0.06) : Color.clear
@@ -534,7 +534,7 @@ struct InstanceRow: View {
     private var shouldReserveIncomingPreviewLineHeight: Bool {
         guard detailsEnabled else { return false }
         guard shouldShowExpandedDetails else { return false }
-        guard session.presentsActiveInUI else { return false }
+        guard session.phase.isActive else { return false }
         guard latestUserLine == nil else { return false }
         return previewLines.count == 1
     }
@@ -602,7 +602,7 @@ struct InstanceRow: View {
     }
 
     private var assistantPrefixColor: Color {
-        providerColor.opacity(session.presentsActiveInUI ? 0.96 : 0.92)
+        providerColor.opacity(session.phase.isActive ? 0.96 : 0.92)
     }
 
     private var assistantTextColor: Color {
@@ -612,7 +612,7 @@ struct InstanceRow: View {
         if isWaitingForApproval {
             return .white.opacity(0.74)
         }
-        if session.presentsActiveInUI {
+        if session.phase.isActive {
             return .white.opacity(0.66)
         }
         return .white.opacity(0.52)

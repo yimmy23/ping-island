@@ -289,7 +289,7 @@ extension MascotStatus {
     init(session: SessionState) {
         if session.needsManualAttention {
             self = .warning
-        } else if session.presentsActiveInUI {
+        } else if session.phase.isActive {
             self = .working
         } else {
             self = .idle

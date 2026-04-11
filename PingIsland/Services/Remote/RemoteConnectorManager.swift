@@ -966,7 +966,7 @@ private enum RemoteConnectorError: LocalizedError {
         case .localBridgeBinaryMissing:
             return "本地 PingIslandBridge 二进制不存在，无法安装到远程主机"
         case .missingClaudeHookProfile:
-            return "未找到 Claude hooks 配置模板"
+            return "未找到 hooks 配置模板"
         case .invalidRemoteMessage:
             return "远程桥接返回了无法识别的消息"
         case .unsupportedRemotePlatform(let detail):

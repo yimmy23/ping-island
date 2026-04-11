@@ -669,7 +669,7 @@ private enum HoverPreviewStyle {
     }
 
     static func assistantPrefixColor(for session: SessionState) -> Color {
-        return providerColor(for: session).opacity(session.presentsActiveInUI ? 0.96 : 0.9)
+        return providerColor(for: session).opacity(session.phase.isActive ? 0.96 : 0.9)
     }
 
     static func assistantTextColor(for session: SessionState, compact: Bool) -> Color {
@@ -679,7 +679,7 @@ private enum HoverPreviewStyle {
         if session.needsApprovalResponse {
             return .white.opacity(compact ? 0.74 : 0.8)
         }
-        if session.presentsActiveInUI {
+        if session.phase.isActive {
             return .white.opacity(compact ? 0.68 : 0.78)
         }
         return .white.opacity(compact ? 0.58 : 0.68)

@@ -133,7 +133,7 @@ struct NotchView: View {
         }
 
         if let active = sessionMonitor.instances
-            .filter({ $0.presentsActiveInUI })
+            .filter({ $0.phase.isActive })
             .sorted(by: { $0.lastActivity > $1.lastActivity })
             .first {
             return active
@@ -193,7 +193,7 @@ struct NotchView: View {
     private func latestMascotSourceSession(from instances: [SessionState]) -> SessionState? {
         latestHookMessageSession(from: instances)
             ?? instances
-                .filter { $0.presentsActiveInUI }
+                .filter { $0.phase.isActive }
                 .sorted(by: { $0.lastActivity > $1.lastActivity })
                 .first
             ?? instances
@@ -399,7 +399,7 @@ struct NotchView: View {
 
     private var sortedHoverSessions: [SessionState] {
         sessionMonitor.instances
-            .filter(\.presentsActiveInUI)
+            .filter(\.phase.isActive)
             .sorted { $0.shouldSortBeforeInQueue($1) }
     }
 

@@ -1206,7 +1206,7 @@ private struct SettingsPanelContentView: View {
                         Text(appLocalized: "还没有添加任何远程主机")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.white)
-                        Text(appLocalized: "添加后，Island 会通过 SSH 安装远程 bridge、改写远程 Claude hooks，并建立一个双向转发通道。")
+                        Text(appLocalized: "添加后，Island 会通过 SSH 安装远程 bridge、改写远程 hooks，并建立一个双向转发通道。")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.58))
                             .fixedSize(horizontal: false, vertical: true)
@@ -1258,13 +1258,17 @@ private struct SettingsPanelContentView: View {
                 .padding(.vertical, 12)
             }
 
-            SettingsSectionCard(title: "说明") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(appLocalized: "说明")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(appLocalized: "添加远程主机后，Island 会通过 SSH 检查环境、安装远程 bridge，并配置 Claude hooks。")
+                    Text(appLocalized: "添加远程主机后，Island 会通过 SSH 检查环境、安装远程 bridge，并配置 Hooks。")
                     Text(appLocalized: "连接成功后，远程会话会回传到本机显示；如果密码连接失败，需要重新输入密码。")
                 }
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.72))
+                .foregroundColor(.white.opacity(0.62))
                 .fixedSize(horizontal: false, vertical: true)
             }
         }

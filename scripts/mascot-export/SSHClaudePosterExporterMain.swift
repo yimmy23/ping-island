@@ -242,7 +242,7 @@ private struct SSHClaudePosterView: View {
         VStack(alignment: .leading, spacing: 28) {
             HStack(spacing: 14) {
                 featurePill("自动安装 remote bridge", icon: "point.3.connected.trianglepath.dotted")
-                featurePill("改写远端 Claude hooks", icon: "arrow.trianglehead.branch")
+                featurePill("改写远端 hooks", icon: "arrow.trianglehead.branch")
                 featurePill("双向转发通道", icon: "arrow.left.arrow.right.circle")
             }
 
@@ -251,7 +251,7 @@ private struct SSHClaudePosterView: View {
                     .font(.system(size: 56, weight: .bold, design: .rounded))
                     .foregroundStyle(Color(red: 0.18, green: 0.13, blue: 0.10))
 
-                Text("添加 SSH 主机后，Ping Island 会在远程机器上部署 bridge，接住 Claude hooks，再把远程事件稳定转发回本机。")
+                Text("添加 SSH 主机后，Ping Island 会在远程机器上部署 bridge，接住 hooks，再把远程事件稳定转发回本机。")
                     .font(.system(size: 31, weight: .medium, design: .rounded))
                     .foregroundStyle(Color(red: 0.42, green: 0.33, blue: 0.24))
                     .fixedSize(horizontal: false, vertical: true)
@@ -290,7 +290,7 @@ private struct SSHClaudePosterView: View {
             FlowStepCard(
                 icon: "point.3.filled.connected.trianglepath.dotted",
                 title: "远程桥接",
-                detail: "部署桥接程序，接住并转发远端 Claude hooks"
+                detail: "部署桥接程序，接住并转发远端 hooks"
             )
 
             flowArrow
@@ -414,7 +414,7 @@ private struct SSHClaudePosterView: View {
     private var bottomRibbon: some View {
         HStack(spacing: 18) {
             ribbonTag(icon: "checkmark.shield", text: "SSH 接入")
-            ribbonTag(icon: "terminal", text: "Claude hooks")
+            ribbonTag(icon: "terminal", text: "hooks")
             ribbonTag(icon: "arrow.left.arrow.right", text: "双向转发")
             ribbonTag(icon: "bell.badge.fill", text: "注意力优先提醒")
         }
