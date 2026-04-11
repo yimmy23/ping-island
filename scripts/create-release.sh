@@ -109,15 +109,18 @@ else
             gh release create "v$VERSION" "${RELEASE_ASSETS[@]}" \
                 --repo "$GITHUB_REPO" \
                 --title "Ping Island v$VERSION" \
-                --notes "## Ping Island v$VERSION
+                --notes "## Highlights
 
-### Installation
-1. Download \`$(basename "$DMG_PATH")\`
-2. Open the DMG and drag Ping Island to Applications
-3. Launch Ping Island from Applications
+- Download \`$(basename "$DMG_PATH")\` and install the latest Ping Island release.
 
-### Auto-updates
-After installation, Ping Island will automatically check for updates."
+## Fixes
+
+- This fallback release note was auto-generated because no dedicated notes file was found for v$VERSION.
+
+## Notes
+
+- Open the DMG, drag Ping Island to Applications, and launch it normally.
+- After installation, Ping Island will automatically check for updates."
         fi
     fi
 

@@ -1196,21 +1196,6 @@ private struct SettingsPanelContentView: View {
                             .foregroundColor(.white.opacity(0.5))
                     }
                 }
-
-#if DEBUG
-                SettingsLineDivider()
-
-                SettingsActionLine(
-                    title: "调试查看本地更新日志",
-                    subtitle: "直接弹出 releases/notes 中的最新版本说明"
-                ) {
-                    updateManager.showLatestLocalReleaseNotesForDebug()
-                } accessory: {
-                    Image(systemName: "hammer")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.5))
-                }
-#endif
             }
 
             SettingsSectionCard(title: "链接") {

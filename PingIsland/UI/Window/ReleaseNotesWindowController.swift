@@ -5,7 +5,7 @@ import SwiftUI
 final class ReleaseNotesWindowController: NSWindowController, NSWindowDelegate {
     static let shared = ReleaseNotesWindowController()
 
-    private let fixedContentSize = NSSize(width: 840, height: 880)
+    private let fixedContentSize = NSSize(width: 600, height: 690)
     private let hostingController = NSHostingController(rootView: AnyView(EmptyView()))
 
     private init() {

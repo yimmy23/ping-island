@@ -166,19 +166,6 @@ final class UpdateManager: NSObject, ObservableObject {
         }
     }
 
-#if DEBUG
-    func showLatestLocalReleaseNotesForDebug() {
-        guard let notes = Self.latestLocalReleaseNotesForDebug(installedVersion: Self.installedVersion) else {
-            state = .error(message: "未找到本地 release notes，请检查 releases/notes 目录")
-            return
-        }
-
-        latestReleaseNotes = notes
-        availableVersion = notes.targetVersion
-        ReleaseNotesWindowController.shared.present(notes: notes)
-    }
-#endif
-
     private func beginObservingSessionActivityIfNeeded() {
         guard sessionActivityObserver == nil else { return }
 
@@ -336,56 +323,6 @@ final class UpdateManager: NSObject, ObservableObject {
 
         return nil
     }
-
-#if DEBUG
-    private static func latestLocalReleaseNotesForDebug(installedVersion: String) -> UpdateReleaseNotes? {
-        guard let notesDirectory = debugReleaseNotesDirectory(),
-              let latestFile = debugLatestReleaseNotesURL(in: notesDirectory),
-              let markdown = try? String(contentsOf: latestFile, encoding: .utf8) else {
-            return nil
-        }
-
-        let targetVersion = latestFile.deletingPathExtension().lastPathComponent
-        return UpdateReleaseNotes(
-            currentVersion: installedVersion,
-            targetVersion: targetVersion,
-            markdown: markdown,
-            sourceURL: latestFile,
-            publishedAt: nil
-        )
-    }
-
-    nonisolated static func debugLatestReleaseNotesURL(in notesDirectory: URL) -> URL? {
-        guard let contents = try? FileManager.default.contentsOfDirectory(
-            at: notesDirectory,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        return contents
-            .filter { ["md", "markdown"].contains($0.pathExtension.lowercased()) }
-            .filter { $0.deletingPathExtension().lastPathComponent.lowercased() != "readme" }
-            .sorted {
-                $0.deletingPathExtension().lastPathComponent.compare(
-                    $1.deletingPathExtension().lastPathComponent,
-                    options: [.numeric, .caseInsensitive]
-                ) == .orderedDescending
-            }
-            .first
-    }
-
-    private static func debugReleaseNotesDirectory() -> URL? {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("releases", isDirectory: true)
-            .appendingPathComponent("notes", isDirectory: true)
-    }
-#endif
 
     private static func fetchMarkdown(from url: URL) async -> String? {
         var request = URLRequest(url: url)
