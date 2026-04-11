@@ -61,6 +61,7 @@ Ping Island focuses on the moments that actually interrupt coding flow, then kee
 - **Act from the notch** - Approve tools, deny requests, and answer follow-up prompts without hunting through tabs.
 - **Claude Code auto-approve** - Turn on per-session auto-approval when you want Claude Code to stop pausing on every permission request.
 - **One-click return** - Jump back to the right iTerm2, Ghostty, Terminal.app, tmux pane, or IDE window.
+- **SSH terminal support** - Bootstrap a remote PingIslandBridge over SSH, rewrite the remote Claude-compatible hooks to point back at your Mac, and keep remote terminal activity visible in the same local Island UI.
 - **Multi-agent coverage** - Track Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Qoder, CodeBuddy, GitHub Copilot, and other compatible sessions in one place.
 - **Codex hook + app-server sync** - Support Codex CLI hooks, live app-server threads, and rollout parsing fallback when needed.
 - **Custom sounds** - Pick per-event macOS sounds or import local sound packs for your own notification style.
@@ -74,6 +75,8 @@ Ping Island focuses on the moments that actually interrupt coding flow, then kee
 </p>
 
 Ping Island also ships VS Code-compatible focus extensions for VS Code, Cursor, CodeBuddy, Qoder, and QoderWork. `QoderWork` remains hook-first and is only treated as an IDE extension host when that environment is actually available.
+
+SSH support is a core workflow, not a sidecar script. Ping Island can bootstrap a bridge onto a remote macOS or Linux host, rewrite the remote Claude-compatible hook config to use that bridge, and keep a bidirectional forwarding path back into the local menu-bar UI. That means approvals, follow-up questions, notifications, and jump-back routing from remote SSH terminals still land in the same Island surface on your Mac.
 
 The mascot GIFs used throughout this README are generated from the live `MascotView` implementation via `./scripts/render-mascots.sh`.
 
@@ -247,6 +250,7 @@ Implementation details worth knowing:
 - Codex sessions can come from hook events or the live `codex app-server` websocket monitor.
 - Gemini CLI hooks are installed into `~/.gemini/settings.json`; tool matchers use Gemini's regex-based hook matcher syntax.
 - OpenCode is wired through a generated plugin file under `~/.config/opencode/plugins/`.
+- Remote SSH hosts can bootstrap `PingIslandBridge`, rewrite remote Claude-compatible hooks to target that bridge, and forward remote events back into the local Ping Island UI.
 - Focus routing spans iTerm2, Ghostty, Terminal.app, tmux, and VS Code-compatible IDE extensions.
 
 ## Requirements
