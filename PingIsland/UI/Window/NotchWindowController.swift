@@ -74,6 +74,14 @@ class NotchWindowController: NSWindowController {
             }
             .store(in: &cancellables)
 
+        viewModel.$openReason
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak notchWindow, weak viewModel] _ in
+                guard let self, let notchWindow, let viewModel else { return }
+                self.updateWindowPresentation(window: notchWindow, viewModel: viewModel)
+            }
+            .store(in: &cancellables)
+
         viewModel.$isFullscreenEdgeRevealActive
             .receive(on: DispatchQueue.main)
             .sink { [weak self, weak notchWindow, weak viewModel] _ in

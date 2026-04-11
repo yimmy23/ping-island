@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Combine
 import ServiceManagement
 import SwiftUI
@@ -6,6 +7,7 @@ import UniformTypeIdentifiers
 
 private enum SettingsCategory: String, CaseIterable, Identifiable {
     case general
+    case shortcuts
     case display
     case mascot
     case sound
@@ -18,6 +20,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: return "通用"
+        case .shortcuts: return "快捷键"
         case .display: return "显示"
         case .mascot: return "宠物"
         case .sound: return "声音"
@@ -30,6 +33,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .general: return "系统与基础行为"
+        case .shortcuts: return "全局展开与自定义"
         case .display: return "显示器与位置"
         case .mascot: return "客户端宠物与动作"
         case .sound: return "通知与提示音"
@@ -42,6 +46,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: return "gearshape.fill"
+        case .shortcuts: return "command.square.fill"
         case .display: return "rectangle.on.rectangle"
         case .mascot: return "face.smiling.fill"
         case .sound: return "speaker.wave.2.fill"
@@ -54,6 +59,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
     var tint: Color {
         switch self {
         case .general: return Color(red: 0.12, green: 0.42, blue: 0.95)
+        case .shortcuts: return Color(red: 0.25, green: 0.82, blue: 0.46)
         case .display: return Color(red: 0.46, green: 0.40, blue: 0.96)
         case .mascot: return Color(red: 0.91, green: 0.27, blue: 0.81)  // Pink
         case .sound: return Color(red: 0.22, green: 0.83, blue: 0.42)
@@ -544,7 +550,7 @@ private struct SettingsPanelContentView: View {
         [
             SettingsSidebarSection(
                 title: nil,
-                categories: [.general, .display, .mascot, .sound, .integration, .remote, .about]
+                categories: [.general, .shortcuts, .display, .mascot, .sound, .integration, .remote, .about]
             )
         ]
     }
@@ -681,6 +687,8 @@ private struct SettingsPanelContentView: View {
                 switch currentCategory {
                 case .general:
                     generalContent
+                case .shortcuts:
+                    shortcutsContent
                 case .display:
                     displayContent
                 case .mascot:
@@ -914,6 +922,31 @@ private struct SettingsPanelContentView: View {
                     )
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white.opacity(0.72))
+                }
+            }
+        }
+    }
+
+    private var shortcutsContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            SettingsSectionCard(title: "全局快捷键") {
+                ShortcutSettingsLine(
+                    action: .openActiveSession,
+                    shortcut: shortcutBinding(for: .openActiveSession)
+                )
+                SettingsLineDivider()
+                ShortcutSettingsLine(
+                    action: .openSessionList,
+                    shortcut: shortcutBinding(for: .openSessionList)
+                )
+            }
+
+            SettingsSectionCard(title: "说明") {
+                SettingsInfoLine(
+                    title: "录制规则",
+                    subtitle: "在录制状态下直接按新组合键即可。建议使用包含 Option + Command 的组合，尽量避开常见系统快捷键。"
+                ) {
+                    EmptyView()
                 }
             }
         }
@@ -1163,6 +1196,21 @@ private struct SettingsPanelContentView: View {
                             .foregroundColor(.white.opacity(0.5))
                     }
                 }
+
+#if DEBUG
+                SettingsLineDivider()
+
+                SettingsActionLine(
+                    title: "调试查看本地更新日志",
+                    subtitle: "直接弹出 releases/notes 中的最新版本说明"
+                ) {
+                    updateManager.showLatestLocalReleaseNotesForDebug()
+                } accessory: {
+                    Image(systemName: "hammer")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+#endif
             }
 
             SettingsSectionCard(title: "链接") {
@@ -1359,6 +1407,13 @@ private struct SettingsPanelContentView: View {
         }
     }
 
+    private func shortcutBinding(for action: GlobalShortcutAction) -> Binding<GlobalShortcut?> {
+        Binding(
+            get: { settings.shortcut(for: action) },
+            set: { settings.setShortcut($0, for: action) }
+        )
+    }
+
     private func soundBinding(for event: NotificationEvent) -> Binding<NotificationSound> {
         switch event {
         case .processingStarted:
@@ -1420,16 +1475,8 @@ private struct SettingsPanelContentView: View {
             return AppLocalization.string("检查更新")
         case .checking:
             return AppLocalization.string("检查中...")
-        case .found:
-            return AppLocalization.string("下载更新")
-        case .downloading:
-            return AppLocalization.string("下载中...")
-        case .extracting:
-            return AppLocalization.string("解压中...")
-        case .readyToInstall:
-            return AppLocalization.string("安装并重启")
-        case .installing:
-            return AppLocalization.string("安装中...")
+        case .found, .downloading, .extracting, .readyToInstall, .installing:
+            return AppLocalization.string("静默更新中")
         case .error:
             return AppLocalization.string("重试更新")
         }
@@ -1439,24 +1486,24 @@ private struct SettingsPanelContentView: View {
         switch updateManager.state {
         case .idle:
             return updateManager.isConfigured
-                ? AppLocalization.string("检查 Island 是否有新版本")
+                ? AppLocalization.string("启动时和空闲时自动静默更新")
                 : updateManager.configurationStatus.message
         case .upToDate:
             return AppLocalization.string("当前已经是最新版本")
         case .checking:
-            return AppLocalization.string("正在连接更新源")
+            return AppLocalization.string("正在后台检查更新")
         case .found(let version, _):
-            return AppLocalization.format("发现新版本 v%@", version)
-        case .downloading(let progress):
-            return AppLocalization.format("下载进度 %lld%%", Int(progress * 100))
-        case .extracting(let progress):
-            return AppLocalization.format("解压进度 %lld%%", Int(progress * 100))
+            return AppLocalization.format("发现新版本 v%@，将静默下载并安装", version)
+        case .downloading:
+            return AppLocalization.string("正在后台下载更新")
+        case .extracting:
+            return AppLocalization.string("正在准备安装更新")
         case .readyToInstall(let version):
-            return AppLocalization.format("已准备安装 v%@", version)
+            return AppLocalization.format("v%@ 已就绪，空闲时自动重启安装", version)
         case .installing:
-            return AppLocalization.string("正在替换应用并准备重启")
+            return AppLocalization.string("正在静默安装并重启")
         case .error:
-            return AppLocalization.string("更新失败，点击后重新尝试")
+            return AppLocalization.string("后台更新失败，点击后重新检查")
         }
     }
 
@@ -1485,11 +1532,7 @@ private struct SettingsPanelContentView: View {
         switch updateManager.state {
         case .idle, .upToDate, .error:
             updateManager.checkForUpdates()
-        case .found:
-            updateManager.downloadAndInstall()
-        case .readyToInstall:
-            updateManager.installAndRelaunch()
-        case .checking, .downloading, .extracting, .installing:
+        case .checking, .found, .downloading, .extracting, .readyToInstall, .installing:
             break
         }
     }
@@ -2907,6 +2950,215 @@ private struct SettingsSliderLine: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
+    }
+}
+
+private struct ShortcutSettingsLine: View {
+    let action: GlobalShortcutAction
+    @Binding var shortcut: GlobalShortcut?
+
+    var body: some View {
+        ShortcutRecorderControl(
+            action: action,
+            shortcut: $shortcut,
+            defaultShortcut: action.defaultShortcut
+        )
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ShortcutRecorderControl: View {
+    let action: GlobalShortcutAction
+    @Binding var shortcut: GlobalShortcut?
+    let defaultShortcut: GlobalShortcut?
+
+    @State private var isRecording = false
+    @State private var helperText: String?
+    @State private var eventMonitor: Any?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(appLocalized: action.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text(appLocalized: action.subtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.58))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+
+                recordButton
+            }
+
+            HStack(alignment: .center, spacing: 8) {
+                Text(appLocalized: "当前键位")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.40))
+
+                if let shortcut {
+                    ShortcutVisualLabel(
+                        shortcut: shortcut,
+                        fontSize: 11,
+                        foregroundColor: .white.opacity(0.92),
+                        keyBackground: Color.black.opacity(0.28),
+                        keyBorder: Color.white.opacity(0.08),
+                        keyMinWidth: 24,
+                        keyHorizontalPadding: 7,
+                        keyVerticalPadding: 5,
+                        keyCornerRadius: 10
+                    )
+                } else {
+                    Text(appLocalized: "未设置")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.42))
+                }
+
+                Spacer(minLength: 12)
+
+                if shortcut != nil {
+                    Button {
+                        shortcut = nil
+                        helperText = nil
+                        stopRecording()
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(ShortcutIconButtonStyle())
+                    .help(AppLocalization.string("清空快捷键"))
+                    .accessibilityLabel(Text(appLocalized: "清空快捷键"))
+                }
+
+                if defaultShortcut != nil {
+                    Button {
+                        shortcut = defaultShortcut
+                        helperText = nil
+                        stopRecording()
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(ShortcutIconButtonStyle())
+                    .help(AppLocalization.string("恢复默认快捷键"))
+                    .accessibilityLabel(Text(appLocalized: "恢复默认快捷键"))
+                }
+            }
+
+            Text(helperText ?? AppLocalization.string(isRecording ? "录制中，按 Esc 取消，Delete 清空" : "需要同时按下至少一个修饰键"))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(isRecording ? TerminalColors.green.opacity(0.90) : .white.opacity(0.42))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .onDisappear {
+            stopRecording()
+        }
+    }
+
+    private var recordButton: some View {
+        Button {
+            toggleRecording()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isRecording ? "record.circle.fill" : "keyboard")
+                    .font(.system(size: 11, weight: .bold))
+
+                Text(appLocalized: isRecording ? "按下新快捷键" : "点击录制")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(isRecording ? .black : .white.opacity(0.88))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isRecording ? TerminalColors.green.opacity(0.96) : Color.white.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(
+                        isRecording ? TerminalColors.green.opacity(0.9) : Color.white.opacity(0.10),
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .help(AppLocalization.string(isRecording ? "停止录制快捷键" : "开始录制快捷键"))
+        .accessibilityLabel(Text(appLocalized: isRecording ? "停止录制快捷键" : "开始录制快捷键"))
+    }
+
+    private func toggleRecording() {
+        if isRecording {
+            stopRecording()
+        } else {
+            startRecording()
+        }
+    }
+
+    private func startRecording() {
+        helperText = nil
+        isRecording = true
+
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            handleRecording(event)
+            return nil
+        }
+    }
+
+    private func stopRecording() {
+        isRecording = false
+
+        if let eventMonitor {
+            NSEvent.removeMonitor(eventMonitor)
+            self.eventMonitor = nil
+        }
+    }
+
+    private func handleRecording(_ event: NSEvent) {
+        if event.keyCode == UInt16(kVK_Escape) {
+            helperText = nil
+            stopRecording()
+            return
+        }
+
+        if event.keyCode == UInt16(kVK_Delete) || event.keyCode == UInt16(kVK_ForwardDelete) {
+            shortcut = nil
+            helperText = nil
+            stopRecording()
+            return
+        }
+
+        guard let recordedShortcut = GlobalShortcut(
+            keyCode: event.keyCode,
+            modifierFlags: event.modifierFlags
+        ) else {
+            helperText = AppLocalization.string("需要同时按下至少一个修饰键")
+            return
+        }
+
+        shortcut = recordedShortcut
+        helperText = nil
+        stopRecording()
+    }
+}
+
+private struct ShortcutIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(.white.opacity(configuration.isPressed ? 0.76 : 0.88))
+            .frame(width: 28, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.11 : 0.055))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.09), lineWidth: 1)
+            )
     }
 }
 

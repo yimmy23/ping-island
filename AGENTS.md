@@ -23,6 +23,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - Session association cache: `PingIsland/Services/State/SessionAssociationStore.swift`
 - Session bridge for UI: `PingIsland/Services/Session/SessionMonitor.swift`
 - Notch state and layout: `PingIsland/Core/NotchViewModel.swift`, `PingIsland/UI/Views/NotchView.swift`
+- Global shortcuts and shortcut persistence: `PingIsland/Services/Shared/GlobalShortcutManager.swift`, `PingIsland/Utilities/GlobalShortcut.swift`, `PingIsland/Core/Settings.swift`, `PingIsland/UI/Views/SettingsWindowView.swift`
 - Claude hook ingress: `Prototype/Sources/IslandBridge/`, `PingIsland/Services/Hooks/HookInstaller.swift`, `PingIsland/Services/Hooks/HookSocketServer.swift`
   - `PingIslandBridge` is the unified Claude/Codex hook entrypoint and is responsible for terminal, tmux, SSH-remote, and IDE terminal context capture before envelopes hit Swift code
 - Codex ingress: `PingIsland/Services/Codex/`, `PingIsland/UI/Views/CodexSessionView.swift`
@@ -76,6 +77,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
   - Current rule: provider-originated end events should preserve the session in `.ended` so it stays visible in the list; only explicit user archive/removal should delete it from `SessionStore`.
   - Primary list rule: sessions with no new activity for 30 minutes should auto-hide from the primary list until fresh hook/file/app-server activity updates `lastActivity`; sessions that need manual attention should stay visible.
 - If you change notch sizing, opening behavior, or visibility, inspect both `NotchViewModel` and `NotchView`.
+- If you change global shortcuts, shortcut persistence, or shortcut hints, trace through `PingIsland/Services/Shared/GlobalShortcutManager.swift`, `PingIsland/Utilities/GlobalShortcut.swift`, `PingIsland/Core/Settings.swift`, `PingIsland/UI/Views/SettingsWindowView.swift`, `PingIsland/UI/Components/GlobalShortcutHintView.swift`, and the relevant notch/chat/session-list views together so registration, customization, and visible hints stay aligned.
 - If you change built-in notification sounds or startup audio, inspect `PingIsland/Core/Settings.swift`, `PingIsland/Core/SoundPackCatalog.swift`, `PingIsland/UI/Views/SettingsWindowView.swift`, `PingIsland/App/AppDelegate.swift`, and `PingIsland/Resources/Sounds/` together so mode selection, fixed mappings, previews, and bundled assets stay aligned.
 - If you change client mascot selection or mascot animations, trace through `PingIsland/Models/ClientProfile.swift`, `PingIsland/Core/Settings.swift`, `PingIsland/UI/Components/MascotView.swift`, and the mascot callsites in `NotchView`, `SessionListView`, `SessionHoverPreviewView`, and `MascotSettingsView` so runtime overrides and previews stay aligned.
 - If you change completion-result popup behavior, trace through `SessionStore`, `SessionMonitor`, `PingIsland/UI/Views/NotchView.swift`, and `PingIsland/UI/Views/SessionCompletionNotificationView.swift` so completion detection, queueing, and auto-dismiss timing stay aligned.

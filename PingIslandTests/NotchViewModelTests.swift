@@ -47,6 +47,58 @@ final class NotchViewModelTests: XCTestCase {
         }
     }
 
+    func testPresentSessionListClearsSavedChatAndOpensManualList() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+            let session = makeSession(id: "chat-session")
+
+            viewModel.showChat(for: session)
+            viewModel.presentSessionList(reason: .click)
+
+            XCTAssertEqual(viewModel.status, .opened)
+            XCTAssertEqual(viewModel.openReason, .click)
+            XCTAssertEqual(viewModel.contentType, .instances)
+        }
+    }
+
+    func testPresentChatOpensClickedNotchAndShowsTargetSession() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+            let session = makeSession(id: "focus-session")
+
+            viewModel.presentChat(for: session, reason: .click)
+
+            XCTAssertEqual(viewModel.status, .opened)
+            XCTAssertEqual(viewModel.openReason, .click)
+            XCTAssertEqual(viewModel.contentType, .chat(session))
+        }
+    }
+
+    func testToggleChatClosesWhenSameSessionIsAlreadyVisible() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+            let session = makeSession(id: "focus-session")
+
+            viewModel.presentChat(for: session, reason: .click)
+            viewModel.toggleChat(for: session, reason: .click)
+
+            XCTAssertEqual(viewModel.status, .closed)
+            XCTAssertEqual(viewModel.contentType, .instances)
+        }
+    }
+
+    func testToggleSessionListClosesManualListWhenAlreadyOpen() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+
+            viewModel.presentSessionList(reason: .click)
+            viewModel.toggleSessionList(reason: .click)
+
+            XCTAssertEqual(viewModel.status, .closed)
+            XCTAssertEqual(viewModel.contentType, .instances)
+        }
+    }
+
     @MainActor
     private func makeViewModel() -> NotchViewModel {
         NotchViewModel(

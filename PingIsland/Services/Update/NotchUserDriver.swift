@@ -41,6 +41,7 @@ enum UpdateConfigurationStatus: Equatable {
 @MainActor
 final class UpdateManager: NSObject, ObservableObject {
     static let shared = UpdateManager()
+    nonisolated static let silentCheckInterval: TimeInterval = 10 * 60
 
     @Published var state: UpdateState = .idle
     @Published var hasUnseenUpdate = false
@@ -51,6 +52,10 @@ final class UpdateManager: NSObject, ObservableObject {
     private var updaterController: SPUStandardUpdaterController?
     private var latestAppcastItem: SUAppcastItem?
     private var releaseNotesTask: Task<Void, Never>?
+    private var sessionActivityObserver: AnyCancellable?
+    private var inactiveCheckTimer: Timer?
+    private var pendingSilentInstall: (() -> Void)?
+    private var hasActiveSessions = false
 
     private override init() {
         super.init()
@@ -91,29 +96,35 @@ final class UpdateManager: NSObject, ObservableObject {
         )
         updaterController = controller
         controller.startUpdater()
-        _ = controller.updater.clearFeedURLFromUserDefaults()
+        let updater = controller.updater
+        updater.automaticallyChecksForUpdates = false
+        updater.automaticallyDownloadsUpdates = true
+        _ = updater.clearFeedURLFromUserDefaults()
+
+        beginObservingSessionActivityIfNeeded()
+        refreshSilentUpdateSchedule(hasActiveSessions: Self.hasActiveSessions(in: []))
+        performSilentUpdateCheck()
     }
 
     func checkForUpdates() {
-        guard let updater = updaterController?.updater else {
+        guard updaterController != nil else {
             state = .error(message: configurationStatus.message)
             return
         }
 
-        state = .checking
-        updater.checkForUpdateInformation()
+        performSilentUpdateCheck()
     }
 
     func checkForUpdatesInBackground() {
-        updaterController?.updater.checkForUpdatesInBackground()
+        performSilentUpdateCheck()
     }
 
     func downloadAndInstall() {
-        updaterController?.updater.checkForUpdates()
+        performSilentUpdateCheck()
     }
 
     func installAndRelaunch() {
-        updaterController?.updater.checkForUpdates()
+        installPendingUpdateIfPossible()
     }
 
     func skipUpdate() {
@@ -153,6 +164,78 @@ final class UpdateManager: NSObject, ObservableObject {
                 }
             }
         }
+    }
+
+#if DEBUG
+    func showLatestLocalReleaseNotesForDebug() {
+        guard let notes = Self.latestLocalReleaseNotesForDebug(installedVersion: Self.installedVersion) else {
+            state = .error(message: "未找到本地 release notes，请检查 releases/notes 目录")
+            return
+        }
+
+        latestReleaseNotes = notes
+        availableVersion = notes.targetVersion
+        ReleaseNotesWindowController.shared.present(notes: notes)
+    }
+#endif
+
+    private func beginObservingSessionActivityIfNeeded() {
+        guard sessionActivityObserver == nil else { return }
+
+        sessionActivityObserver = SessionStore.shared.sessionsPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] sessions in
+                guard let self else { return }
+                self.refreshSilentUpdateSchedule(hasActiveSessions: Self.hasActiveSessions(in: sessions))
+            }
+    }
+
+    private func refreshSilentUpdateSchedule(hasActiveSessions: Bool) {
+        self.hasActiveSessions = hasActiveSessions
+
+        if hasActiveSessions {
+            inactiveCheckTimer?.invalidate()
+            inactiveCheckTimer = nil
+            return
+        }
+
+        installPendingUpdateIfPossible()
+
+        guard inactiveCheckTimer == nil else { return }
+
+        inactiveCheckTimer = Timer.scheduledTimer(withTimeInterval: Self.silentCheckInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.performSilentUpdateCheck()
+            }
+        }
+
+        if let inactiveCheckTimer {
+            RunLoop.main.add(inactiveCheckTimer, forMode: .common)
+        }
+    }
+
+    private func performSilentUpdateCheck() {
+        guard let updater = updaterController?.updater else {
+            state = .error(message: configurationStatus.message)
+            return
+        }
+
+        guard updater.canCheckForUpdates else {
+            installPendingUpdateIfPossible()
+            return
+        }
+
+        state = .checking
+        updater.checkForUpdatesInBackground()
+    }
+
+    private func installPendingUpdateIfPossible() {
+        guard !hasActiveSessions, let pendingSilentInstall else { return }
+
+        self.pendingSilentInstall = nil
+        hasUnseenUpdate = false
+        state = .installing
+        pendingSilentInstall()
     }
 
     private func handleLatestAppcastItem(_ item: SUAppcastItem, userInitiated: Bool) {
@@ -254,6 +337,56 @@ final class UpdateManager: NSObject, ObservableObject {
         return nil
     }
 
+#if DEBUG
+    private static func latestLocalReleaseNotesForDebug(installedVersion: String) -> UpdateReleaseNotes? {
+        guard let notesDirectory = debugReleaseNotesDirectory(),
+              let latestFile = debugLatestReleaseNotesURL(in: notesDirectory),
+              let markdown = try? String(contentsOf: latestFile, encoding: .utf8) else {
+            return nil
+        }
+
+        let targetVersion = latestFile.deletingPathExtension().lastPathComponent
+        return UpdateReleaseNotes(
+            currentVersion: installedVersion,
+            targetVersion: targetVersion,
+            markdown: markdown,
+            sourceURL: latestFile,
+            publishedAt: nil
+        )
+    }
+
+    nonisolated static func debugLatestReleaseNotesURL(in notesDirectory: URL) -> URL? {
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: notesDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        return contents
+            .filter { ["md", "markdown"].contains($0.pathExtension.lowercased()) }
+            .filter { $0.deletingPathExtension().lastPathComponent.lowercased() != "readme" }
+            .sorted {
+                $0.deletingPathExtension().lastPathComponent.compare(
+                    $1.deletingPathExtension().lastPathComponent,
+                    options: [.numeric, .caseInsensitive]
+                ) == .orderedDescending
+            }
+            .first
+    }
+
+    private static func debugReleaseNotesDirectory() -> URL? {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("releases", isDirectory: true)
+            .appendingPathComponent("notes", isDirectory: true)
+    }
+#endif
+
     private static func fetchMarkdown(from url: URL) async -> String? {
         var request = URLRequest(url: url)
         request.timeoutInterval = 15
@@ -291,6 +424,10 @@ final class UpdateManager: NSObject, ObservableObject {
         }
 
         return description
+    }
+
+    nonisolated static func hasActiveSessions(in sessions: [SessionState]) -> Bool {
+        sessions.contains(where: { $0.phase.isActive })
     }
 
     nonisolated static func isValidFeedURL(_ value: String) -> Bool {
@@ -416,6 +553,10 @@ final class UpdateManager: NSObject, ObservableObject {
 }
 
 extension UpdateManager: SPUUpdaterDelegate {
+    func updater(_ updater: SPUUpdater, mayPerformUpdateCheck updateCheck: SPUUpdateCheck, error: AutoreleasingUnsafeMutablePointer<NSError?>) -> Bool {
+        true
+    }
+
     func updater(_ updater: SPUUpdater, didFinishLoading appcast: SUAppcast) {
         guard let newestItem = appcast.items.first else { return }
         latestAppcastItem = newestItem
@@ -426,12 +567,58 @@ extension UpdateManager: SPUUpdaterDelegate {
         handleLatestAppcastItem(item, userInitiated: false)
     }
 
+    func updater(_ updater: SPUUpdater, shouldDownloadReleaseNotesForUpdate updateItem: SUAppcastItem) -> Bool {
+        false
+    }
+
+    func updater(_ updater: SPUUpdater, willDownloadUpdate item: SUAppcastItem, with request: NSMutableURLRequest) {
+        state = .downloading(progress: 0)
+    }
+
+    func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) {
+        state = .readyToInstall(version: item.displayVersionString)
+    }
+
+    func updater(_ updater: SPUUpdater, willExtractUpdate item: SUAppcastItem) {
+        state = .extracting(progress: 0)
+    }
+
+    func updater(_ updater: SPUUpdater, didExtractUpdate item: SUAppcastItem) {
+        state = .readyToInstall(version: item.displayVersionString)
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        hasUnseenUpdate = false
+        state = .installing
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {
+        availableVersion = item.displayVersionString
+        state = .readyToInstall(version: item.displayVersionString)
+        pendingSilentInstall = { [weak self] in
+            self?.hasUnseenUpdate = false
+            self?.state = .installing
+            immediateInstallHandler()
+        }
+
+        installPendingUpdateIfPossible()
+        return true
+    }
+
     func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
         handleUpdateCycleError(error as NSError)
     }
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
         handleUpdateCycleError(error as NSError)
+    }
+
+    func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
+        if let error {
+            handleUpdateCycleError(error as NSError)
+        } else if case .checking = state {
+            handleNoUpdateFound()
+        }
     }
 
     func updater(_ updater: SPUUpdater, userDidMake choice: SPUUserUpdateChoice, forUpdate updateItem: SUAppcastItem, state userState: SPUUserUpdateState) {
@@ -458,6 +645,18 @@ extension UpdateManager: SPUUpdaterDelegate {
 }
 
 extension UpdateManager: @preconcurrency SPUStandardUserDriverDelegate {
+    var supportsGentleScheduledUpdateReminders: Bool {
+        true
+    }
+
+    func standardUserDriverShouldHandleShowingScheduledUpdate(_ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool) -> Bool {
+        false
+    }
+
+    func standardUserDriverAllowsMinimizableStatusWindow() -> Bool {
+        false
+    }
+
     func standardUserDriverShouldShowVersionHistory(for item: SUAppcastItem) -> Bool {
         true
     }
@@ -469,6 +668,14 @@ extension UpdateManager: @preconcurrency SPUStandardUserDriverDelegate {
 
     func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state userState: SPUUserUpdateState) {
         availableVersion = update.displayVersionString
+        handleLatestAppcastItem(update, userInitiated: userState.userInitiated)
+
+        guard handleShowingUpdate || userState.userInitiated else {
+            if userState.stage == .downloaded {
+                state = .readyToInstall(version: update.displayVersionString)
+            }
+            return
+        }
 
         switch userState.stage {
         case .notDownloaded:
@@ -480,8 +687,6 @@ extension UpdateManager: @preconcurrency SPUStandardUserDriverDelegate {
         @unknown default:
             state = .found(version: update.displayVersionString, releaseNotes: latestReleaseNotes?.markdown)
         }
-
-        handleLatestAppcastItem(update, userInitiated: userState.userInitiated)
     }
 }
 

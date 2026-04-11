@@ -429,6 +429,22 @@ class NotchViewModel: ObservableObject {
         contentType = .chat(session)
     }
 
+    func presentChat(for session: SessionState, reason: NotchOpenReason = .click) {
+        notchOpen(reason: reason)
+        showChat(for: session)
+    }
+
+    func toggleChat(for session: SessionState, reason: NotchOpenReason = .click) {
+        if status == .opened,
+           case .chat(let currentSession) = contentType,
+           currentSession.sessionId == session.sessionId {
+            notchClose()
+            return
+        }
+
+        presentChat(for: session, reason: reason)
+    }
+
     /// Surface a session from an automatic notification without collapsing first.
     /// This keeps attention-driven panel refreshes stable when the notch is already open.
     func presentNotificationChat(for session: SessionState) {
@@ -441,6 +457,23 @@ class NotchViewModel: ObservableObject {
         currentChatSession = nil
         contentType = .instances
         openedMeasuredHeight = nil
+    }
+
+    func presentSessionList(reason: NotchOpenReason = .click) {
+        exitChat()
+        notchOpen(reason: reason)
+    }
+
+    func toggleSessionList(reason: NotchOpenReason = .click) {
+        if status == .opened,
+           reason == .click,
+           openReason == .click,
+           case .instances = contentType {
+            notchClose()
+            return
+        }
+
+        presentSessionList(reason: reason)
     }
 
     func updateOpenedMeasuredHeight(_ height: CGFloat?) {

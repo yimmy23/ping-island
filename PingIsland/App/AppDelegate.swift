@@ -5,6 +5,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowManager: WindowManager?
     private var screenObserver: ScreenObserver?
     private let launchConfiguration = AppLaunchConfiguration()
+    private let globalShortcutManager = GlobalShortcutManager.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if launchConfiguration.shouldEnforceSingleInstance && !ensureSingleInstance() {
@@ -33,6 +34,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.handleScreenChange()
             }
         }
+
+        globalShortcutManager.start()
 
         if launchConfiguration.shouldPresentSettingsWindowOnLaunch {
             SettingsWindowController.shared.present()

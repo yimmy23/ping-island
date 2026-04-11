@@ -144,6 +144,10 @@ struct NotchView: View {
             .first
     }
 
+    private var preferredShortcutSession: SessionState? {
+        representativeClosedSession ?? latestHookMessageSession
+    }
+
     /// The compact-notch mascot should follow the freshest visible activity source first,
     /// instead of being pinned to whichever session currently owns the warning state.
     private var closedMascotClient: MascotClient {
@@ -370,6 +374,12 @@ struct NotchView: View {
             } else {
                 handleProcessingChange()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pingIslandOpenActiveSessionShortcut)) { _ in
+            handleOpenActiveSessionShortcut()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pingIslandOpenSessionListShortcut)) { _ in
+            handleOpenSessionListShortcut()
         }
         .onPreferenceChange(OpenedPanelContentHeightPreferenceKey.self) { height in
             guard viewModel.status == .opened else {
@@ -1155,6 +1165,17 @@ struct NotchView: View {
     private func openSettingsWindow() {
         updateManager.markUpdateSeen()
         SettingsWindowController.shared.present()
+    }
+
+    private func handleOpenActiveSessionShortcut() {
+        guard let session = preferredShortcutSession else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        viewModel.toggleChat(for: session, reason: .click)
+    }
+
+    private func handleOpenSessionListShortcut() {
+        NSApp.activate(ignoringOtherApps: true)
+        viewModel.toggleSessionList(reason: .click)
     }
 
     private func activateTemporaryReminderMute() {
