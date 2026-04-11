@@ -44,6 +44,9 @@ final class OpenCodeIntegrationTests: XCTestCase {
         )
 
         XCTAssertEqual(clientInfo.brand, .neutral)
+        XCTAssertEqual(MascotClient(clientInfo: clientInfo, provider: .claude), .openclaw)
+        XCTAssertEqual(MascotKind(clientInfo: clientInfo, provider: .claude), .openclaw)
+        XCTAssertEqual(MascotClient.allCases.contains(.openclaw), true)
         XCTAssertEqual(clientInfo.badgeLabel(for: .claude), "OpenClaw")
     }
 

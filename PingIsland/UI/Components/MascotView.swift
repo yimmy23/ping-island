@@ -4,6 +4,7 @@ enum MascotClient: String, CaseIterable, Identifiable, Sendable {
     case claude
     case codex
     case gemini
+    case openclaw
     case opencode
     case cursor
     case qoder
@@ -15,6 +16,7 @@ enum MascotClient: String, CaseIterable, Identifiable, Sendable {
         .claude,
         .codex,
         .gemini,
+        .openclaw,
         .opencode,
         .cursor,
         .qoder,
@@ -32,6 +34,8 @@ enum MascotClient: String, CaseIterable, Identifiable, Sendable {
             return "Codex"
         case .gemini:
             return "Gemini CLI"
+        case .openclaw:
+            return "OpenClaw"
         case .opencode:
             return "OpenCode"
         case .cursor:
@@ -55,6 +59,8 @@ enum MascotClient: String, CaseIterable, Identifiable, Sendable {
             return "Codex App 与 Codex CLI"
         case .gemini:
             return "Gemini CLI hooks 与默认 Gemini CLI 会话"
+        case .openclaw:
+            return "OpenClaw Gateway hooks 与默认小龙虾形象"
         case .opencode:
             return "OpenCode 插件 hooks 会话"
         case .cursor:
@@ -78,6 +84,8 @@ enum MascotClient: String, CaseIterable, Identifiable, Sendable {
             return .codex
         case .gemini:
             return .gemini
+        case .openclaw:
+            return .openclaw
         case .opencode:
             return .opencode
         case .cursor:
@@ -109,6 +117,8 @@ enum MascotClient: String, CaseIterable, Identifiable, Sendable {
             let resolvedClient: MascotClient? = switch profileID {
             case "cursor":
                 .cursor
+            case "openclaw":
+                .openclaw
             case "opencode":
                 .opencode
             case "qoder", "qoderwork", "qoder-cli", "jb-plugin":
@@ -138,13 +148,26 @@ enum MascotClient: String, CaseIterable, Identifiable, Sendable {
             self = .codex
         case .gemini:
             self = .gemini
+        case .neutral:
+            if clientInfo.resolvedProfile(for: provider)?.id == "openclaw" {
+                self = .openclaw
+                return
+            }
+            switch provider {
+            case .codex:
+                self = .codex
+            case .copilot:
+                self = .copilot
+            case .claude:
+                self = .claude
+            }
         case .opencode:
             self = .opencode
         case .qoder:
             self = .qoder
         case .copilot:
             self = .copilot
-        case .claude, .neutral:
+        case .claude:
             switch provider {
             case .codex:
                 self = .codex
@@ -161,6 +184,7 @@ enum MascotKind: String, CaseIterable, Identifiable, Sendable {
     case claude
     case codex
     case gemini
+    case openclaw
     case opencode
     case cursor
     case qoder
@@ -177,6 +201,8 @@ enum MascotKind: String, CaseIterable, Identifiable, Sendable {
             return "Codex"
         case .gemini:
             return "Gemini CLI"
+        case .openclaw:
+            return "OpenClaw"
         case .opencode:
             return "OpenCode"
         case .cursor:
@@ -198,6 +224,8 @@ enum MascotKind: String, CaseIterable, Identifiable, Sendable {
             return "终端云团"
         case .gemini:
             return "蓝色双子星灵"
+        case .openclaw:
+            return "像素小龙虾"
         case .opencode:
             return "高高的白色小章鱼"
         case .cursor:
@@ -219,6 +247,8 @@ enum MascotKind: String, CaseIterable, Identifiable, Sendable {
             return Color(red: 1.0, green: 0.67, blue: 0.12)
         case .gemini:
             return Color(red: 0.26, green: 0.52, blue: 0.96)
+        case .openclaw:
+            return Color(red: 1.0, green: 0.38, blue: 0.24)
         case .opencode:
             return Color(red: 0.34, green: 0.96, blue: 0.82)
         case .cursor:
@@ -358,6 +388,8 @@ struct MascotView: View {
             drawCodex(in: context, canvasSize: canvasSize, time: time, mode: mode)
         case .gemini:
             drawGemini(in: context, canvasSize: canvasSize, time: time, mode: mode)
+        case .openclaw:
+            drawOpenClaw(in: context, canvasSize: canvasSize, time: time, mode: mode)
         case .opencode:
             drawOpenCode(in: context, canvasSize: canvasSize, time: time, mode: mode)
         case .cursor:
@@ -756,6 +788,109 @@ struct MascotView: View {
 
         if mode == .warning {
             drawAlertGlyph(in: context, space: space, x: 12.8 + motion.shake, y: 2.2, color: kind.alertColor)
+        }
+    }
+
+    private func drawOpenClaw(
+        in context: GraphicsContext,
+        canvasSize: CGSize,
+        time: TimeInterval,
+        mode: MascotRenderMode
+    ) {
+        let space = PixelSpace(canvasSize, logicalWidth: 18, logicalHeight: 14, yOffset: 2)
+        let motion = motionValues(for: mode, time: time)
+        let shell = Color(red: 1.0, green: 0.36, blue: 0.25)
+        let highlight = Color(red: 1.0, green: 0.56, blue: 0.43)
+        let dark = Color(red: 0.27, green: 0.07, blue: 0.07)
+        let eye = Color.black
+
+        drawShadow(in: context, space: space, centerX: 9, y: 15.7, width: 7.8 - abs(motion.bounce) * 0.28, opacity: 0.2)
+
+        if mode == .working {
+            drawKeyboard(
+                in: context,
+                space: space,
+                y: 13.1,
+                base: Color(red: 0.22, green: 0.12, blue: 0.12),
+                key: Color(red: 0.43, green: 0.20, blue: 0.19),
+                highlight: highlight,
+                flashIndex: keyboardFlashIndex(time: time)
+            )
+        }
+
+        let bodyRows: [(CGFloat, CGFloat, CGFloat)] = [
+            (12.8, 5.6, 6.8), (11.8, 4.6, 8.8), (10.8, 3.6, 10.8), (9.8, 2.8, 12.4),
+            (8.8, 2.2, 13.6), (7.8, 2.8, 12.4), (6.8, 3.6, 10.8), (5.8, 4.6, 8.8)
+        ]
+        for row in bodyRows {
+            context.fill(
+                Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2 * motion.squashX, 1 * motion.squashY)),
+                with: .color(shell)
+            )
+        }
+
+        let outlineRows: [(CGFloat, CGFloat, CGFloat)] = [
+            (4.9, 5.1, 7.8), (13.7, 5.1, 7.8), (4.1, 6.0, 1.0), (12.9, 6.0, 1.0),
+            (3.2, 7.0, 1.0), (13.8, 7.0, 1.0), (2.4, 8.1, 1.0), (14.6, 8.1, 1.0),
+            (2.1, 9.1, 1.0), (14.9, 9.1, 1.0), (2.4, 10.1, 1.0), (14.6, 10.1, 1.0),
+            (3.2, 11.1, 1.0), (13.8, 11.1, 1.0), (4.1, 12.1, 1.0), (12.9, 12.1, 1.0)
+        ]
+        for row in outlineRows {
+            context.fill(Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.9)), with: .color(dark))
+        }
+
+        context.fill(Path(space.rect(6.0 + motion.shake, 6.0 + motion.vertical, 6.0, 0.9)), with: .color(dark))
+        context.fill(Path(space.rect(6.8 + motion.shake, 8.1 + motion.vertical, 1.4, 2.0)), with: .color(.white))
+        context.fill(Path(space.rect(10.4 + motion.shake, 8.1 + motion.vertical, 1.4, 2.0)), with: .color(.white))
+
+        let eyeHeight: CGFloat = mode == .idle ? 0.6 : (mode == .warning ? 1.2 : blinkHeight(time: time, closedHeight: 0.2, openHeight: 1.2))
+        context.fill(Path(space.rect(7.2 + motion.shake, 9.0 + motion.vertical, 0.9, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(10.8 + motion.shake, 9.0 + motion.vertical, 0.9, eyeHeight)), with: .color(eye))
+
+        let highlightRows: [(CGFloat, CGFloat, CGFloat)] = [
+            (8.0, 4.1, 1.4), (8.0, 13.4, 1.4), (11.0, 4.6, 1.0), (11.0, 12.8, 1.0)
+        ]
+        for row in highlightRows {
+            context.fill(Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.8)), with: .color(highlight.opacity(0.55)))
+        }
+
+        // Claws
+        let clawRects: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+            (0.8, 8.6, 1.2, 2.0), (1.8, 7.8, 1.2, 1.0), (1.8, 10.3, 1.2, 1.0),
+            (16.0, 8.6, 1.2, 2.0), (15.0, 7.8, 1.2, 1.0), (15.0, 10.3, 1.2, 1.0)
+        ]
+        for rect in clawRects {
+            context.fill(Path(space.rect(rect.0 + motion.shake, rect.1 + motion.vertical, rect.2, rect.3)), with: .color(shell))
+        }
+        context.fill(Path(space.rect(1.0 + motion.shake, 8.8 + motion.vertical, 0.9, 0.9)), with: .color(dark))
+        context.fill(Path(space.rect(1.0 + motion.shake, 9.9 + motion.vertical, 0.9, 0.9)), with: .color(dark))
+        context.fill(Path(space.rect(16.3 + motion.shake, 8.8 + motion.vertical, 0.9, 0.9)), with: .color(dark))
+        context.fill(Path(space.rect(16.3 + motion.shake, 9.9 + motion.vertical, 0.9, 0.9)), with: .color(dark))
+
+        // Tail and legs
+        let tailRows: [(CGFloat, CGFloat, CGFloat)] = [
+            (13.4, 7.1, 4.0), (14.4, 6.2, 2.8), (15.4, 5.3, 1.8)
+        ]
+        for row in tailRows {
+            context.fill(Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.9)), with: .color(dark))
+        }
+
+        let legs: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+            (6.0, 13.5, 0.9, 1.4), (5.1, 14.4, 1.6, 0.8),
+            (11.1, 13.5, 0.9, 1.4), (11.3, 14.4, 1.6, 0.8),
+            (7.5, 12.8, 0.9, 1.2), (10.0, 12.8, 0.9, 1.2)
+        ]
+        for leg in legs {
+            context.fill(Path(space.rect(leg.0 + motion.shake, leg.1 + motion.vertical, leg.2, leg.3)), with: .color(dark))
+        }
+
+        if mode != .idle {
+            context.fill(Path(space.rect(7.2 + motion.shake, 11.2 + motion.vertical, 1.4, 0.5)), with: .color(highlight))
+            context.fill(Path(space.rect(9.4 + motion.shake, 11.2 + motion.vertical, 1.4, 0.5)), with: .color(highlight))
+        }
+
+        if mode == .warning {
+            drawAlertGlyph(in: context, space: space, x: 13.9 + motion.shake, y: 2.1, color: kind.alertColor)
         }
     }
 
