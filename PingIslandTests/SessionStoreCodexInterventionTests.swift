@@ -82,4 +82,67 @@ final class SessionStoreCodexInterventionTests: XCTestCase {
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }
+
+    func testCodexIdleRefreshDoesNotDowngradeRunningToolThread() async {
+        let sessionId = "codex-running-tool-\(UUID().uuidString)"
+        let store = SessionStore.shared
+        let startedAt = Date()
+
+        await store.syncCodexThreadSnapshot(
+            CodexThreadSnapshot(
+                threadId: sessionId,
+                name: "Codex",
+                preview: "Running tool",
+                cwd: "/tmp/project",
+                clientInfo: SessionClientInfo(kind: .codexCLI, profileID: "codex-cli", name: "Codex"),
+                intervention: nil,
+                createdAt: startedAt,
+                updatedAt: startedAt,
+                phase: .processing,
+                historyItems: [
+                    ChatHistoryItem(
+                        id: "tool-1",
+                        type: .toolCall(ToolCallItem(
+                            name: "shell",
+                            input: ["command": "sleep 120"],
+                            status: .running,
+                            result: nil,
+                            structuredResult: nil,
+                            subagentTools: []
+                        )),
+                        timestamp: startedAt
+                    )
+                ],
+                conversationInfo: ConversationInfo(
+                    summary: "Codex",
+                    lastMessage: nil,
+                    lastMessageRole: nil,
+                    lastToolName: nil,
+                    firstUserMessage: "keep going",
+                    lastUserMessageDate: startedAt
+                ),
+                latestTurnId: "turn-1",
+                latestResponseText: nil,
+                latestResponsePhase: nil,
+                latestUserText: "keep going"
+            )
+        )
+
+        await store.upsertCodexSession(
+            sessionId: sessionId,
+            name: "Codex",
+            preview: "Idle heartbeat",
+            cwd: "/tmp/project",
+            phase: .idle,
+            intervention: nil,
+            clientInfo: SessionClientInfo(kind: .codexCLI, profileID: "codex-cli", name: "Codex"),
+            activityAt: startedAt.addingTimeInterval(90)
+        )
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .processing)
+        XCTAssertEqual(session?.lastActivity, startedAt)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
 }

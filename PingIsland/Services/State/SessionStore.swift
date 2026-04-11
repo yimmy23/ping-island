@@ -57,6 +57,7 @@ actor SessionStore {
     private let codexHookPlaceholderPruneDelayNs: UInt64 = 10_000_000_000
     private let codexAppServerPlaceholderPruneDelayNs: UInt64 = 60_000_000_000
     private let codexContinuationMergeWindow: TimeInterval = 10 * 60
+    private let apparentIdleProcessingGraceWindow: TimeInterval = 5 * 60
     private let qoderConversationPollIntervalNs: UInt64 = 250_000_000
     private let qoderConversationPollTimeoutNs: UInt64 = 120_000_000_000
     private let openClawConversationPollIntervalNs: UInt64 = 1_000_000_000
@@ -226,6 +227,7 @@ actor SessionStore {
                 sessionId: sessionId
             )
         }
+        let previousLastActivity = session.lastActivity
         session.lastActivity = Date()
         if let hookMessage = Self.normalizedHookMessage(event.message) {
             session.latestHookMessage = hookMessage
@@ -266,6 +268,13 @@ actor SessionStore {
                 "Preserving waitingForApproval for \(sessionId.prefix(8), privacy: .public) on \(event.event, privacy: .public)"
             )
             session.phase = .waitingForApproval(preservedPendingApproval)
+        } else if shouldPreserveActivePhaseDuringApparentIdle(
+            session: session,
+            incomingPhase: newPhase,
+            referenceDate: Date(),
+            previousLastActivity: previousLastActivity
+        ) {
+            session.lastActivity = previousLastActivity
         } else if let resumedPhase = resumedPhaseForFreshHookActivity(
             currentPhase: session.phase,
             incomingPhase: newPhase,
@@ -1016,6 +1025,38 @@ actor SessionStore {
         }
 
         return nil
+    }
+
+    private func shouldPreserveActivePhaseDuringApparentIdle(
+        session: SessionState,
+        incomingPhase: SessionPhase,
+        referenceDate: Date,
+        previousLastActivity: Date?
+    ) -> Bool {
+        guard session.phase.isActive else { return false }
+        guard incomingPhase == .idle else { return false }
+
+        if sessionHasLiveExecutionEvidence(session) {
+            return true
+        }
+
+        guard let previousLastActivity else { return false }
+        return referenceDate.timeIntervalSince(previousLastActivity) < apparentIdleProcessingGraceWindow
+    }
+
+    private func sessionHasLiveExecutionEvidence(_ session: SessionState) -> Bool {
+        for item in session.chatItems.reversed() {
+            switch item.type {
+            case .thinking:
+                return true
+            case .toolCall(let tool):
+                return tool.status == .running
+            case .assistant, .user, .interrupted:
+                return false
+            }
+        }
+
+        return false
     }
 
     private func mergedLastActivity(
@@ -1824,6 +1865,13 @@ actor SessionStore {
             if !session.phase.needsAttention {
                 session.phase = phase
             }
+        } else if shouldPreserveActivePhaseDuringApparentIdle(
+            session: session,
+            incomingPhase: phase,
+            referenceDate: activityAt ?? Date(),
+            previousLastActivity: existingLastActivity
+        ) {
+            // Keep the fresher active state until a stronger non-idle signal arrives.
         } else if shouldPreserveActivePhaseFromStaleCodexRefresh(
             currentPhase: session.phase,
             incomingPhase: phase,
@@ -1845,10 +1893,19 @@ actor SessionStore {
         if session.ingress != .hookBridge || (!session.phase.needsAttention && !hasIntervention) {
             session.ingress = .codexAppServer
         }
-        session.lastActivity = mergedLastActivity(
-            existing: existingLastActivity,
-            incoming: activityAt ?? Date()
-        )
+        if shouldPreserveActivePhaseDuringApparentIdle(
+            session: session,
+            incomingPhase: phase,
+            referenceDate: activityAt ?? Date(),
+            previousLastActivity: existingLastActivity
+        ) {
+            session.lastActivity = existingLastActivity ?? (activityAt ?? Date())
+        } else {
+            session.lastActivity = mergedLastActivity(
+                existing: existingLastActivity,
+                incoming: activityAt ?? Date()
+            )
+        }
 
         if !metadata.isEmpty {
             var previewMetadata = session.previewText ?? ""
@@ -1958,6 +2015,13 @@ actor SessionStore {
             if !session.phase.needsAttention {
                 session.phase = snapshot.phase
             }
+        } else if shouldPreserveActivePhaseDuringApparentIdle(
+            session: session,
+            incomingPhase: snapshot.phase,
+            referenceDate: snapshot.updatedAt,
+            previousLastActivity: existingLastActivity
+        ) {
+            // Keep the fresher active state until a stronger non-idle signal arrives.
         } else if shouldPreserveActivePhaseFromStaleCodexRefresh(
             currentPhase: session.phase,
             incomingPhase: snapshot.phase,
@@ -1983,10 +2047,19 @@ actor SessionStore {
         } else if session.ingress != .hookBridge || (!session.phase.needsAttention && !hasIntervention) {
             session.ingress = .codexAppServer
         }
-        session.lastActivity = mergedLastActivity(
-            existing: existingLastActivity,
-            incoming: snapshot.updatedAt
-        )
+        if shouldPreserveActivePhaseDuringApparentIdle(
+            session: session,
+            incomingPhase: snapshot.phase,
+            referenceDate: snapshot.updatedAt,
+            previousLastActivity: existingLastActivity
+        ) {
+            session.lastActivity = existingLastActivity ?? snapshot.updatedAt
+        } else {
+            session.lastActivity = mergedLastActivity(
+                existing: existingLastActivity,
+                incoming: snapshot.updatedAt
+            )
+        }
 
         let placeholderCandidate = isLikelyEmptyCodexPlaceholder(session)
         Self.logger.debug(
