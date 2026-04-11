@@ -293,4 +293,70 @@ final class RemoteHookConfigurationTests: XCTestCase {
 
         XCTAssertEqual(promptEntries.count, 1)
     }
+
+    func testOpenClawInternalHookConfigurationDataEnablesManagedEntry() throws {
+        let data = HookInstaller.updatedInternalHookConfigurationData(
+            existingData: nil,
+            entryName: "ping-island-openclaw",
+            installing: true
+        )
+
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let hooks = try XCTUnwrap(object["hooks"] as? [String: Any])
+        let internalHooks = try XCTUnwrap(hooks["internal"] as? [String: Any])
+        let enabled = try XCTUnwrap(internalHooks["enabled"] as? Bool)
+        let entries = try XCTUnwrap(internalHooks["entries"] as? [String: Any])
+        let entry = try XCTUnwrap(entries["ping-island-openclaw"] as? [String: Any])
+
+        XCTAssertTrue(enabled)
+        XCTAssertEqual(entry["enabled"] as? Bool, true)
+        XCTAssertTrue(
+            HookInstaller.isInternalHookEnabled(
+                existingData: data,
+                entryName: "ping-island-openclaw"
+            )
+        )
+    }
+
+    func testOpenClawInternalHookConfigurationDataDisablesManagedEntry() throws {
+        let existingJSON = """
+        {
+          "hooks": {
+            "internal": {
+              "enabled": true,
+              "entries": {
+                "ping-island-openclaw": {
+                  "enabled": true,
+                  "env": {
+                    "PING_ISLAND_DEBUG": "1"
+                  }
+                }
+              }
+            }
+          }
+        }
+        """.data(using: .utf8)
+
+        let data = HookInstaller.updatedInternalHookConfigurationData(
+            existingData: existingJSON,
+            entryName: "ping-island-openclaw",
+            installing: false
+        )
+
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let hooks = try XCTUnwrap(object["hooks"] as? [String: Any])
+        let internalHooks = try XCTUnwrap(hooks["internal"] as? [String: Any])
+        let entries = try XCTUnwrap(internalHooks["entries"] as? [String: Any])
+        let entry = try XCTUnwrap(entries["ping-island-openclaw"] as? [String: Any])
+        let env = try XCTUnwrap(entry["env"] as? [String: String])
+
+        XCTAssertEqual(entry["enabled"] as? Bool, false)
+        XCTAssertEqual(env["PING_ISLAND_DEBUG"], "1")
+        XCTAssertFalse(
+            HookInstaller.isInternalHookEnabled(
+                existingData: data,
+                entryName: "ping-island-openclaw"
+            )
+        )
+    }
 }

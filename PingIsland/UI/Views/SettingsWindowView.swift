@@ -1877,12 +1877,12 @@ private struct CustomHookInstallSheet: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(appLocalized: "配置目录")
+                    Text(appLocalized: "安装目录")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white.opacity(0.7))
 
                     HStack(spacing: 8) {
-                        TextField("", text: $customPath, prompt: Text(verbatim: "例如 /path/to/.claude"))
+                        TextField("", text: $customPath, prompt: Text(verbatim: installPathPlaceholder))
                             .textFieldStyle(.plain)
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .foregroundColor(.white)
@@ -1916,11 +1916,17 @@ private struct CustomHookInstallSheet: View {
                     }
 
                     if let resolvedFileName {
-                        Text(AppLocalization.format("安装后将写入: %@/%@", customPath, resolvedFileName))
+                        Text(resolvedInstallTargetDescription(resolvedFileName: resolvedFileName))
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
                             .foregroundColor(.white.opacity(0.4))
                             .lineLimit(1)
                             .truncationMode(.middle)
+                    }
+
+                    if let installHint {
+                        Text(verbatim: installHint)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.white.opacity(0.45))
                     }
                 }
             }
@@ -1976,6 +1982,54 @@ private struct CustomHookInstallSheet: View {
             return nil
         }
         return profile.primaryConfigurationURL.lastPathComponent
+    }
+
+    private var installPathPlaceholder: String {
+        guard let profile = ClientProfileRegistry.managedHookProfile(id: selectedProfileID) else {
+            return "例如 /path/to/.claude"
+        }
+
+        switch profile.installationKind {
+        case .jsonHooks:
+            return "例如 /path/to/.claude"
+        case .pluginFile:
+            return "例如 /path/to/plugins"
+        case .hookDirectory:
+            return "例如 /path/to/.openclaw 或 /path/to/hooks"
+        }
+    }
+
+    private var installHint: String? {
+        guard let profile = ClientProfileRegistry.managedHookProfile(id: selectedProfileID),
+              profile.installationKind == .hookDirectory else {
+            return nil
+        }
+        return AppLocalization.string("OpenClaw 可选择 ~/.openclaw 根目录，或已配置到 extraDirs 的 hooks 目录。")
+    }
+
+    private func resolvedInstallTargetDescription(resolvedFileName: String) -> String {
+        guard let profile = ClientProfileRegistry.managedHookProfile(id: selectedProfileID) else {
+            return AppLocalization.format("安装后将写入: %@/%@", customPath, resolvedFileName)
+        }
+
+        let baseURL = URL(fileURLWithPath: customPath)
+        let targetURL: URL
+        switch profile.installationKind {
+        case .jsonHooks, .pluginFile:
+            targetURL = baseURL.appendingPathComponent(resolvedFileName)
+        case .hookDirectory:
+            if baseURL.lastPathComponent == ".openclaw" {
+                targetURL = baseURL
+                    .appendingPathComponent("hooks", isDirectory: true)
+                    .appendingPathComponent(resolvedFileName, isDirectory: true)
+            } else if baseURL.lastPathComponent == "hooks" {
+                targetURL = baseURL.appendingPathComponent(resolvedFileName, isDirectory: true)
+            } else {
+                targetURL = baseURL.appendingPathComponent(resolvedFileName, isDirectory: true)
+            }
+        }
+
+        return AppLocalization.format("安装后将写入: %@", targetURL.path)
     }
 
     private func selectDirectory() {

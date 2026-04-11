@@ -66,6 +66,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - If you change provider/client detection or click-through behavior, trace through `HookSocketServer`, `SessionStore`, `SessionState`, `SessionLauncher`, and the session list / hover UI so labels and launch targets stay in sync.
 - If you add a Claude-compatible hook client, start in `PingIsland/Models/ClientProfile.swift` and wire any truly client-specific behavior from there before adding new ad-hoc switches elsewhere.
   - Gemini CLI hooks are managed through `~/.gemini/settings.json`; its `BeforeTool` / `AfterTool` matchers are regex-based, so use `.*` rather than Claude-style `*`.
+  - OpenClaw hooks are managed as a generated internal hook directory under `~/.openclaw/hooks/<hook-name>/` and require the paired enablement entry in `~/.openclaw/openclaw.json`; treat it as a directory-discovery integration, not a JSON hook list.
   - Gemini `Notification` hooks are observability-only in the upstream protocol; do not treat them as actionable approval callbacks unless the bridge grows explicit Gemini response handling.
   - Qoder-family hook installs currently cover both `~/.qoder/settings.json` and `~/.qoderwork/settings.json`; keep their event lists and bridge arguments aligned unless the clients diverge on protocol.
   - OpenCode is managed as a generated plugin file under `~/.config/opencode/plugins/ping-island.js`; treat it as a plugin-based integration, not a JSON hooks file.

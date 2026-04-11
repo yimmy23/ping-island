@@ -30,6 +30,7 @@ enum HookInstallEntryTemplate: Sendable {
 enum ManagedHookInstallationKind: Sendable, Equatable {
     case jsonHooks
     case pluginFile
+    case hookDirectory
 }
 
 struct HookInstallEventDescriptor: Sendable {
@@ -55,6 +56,8 @@ struct ManagedHookClientProfile: Identifiable, Sendable {
     let localAppBundleIdentifiers: [String]
     let iconSymbolName: String
     let configurationRelativePaths: [String]
+    let activationConfigurationRelativePath: String?
+    let activationEntryName: String?
     let bridgeSource: String
     let bridgeExtraArguments: [String]
     let defaultEnabled: Bool
@@ -72,6 +75,8 @@ struct ManagedHookClientProfile: Identifiable, Sendable {
         localAppBundleIdentifiers: [String] = [],
         iconSymbolName: String,
         configurationRelativePath: String,
+        activationConfigurationRelativePath: String? = nil,
+        activationEntryName: String? = nil,
         bridgeSource: String,
         bridgeExtraArguments: [String],
         defaultEnabled: Bool,
@@ -89,6 +94,8 @@ struct ManagedHookClientProfile: Identifiable, Sendable {
             localAppBundleIdentifiers: localAppBundleIdentifiers,
             iconSymbolName: iconSymbolName,
             configurationRelativePaths: [configurationRelativePath],
+            activationConfigurationRelativePath: activationConfigurationRelativePath,
+            activationEntryName: activationEntryName,
             bridgeSource: bridgeSource,
             bridgeExtraArguments: bridgeExtraArguments,
             defaultEnabled: defaultEnabled,
@@ -108,6 +115,8 @@ struct ManagedHookClientProfile: Identifiable, Sendable {
         localAppBundleIdentifiers: [String] = [],
         iconSymbolName: String,
         configurationRelativePaths: [String],
+        activationConfigurationRelativePath: String? = nil,
+        activationEntryName: String? = nil,
         bridgeSource: String,
         bridgeExtraArguments: [String],
         defaultEnabled: Bool,
@@ -124,6 +133,8 @@ struct ManagedHookClientProfile: Identifiable, Sendable {
         self.localAppBundleIdentifiers = localAppBundleIdentifiers
         self.iconSymbolName = iconSymbolName
         self.configurationRelativePaths = configurationRelativePaths
+        self.activationConfigurationRelativePath = activationConfigurationRelativePath
+        self.activationEntryName = activationEntryName
         self.bridgeSource = bridgeSource
         self.bridgeExtraArguments = bridgeExtraArguments
         self.defaultEnabled = defaultEnabled
@@ -139,12 +150,21 @@ struct ManagedHookClientProfile: Identifiable, Sendable {
         configurationURLs[0]
     }
 
+    nonisolated var activationConfigurationURL: URL? {
+        guard let activationConfigurationRelativePath else {
+            return nil
+        }
+        return Self.resolveConfigurationURL(relativePath: activationConfigurationRelativePath)
+    }
+
     nonisolated var reinstallDescriptionFormat: String {
         switch installationKind {
         case .jsonHooks:
             return "这会重新写入 %@ 的 Island hooks 配置，并保留其他非 Island hooks。"
         case .pluginFile:
             return "这会重新生成 %@ 的 Island 插件文件，并覆盖旧的 Island 托管版本。"
+        case .hookDirectory:
+            return "这会重新生成 %@ 的 Island hook 目录，并刷新 OpenClaw 的启用状态。"
         }
     }
 
@@ -462,6 +482,37 @@ enum ClientProfileRegistry {
             ]
         ),
         ManagedHookClientProfile(
+            id: "openclaw-hooks",
+            title: "OpenClaw",
+            subtitle: "管理 ~/.openclaw/hooks/ping-island-openclaw，并自动启用内部 hook",
+            installationKind: .hookDirectory,
+            alwaysVisibleInSettings: true,
+            iconSymbolName: "bird.fill",
+            configurationRelativePath: ".openclaw/hooks/ping-island-openclaw",
+            activationConfigurationRelativePath: ".openclaw/openclaw.json",
+            activationEntryName: "ping-island-openclaw",
+            bridgeSource: "claude",
+            bridgeExtraArguments: [
+                "--client-kind", "openclaw",
+                "--client-name", "OpenClaw",
+                "--client-origin", "gateway",
+                "--client-originator", "OpenClaw",
+                "--thread-source", "openclaw-hooks"
+            ],
+            defaultEnabled: false,
+            brand: .neutral,
+            events: [
+                HookInstallEventDescriptor(name: "command:new", templates: []),
+                HookInstallEventDescriptor(name: "command:reset", templates: []),
+                HookInstallEventDescriptor(name: "command:stop", templates: []),
+                HookInstallEventDescriptor(name: "message:received", templates: []),
+                HookInstallEventDescriptor(name: "message:sent", templates: []),
+                HookInstallEventDescriptor(name: "session:compact:before", templates: []),
+                HookInstallEventDescriptor(name: "session:compact:after", templates: []),
+                HookInstallEventDescriptor(name: "session:patch", templates: []),
+            ]
+        ),
+        ManagedHookClientProfile(
             id: "codebuddy-hooks",
             title: "CodeBuddy",
             subtitle: "管理 ~/.codebuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island",
@@ -753,6 +804,21 @@ enum ClientProfileRegistry {
             recognizedKinds: ["jetbrains", "jetbrains-plugin", "jb", "jb-plugin", "jb plugin"],
             exactAliases: ["jetbrains", "jetbrains-plugin", "jetbrains plugin", "jb", "jb-plugin", "jb plugin"],
             keywordAliases: ["jetbrains", "jb plugin"],
+            bundleIdentifiers: []
+        ),
+        SessionClientProfile(
+            id: "openclaw",
+            provider: .claude,
+            family: .claudeHooks,
+            kind: .custom,
+            displayName: "OpenClaw",
+            assistantLabelMode: .badgeLabel,
+            brand: .neutral,
+            defaultBundleIdentifier: nil,
+            defaultOrigin: "gateway",
+            recognizedKinds: ["openclaw", "open-claw", "open_claw", "open claw"],
+            exactAliases: ["openclaw", "open-claw", "open claw"],
+            keywordAliases: ["openclaw", "open claw"],
             bundleIdentifiers: []
         ),
         SessionClientProfile(

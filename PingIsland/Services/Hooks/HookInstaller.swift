@@ -261,6 +261,9 @@ struct HookInstaller {
             return profile.configurationURLs.contains { containsManagedHooks(at: $0) }
         case .pluginFile:
             return profile.configurationURLs.contains { containsManagedPlugin(at: $0, profile: profile) }
+        case .hookDirectory:
+            return profile.configurationURLs.contains { containsManagedHookDirectory(at: $0, profile: profile) }
+                && isInternalHookEnabled(profile)
         }
     }
 
@@ -297,6 +300,11 @@ struct HookInstaller {
             for url in installationTargets(for: profile) {
                 writeManagedPlugin(at: url, profile: profile)
             }
+        case .hookDirectory:
+            for url in installationTargets(for: profile) {
+                writeManagedHookDirectory(at: url, profile: profile)
+            }
+            setInternalHookEnabled(true, for: profile)
         }
     }
 
@@ -320,6 +328,11 @@ struct HookInstaller {
             for url in profile.configurationURLs {
                 removeManagedPlugin(at: url, profile: profile)
             }
+        case .hookDirectory:
+            for url in profile.configurationURLs {
+                removeManagedHookDirectory(at: url, profile: profile)
+            }
+            setInternalHookEnabled(false, for: profile)
         }
     }
 
@@ -371,6 +384,34 @@ struct HookInstaller {
         }
 
         return existingTargets.isEmpty ? [profile.primaryConfigurationURL] : existingTargets
+    }
+
+    private static func isInternalHookEnabled(_ profile: ManagedHookClientProfile) -> Bool {
+        guard let url = profile.activationConfigurationURL,
+              let entryName = profile.activationEntryName,
+              let data = try? Data(contentsOf: url) else {
+            return false
+        }
+        return isInternalHookEnabled(existingData: data, entryName: entryName)
+    }
+
+    private static func setInternalHookEnabled(_ enabled: Bool, for profile: ManagedHookClientProfile, customConfigURL: URL? = nil) {
+        guard let entryName = profile.activationEntryName else {
+            return
+        }
+
+        let url = customConfigURL ?? profile.activationConfigurationURL
+        guard let url else {
+            return
+        }
+
+        let existingData = try? Data(contentsOf: url)
+        let data = updatedInternalHookConfigurationData(
+            existingData: existingData,
+            entryName: entryName,
+            installing: enabled
+        )
+        writeData(data, to: url)
     }
 
     private static func removeLegacyClaudeScriptIfNeeded() {
@@ -586,6 +627,45 @@ struct HookInstaller {
         }
 
         return content.contains(managedMarker(for: profile))
+    }
+
+    private static func writeManagedHookDirectory(at url: URL, profile: ManagedHookClientProfile) {
+        let files = managedHookDirectoryFiles(for: profile)
+        guard !files.isEmpty else { return }
+
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        for (name, content) in files {
+            let fileURL = url.appendingPathComponent(name)
+            try? Data(content.utf8).write(to: fileURL, options: .atomic)
+        }
+    }
+
+    private static func removeManagedHookDirectory(at url: URL, profile: ManagedHookClientProfile) {
+        guard containsManagedHookDirectory(at: url, profile: profile) else {
+            return
+        }
+
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private static func containsManagedHookDirectory(at url: URL, profile: ManagedHookClientProfile) -> Bool {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: url.path) else {
+            return false
+        }
+
+        let marker = managedMarker(for: profile)
+        let candidates = [
+            url.appendingPathComponent("HOOK.md"),
+            url.appendingPathComponent("handler.ts")
+        ]
+
+        return candidates.contains { fileURL in
+            guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+                return false
+            }
+            return content.contains(marker)
+        }
     }
 
     private static func makeHookEntries(command: String, event: HookInstallEventDescriptor) -> [[String: Any]] {
@@ -937,6 +1017,193 @@ struct HookInstaller {
         """
     }
 
+    private static func managedHookDirectoryFiles(for profile: ManagedHookClientProfile) -> [String: String] {
+        guard profile.id == "openclaw-hooks" else {
+            return [:]
+        }
+
+        let argsData = (try? JSONSerialization.data(withJSONObject: bridgeCommandArguments(for: profile), options: []))
+            ?? Data("[]".utf8)
+        let argsJSON = String(data: argsData, encoding: .utf8) ?? "[]"
+        let eventList = profile.events.map(\.name)
+        let eventsData = (try? JSONSerialization.data(withJSONObject: eventList, options: []))
+            ?? Data("[]".utf8)
+        let eventsJSON = String(data: eventsData, encoding: .utf8) ?? "[]"
+        let marker = managedMarker(for: profile)
+        let hookName = profile.activationEntryName ?? profile.primaryConfigurationURL.lastPathComponent
+
+        let hookMD = """
+        ---
+        name: \(hookName)
+        description: "Forward OpenClaw internal hook events to Ping Island"
+        metadata:
+          { "openclaw": { "events": \(eventsJSON) } }
+        ---
+
+        <!-- \(marker) -->
+
+        # Ping Island OpenClaw Hook
+
+        Generated by Ping Island. Reinstall from Island settings if you need to refresh it.
+        """
+
+        let handlerTS = """
+        // \(marker)
+        // Generated by Ping Island. Reinstall from Island settings if you need to refresh it.
+
+        const BRIDGE_ARGS = \(argsJSON);
+
+        function stableString(value) {
+          if (value == null) return undefined;
+          if (typeof value === "string") {
+            const trimmed = value.trim();
+            return trimmed.length > 0 ? trimmed : undefined;
+          }
+          try {
+            return JSON.stringify(value);
+          } catch {
+            return undefined;
+          }
+        }
+
+        function firstDefined(...values) {
+          for (const value of values) {
+            if (value !== undefined && value !== null && value !== "") {
+              return value;
+            }
+          }
+          return undefined;
+        }
+
+        function summarizeContent(content) {
+          if (typeof content === "string") return content;
+          if (Array.isArray(content)) {
+            const parts = content
+              .map((entry) => summarizeContent(entry))
+              .filter(Boolean);
+            return parts.length > 0 ? parts.join("\\n") : undefined;
+          }
+          if (content && typeof content === "object") {
+            return firstDefined(
+              summarizeContent(content.text),
+              summarizeContent(content.body),
+              summarizeContent(content.message),
+              stableString(content)
+            );
+          }
+          return undefined;
+        }
+
+        function statusFor(event) {
+          const key = `${event?.type ?? ""}:${event?.action ?? ""}`;
+          switch (key) {
+            case "command:new":
+            case "command:reset":
+            case "message:received":
+              return "thinking";
+            case "message:sent":
+              return "waitingForInput";
+            case "command:stop":
+              return "completed";
+            case "session:compact:before":
+              return "compacting";
+            case "session:compact:after":
+            case "session:patch":
+              return "active";
+            default:
+              return "active";
+          }
+        }
+
+        function titleFor(event) {
+          return firstDefined(
+            event?.context?.sessionEntry?.title,
+            event?.context?.sessionEntry?.name,
+            event?.context?.patch?.title,
+            "OpenClaw"
+          );
+        }
+
+        function previewFor(event) {
+          return firstDefined(
+            summarizeContent(event?.context?.content),
+            summarizeContent(event?.context?.bodyForAgent),
+            summarizeContent(event?.context?.transcript),
+            summarizeContent(event?.context?.patch),
+            event?.context?.commandSource,
+            `${event?.type ?? "event"}:${event?.action ?? "unknown"}`
+          );
+        }
+
+        function buildPayload(event) {
+          const sessionId = stableString(event?.sessionKey);
+          if (!sessionId) return undefined;
+
+          const payload = {
+            event: `${event?.type ?? "unknown"}:${event?.action ?? "unknown"}`,
+            session_id: sessionId,
+            cwd: firstDefined(
+              event?.context?.workspaceDir,
+              event?.context?.sessionEntry?.workspaceDir,
+              event?.context?.cfg?.workspace?.dir
+            ),
+            status: statusFor(event),
+            title: titleFor(event),
+            message: previewFor(event),
+            client_kind: "openclaw",
+            client_name: "OpenClaw",
+            client_origin: "gateway",
+            client_originator: "OpenClaw",
+            thread_source: "openclaw-hooks"
+          };
+
+          return Object.fromEntries(
+            Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== "")
+          );
+        }
+
+        async function forwardViaNode(payload) {
+          const { spawn } = await import("node:child_process");
+          const child = spawn(BRIDGE_ARGS[0], BRIDGE_ARGS.slice(1), {
+            stdio: ["pipe", "ignore", "ignore"],
+            env: process.env
+          });
+          child.on("error", () => {});
+          child.stdin.write(JSON.stringify(payload));
+          child.stdin.end();
+        }
+
+        const handler = async (event) => {
+          const payload = buildPayload(event);
+          if (!payload) return;
+
+          try {
+            if (typeof Bun !== "undefined" && typeof Bun.spawn === "function") {
+              const subprocess = Bun.spawn(BRIDGE_ARGS, {
+                stdin: new Response(JSON.stringify(payload)),
+                stdout: "ignore",
+                stderr: "ignore",
+                env: globalThis.process?.env
+              });
+              void subprocess.exited.catch(() => {});
+              return;
+            }
+
+            await forwardViaNode(payload);
+          } catch {
+            // OpenClaw hooks should never fail because Ping Island is unavailable.
+          }
+        };
+
+        export default handler;
+        """
+
+        return [
+            "HOOK.md": hookMD,
+            "handler.ts": handlerTS
+        ]
+    }
+
     // MARK: - Custom Hook Installations
 
     private static let customInstallationsDefaultsKey = "HookInstaller.customInstallations.v1"
@@ -969,9 +1236,9 @@ struct HookInstaller {
             return
         }
 
-        let configFileName = profile.primaryConfigurationURL.lastPathComponent
         let directoryURL = URL(fileURLWithPath: directoryPath)
-        let url = directoryURL.appendingPathComponent(configFileName)
+        let url = customInstallationURL(for: profile, baseDirectory: directoryURL)
+        let activationConfigURL = customActivationConfigurationURL(for: profile, baseDirectory: directoryURL)
 
         installBridgeLauncherIfNeeded()
         switch profile.installationKind {
@@ -979,6 +1246,9 @@ struct HookInstaller {
             updateHooks(at: url, profile: profile)
         case .pluginFile:
             writeManagedPlugin(at: url, profile: profile)
+        case .hookDirectory:
+            writeManagedHookDirectory(at: url, profile: profile)
+            setInternalHookEnabled(true, for: profile, customConfigURL: activationConfigURL)
         }
 
         let installation = CustomHookInstallation(
@@ -1002,11 +1272,15 @@ struct HookInstaller {
         let url = installation.customURL
 
         if let profile = ClientProfileRegistry.managedHookProfile(id: installation.profileID) {
+            let activationConfigURL = customActivationConfigurationURL(for: profile, installedURL: url)
             switch profile.installationKind {
             case .jsonHooks:
                 removeManagedHooks(at: url)
             case .pluginFile:
                 removeManagedPlugin(at: url, profile: profile)
+            case .hookDirectory:
+                removeManagedHookDirectory(at: url, profile: profile)
+                setInternalHookEnabled(false, for: profile, customConfigURL: activationConfigURL)
             }
         }
 
@@ -1024,6 +1298,10 @@ struct HookInstaller {
             return containsManagedHooks(at: url)
         case .pluginFile:
             return containsManagedPlugin(at: url, profile: profile)
+        case .hookDirectory:
+            let activationConfigURL = customActivationConfigurationURL(for: profile, installedURL: url)
+            return containsManagedHookDirectory(at: url, profile: profile)
+                && isInternalHookEnabled(at: activationConfigURL, for: profile)
         }
     }
 
@@ -1068,6 +1346,56 @@ struct HookInstaller {
         components.append(source)
         components.append(contentsOf: extraArguments.map(shellQuoted))
         return components.joined(separator: " ")
+    }
+
+    nonisolated static func updatedInternalHookConfigurationData(
+        existingData: Data?,
+        entryName: String,
+        installing: Bool
+    ) -> Data {
+        var json: [String: Any] = [:]
+        if let existingData,
+           let existing = HookConfigParser.parseJSONObject(from: existingData) {
+            json = existing
+        }
+
+        var hooks = json["hooks"] as? [String: Any] ?? [:]
+        var internalHooks = hooks["internal"] as? [String: Any] ?? [:]
+        var entries = internalHooks["entries"] as? [String: Any] ?? [:]
+        var entry = entries[entryName] as? [String: Any] ?? [:]
+
+        entry["enabled"] = installing
+        entries[entryName] = entry
+
+        if installing {
+            internalHooks["enabled"] = true
+        }
+
+        internalHooks["entries"] = entries
+        hooks["internal"] = internalHooks
+        json["hooks"] = hooks
+
+        return (try? JSONSerialization.data(
+            withJSONObject: json,
+            options: [.prettyPrinted, .sortedKeys]
+        )) ?? Data("{}".utf8)
+    }
+
+    nonisolated static func isInternalHookEnabled(
+        existingData: Data?,
+        entryName: String
+    ) -> Bool {
+        guard let existingData,
+              let json = HookConfigParser.parseJSONObject(from: existingData),
+              let hooks = json["hooks"] as? [String: Any],
+              let internalHooks = hooks["internal"] as? [String: Any],
+              let entries = internalHooks["entries"] as? [String: Any],
+              let entry = entries[entryName] as? [String: Any],
+              let enabled = entry["enabled"] as? Bool else {
+            return false
+        }
+
+        return enabled
     }
 
     nonisolated static func updatedConfigurationData(
@@ -1119,6 +1447,8 @@ struct HookInstaller {
 
         case .pluginFile:
             break
+        case .hookDirectory:
+            break
         }
 
         let data = (try? JSONSerialization.data(
@@ -1168,6 +1498,67 @@ struct HookInstaller {
         ) {
             try? data.write(to: url)
         }
+    }
+
+    private static func writeData(_ data: Data, to url: URL) {
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try? data.write(to: url, options: .atomic)
+    }
+
+    private static func customInstallationURL(for profile: ManagedHookClientProfile, baseDirectory: URL) -> URL {
+        switch profile.installationKind {
+        case .jsonHooks, .pluginFile:
+            return baseDirectory.appendingPathComponent(profile.primaryConfigurationURL.lastPathComponent)
+        case .hookDirectory:
+            let selectedName = baseDirectory.lastPathComponent
+            if selectedName == ".openclaw" || FileManager.default.fileExists(atPath: baseDirectory.appendingPathComponent("openclaw.json").path) {
+                return baseDirectory
+                    .appendingPathComponent("hooks", isDirectory: true)
+                    .appendingPathComponent(profile.primaryConfigurationURL.lastPathComponent, isDirectory: true)
+            }
+            if selectedName == "hooks" {
+                return baseDirectory.appendingPathComponent(profile.primaryConfigurationURL.lastPathComponent, isDirectory: true)
+            }
+            return baseDirectory.appendingPathComponent(profile.primaryConfigurationURL.lastPathComponent, isDirectory: true)
+        }
+    }
+
+    private static func customActivationConfigurationURL(for profile: ManagedHookClientProfile, baseDirectory: URL) -> URL? {
+        guard profile.installationKind == .hookDirectory else {
+            return nil
+        }
+
+        let selectedName = baseDirectory.lastPathComponent
+        if selectedName == ".openclaw" || FileManager.default.fileExists(atPath: baseDirectory.appendingPathComponent("openclaw.json").path) {
+            return baseDirectory.appendingPathComponent("openclaw.json")
+        }
+        if selectedName == "hooks" {
+            return baseDirectory.deletingLastPathComponent().appendingPathComponent("openclaw.json")
+        }
+        return profile.activationConfigurationURL
+    }
+
+    private static func customActivationConfigurationURL(for profile: ManagedHookClientProfile, installedURL: URL) -> URL? {
+        guard profile.installationKind == .hookDirectory else {
+            return nil
+        }
+        let parent = installedURL.deletingLastPathComponent()
+        if parent.lastPathComponent == "hooks" {
+            return parent.deletingLastPathComponent().appendingPathComponent("openclaw.json")
+        }
+        return profile.activationConfigurationURL
+    }
+
+    private static func isInternalHookEnabled(at url: URL?, for profile: ManagedHookClientProfile) -> Bool {
+        guard let url,
+              let entryName = profile.activationEntryName,
+              let data = try? Data(contentsOf: url) else {
+            return false
+        }
+        return isInternalHookEnabled(existingData: data, entryName: entryName)
     }
 
     private nonisolated static func shellQuoted(_ string: String) -> String {
