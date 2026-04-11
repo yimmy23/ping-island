@@ -243,8 +243,8 @@
 "Go to Terminal" = "Go to Terminal";
 "Terminal" = "Terminal";
 
-"No recent session" = "No recent session";
-"Hover here to preview your most recent Claude and Codex threads." = "Hover here to preview your most recent Claude and Codex threads.";
+"No active session" = "No active session";
+"Hover here to preview your active Agent sessions." = "Hover here to preview your active Agent sessions.";
 "当前操作" = "Current action";
 "批准后会继续执行当前会话。" = "Approving will continue the current session.";
 "%@ 请求批准" = "%@ requests approval";
@@ -291,6 +291,8 @@
 "支持协议" = "Supported Protocol";
 "首连能力" = "First-Connect Flow";
 "密码模式" = "Password Mode";
+"添加远程主机后，Island 会通过 SSH 检查环境、安装远程 bridge，并配置 Claude hooks。" = "After you add a remote host, Island uses SSH to check the environment, install the remote bridge, and configure Claude hooks.";
+"连接成功后，远程会话会回传到本机显示；如果密码连接失败，需要重新输入密码。" = "Once connected, remote sessions are forwarded back to your Mac for display. If password auth fails, you will need to enter the password again.";
 "连接成功后可直接重连；连接失败后需要重新输入" = "Reconnect directly after a successful connection; re-enter the password after a failed reconnect";
 "SSH" = "SSH";
 "检测 + 安装 bridge + 改写 Claude hooks" = "Probe + install bridge + rewrite Claude hooks";

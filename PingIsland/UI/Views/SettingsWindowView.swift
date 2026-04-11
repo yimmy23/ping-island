@@ -1259,11 +1259,13 @@ private struct SettingsPanelContentView: View {
             }
 
             SettingsSectionCard(title: "说明") {
-                SettingsValueLine(title: "支持协议", value: AppLocalization.string("SSH"))
-                SettingsLineDivider()
-                SettingsValueLine(title: "首连能力", value: AppLocalization.string("检测 + 安装 bridge + 改写 Claude hooks"))
-                SettingsLineDivider()
-                SettingsValueLine(title: "密码模式", value: AppLocalization.string("连接成功后可直接重连；连接失败后需要重新输入"))
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(appLocalized: "添加远程主机后，Island 会通过 SSH 检查环境、安装远程 bridge，并配置 Claude hooks。")
+                    Text(appLocalized: "连接成功后，远程会话会回传到本机显示；如果密码连接失败，需要重新输入密码。")
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.72))
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

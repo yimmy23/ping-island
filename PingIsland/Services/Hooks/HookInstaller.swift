@@ -1392,7 +1392,7 @@ struct HookInstaller {
         """
     }
 
-    private static func managedHookDirectoryFiles(for profile: ManagedHookClientProfile) -> [String: String] {
+    static func managedHookDirectoryFiles(for profile: ManagedHookClientProfile) -> [String: String] {
         guard profile.id == "openclaw-hooks" else {
             return [:]
         }
@@ -1400,7 +1400,7 @@ struct HookInstaller {
         let argsData = (try? JSONSerialization.data(withJSONObject: bridgeCommandArguments(for: profile), options: []))
             ?? Data("[]".utf8)
         let argsJSON = String(data: argsData, encoding: .utf8) ?? "[]"
-        let eventList = profile.events.map(\.name)
+        let eventList = ["command", "message", "session"]
         let eventsData = (try? JSONSerialization.data(withJSONObject: eventList, options: []))
             ?? Data("[]".utf8)
         let eventsJSON = String(data: eventsData, encoding: .utf8) ?? "[]"
@@ -1511,15 +1511,38 @@ struct HookInstaller {
         }
 
         function buildPayload(event) {
-          const sessionId = stableString(event?.sessionKey);
-          if (!sessionId) return undefined;
+          const rawSessionId = firstDefined(
+            event?.context?.sessionEntry?.id,
+            event?.context?.sessionEntry?.sessionID,
+            event?.context?.sessionEntry?.sessionId,
+            event?.context?.patch?.sessionID,
+            event?.context?.patch?.sessionId,
+            event?.sessionKey,
+            event?.sessionID,
+            event?.sessionId,
+            event?.context?.sessionKey,
+            event?.context?.sessionID,
+            event?.context?.sessionId
+          );
+          const sessionId = stableString(rawSessionId);
+          if (!sessionId) {
+            return {
+              payload: undefined,
+              skipReason: "missing_session_id",
+              rawSessionId: stableString(rawSessionId)
+            };
+          }
 
           const payload = {
             event: `${event?.type ?? "unknown"}:${event?.action ?? "unknown"}`,
             session_id: sessionId,
+            session_file_path: `${process.env.HOME ?? ""}/.openclaw/agents/main/sessions/${sessionId}.jsonl`,
             cwd: firstDefined(
               event?.context?.workspaceDir,
+              event?.context?.workspace?.dir,
+              event?.context?.directory,
               event?.context?.sessionEntry?.workspaceDir,
+              event?.context?.sessionEntry?.directory,
               event?.context?.cfg?.workspace?.dir
             ),
             status: statusFor(event),
@@ -1532,24 +1555,34 @@ struct HookInstaller {
             thread_source: "openclaw-hooks"
           };
 
-          return Object.fromEntries(
-            Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== "")
-          );
+          return {
+            payload: Object.fromEntries(
+              Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== "")
+            ),
+            skipReason: undefined,
+            rawSessionId: stableString(rawSessionId)
+          };
         }
 
         async function forwardViaNode(payload) {
           const { spawn } = await import("node:child_process");
-          const child = spawn(BRIDGE_ARGS[0], BRIDGE_ARGS.slice(1), {
-            stdio: ["pipe", "ignore", "ignore"],
-            env: process.env
+          return await new Promise((resolve, reject) => {
+            const child = spawn(BRIDGE_ARGS[0], BRIDGE_ARGS.slice(1), {
+              stdio: ["pipe", "ignore", "ignore"],
+              env: process.env
+            });
+            child.once("error", reject);
+            child.once("close", (code, signal) => {
+              resolve({ code, signal });
+            });
+            child.stdin.on("error", () => {});
+            child.stdin.write(JSON.stringify(payload));
+            child.stdin.end();
           });
-          child.on("error", () => {});
-          child.stdin.write(JSON.stringify(payload));
-          child.stdin.end();
         }
 
         const handler = async (event) => {
-          const payload = buildPayload(event);
+          const { payload } = buildPayload(event);
           if (!payload) return;
 
           try {

@@ -565,8 +565,14 @@ struct SessionState: Equatable, Identifiable, Sendable {
     /// Last message content
     nonisolated var lastMessage: String? {
         SessionTextSanitizer.sanitizedDisplayText(conversationInfo.lastMessage)
+            ?? (clientInfo.isOpenClawGatewayClient ? compactHookMessage : nil)
             ?? SessionTextSanitizer.sanitizedDisplayText(previewText)
+            ?? (!clientInfo.isOpenClawGatewayClient ? compactHookMessage : nil)
             ?? SessionTextSanitizer.sanitizedDisplayText(intervention?.summaryText)
+    }
+
+    nonisolated var shouldHideProjectContextInUI: Bool {
+        clientInfo.isOpenClawGatewayClient
     }
 
     /// Latest hook bridge message formatted for compact notch display.
@@ -639,6 +645,22 @@ struct SessionState: Equatable, Identifiable, Sendable {
         scopedApprovalAction != nil
     }
 
+    /// The primary UI keeps recently-active conversations "warm" for a short grace
+    /// window so a fresh follow-up does not immediately look dormant once the provider
+    /// sends an idle heartbeat.
+    nonisolated var presentsActiveInUI: Bool {
+        if phase.isActive {
+            return true
+        }
+        if needsManualAttention {
+            return false
+        }
+        guard hasDurableConversationContentForUI else {
+            return false
+        }
+        return Date().timeIntervalSince(lastActivity) < Self.minimalCompactDelay
+    }
+
     /// Timestamp used when sorting sessions that need manual attention.
     nonisolated var attentionRequestedAt: Date? {
         if let permission = activePermission {
@@ -651,8 +673,14 @@ struct SessionState: Equatable, Identifiable, Sendable {
     }
 
     /// Timestamp used for recency ordering once attention-demanding sessions are handled.
+    /// Keep actively-running sessions anchored to their live activity time so a
+    /// backfilled transcript timestamp from the first parsed user message cannot
+    /// make the row jump backward during an in-flight update.
     nonisolated var queueSortActivityDate: Date {
-        lastUserMessageDate ?? lastActivity
+        if presentsActiveInUI {
+            return lastActivity
+        }
+        return lastUserMessageDate ?? lastActivity
     }
 
     /// Sessions with no new activity for long enough should disappear from the primary list
@@ -672,7 +700,7 @@ struct SessionState: Equatable, Identifiable, Sendable {
         if phase == .ended, shouldShowArchiveActionInPrimaryUI {
             return false
         }
-        if phase.isActive || needsManualAttention {
+        if presentsActiveInUI || needsManualAttention {
             return false
         }
         return Date().timeIntervalSince(lastActivity) >= Self.minimalCompactDelay
@@ -693,6 +721,10 @@ struct SessionState: Equatable, Identifiable, Sendable {
     }
 
     nonisolated func shouldSortBeforeInQueue(_ other: SessionState) -> Bool {
+        if presentsActiveInUI != other.presentsActiveInUI {
+            return presentsActiveInUI
+        }
+
         if needsManualAttention != other.needsManualAttention {
             return needsManualAttention
         }
@@ -729,12 +761,20 @@ struct SessionState: Equatable, Identifiable, Sendable {
         case .processing, .compacting:
             return 1
         case .idle:
-            return 2
+            return presentsActiveInUI ? 1 : 2
         case .ended:
-            return 3
+            return presentsActiveInUI ? 1 : 3
         case .waitingForInput, .waitingForApproval:
             return 0
         }
+    }
+
+    private nonisolated var hasDurableConversationContentForUI: Bool {
+        !chatItems.isEmpty
+            || lastUserMessageDate != nil
+            || SessionTextSanitizer.sanitizedDisplayText(conversationInfo.lastMessage) != nil
+            || SessionTextSanitizer.sanitizedDisplayText(conversationInfo.summary) != nil
+            || SessionTextSanitizer.sanitizedDisplayText(conversationInfo.firstUserMessage) != nil
     }
 
     private nonisolated var normalizedWorkspacePath: String? {

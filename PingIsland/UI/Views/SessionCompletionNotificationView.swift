@@ -131,7 +131,7 @@ struct SessionCompletionNotificationView: View {
     }
 
     private var assistantPrefixColor: Color {
-        providerTint.opacity(session.phase.isActive ? 0.96 : 0.9)
+        providerTint.opacity(session.presentsActiveInUI ? 0.96 : 0.9)
     }
 
     private var assistantTextColor: Color {

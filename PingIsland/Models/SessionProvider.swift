@@ -162,6 +162,10 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
             || originator?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "openclaw"
     }
 
+    nonisolated var suppressesActivationNavigation: Bool {
+        isOpenClawGatewayClient
+    }
+
     nonisolated func badgeLabel(for provider: SessionProvider) -> String {
         let profile = resolvedProfile(for: provider)
         if provider == .codex,

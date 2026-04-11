@@ -133,7 +133,7 @@ struct NotchView: View {
         }
 
         if let active = sessionMonitor.instances
-            .filter({ $0.phase.isActive })
+            .filter({ $0.presentsActiveInUI })
             .sorted(by: { $0.lastActivity > $1.lastActivity })
             .first {
             return active
@@ -193,7 +193,7 @@ struct NotchView: View {
     private func latestMascotSourceSession(from instances: [SessionState]) -> SessionState? {
         latestHookMessageSession(from: instances)
             ?? instances
-                .filter { $0.phase.isActive }
+                .filter { $0.presentsActiveInUI }
                 .sorted(by: { $0.lastActivity > $1.lastActivity })
                 .first
             ?? instances
@@ -398,7 +398,9 @@ struct NotchView: View {
     }
 
     private var sortedHoverSessions: [SessionState] {
-        sessionMonitor.instances.sorted { $0.shouldSortBeforeInQueue($1) }
+        sessionMonitor.instances
+            .filter(\.presentsActiveInUI)
+            .sorted { $0.shouldSortBeforeInQueue($1) }
     }
 
     /// Whether to show the expanded closed state (processing, pending permission, or waiting for input)

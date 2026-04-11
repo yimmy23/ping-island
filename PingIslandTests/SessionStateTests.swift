@@ -66,6 +66,160 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(withFirstUserMessage.displayTitle, "Fix the menu bar bug")
     }
 
+    func testActiveQueueSortActivityDatePrefersLiveActivityOverOlderTranscriptUserTimestamp() {
+        let now = Date()
+        let session = SessionState(
+            sessionId: "active-session",
+            cwd: "/tmp/project",
+            phase: .processing,
+            conversationInfo: ConversationInfo(
+                summary: nil,
+                lastMessage: "Working",
+                lastMessageRole: "assistant",
+                lastToolName: nil,
+                firstUserMessage: "Do the work",
+                lastUserMessageDate: now.addingTimeInterval(-120)
+            ),
+            lastActivity: now
+        )
+
+        XCTAssertEqual(session.queueSortActivityDate, now)
+    }
+
+    func testIdleQueueSortActivityDateStillUsesLastUserMessageDateWhenPresent() {
+        let now = Date()
+        let lastUserMessageDate = now.addingTimeInterval(-60)
+        let session = SessionState(
+            sessionId: "idle-session",
+            cwd: "/tmp/project",
+            phase: .idle,
+            conversationInfo: ConversationInfo(
+                summary: nil,
+                lastMessage: "Done",
+                lastMessageRole: "assistant",
+                lastToolName: nil,
+                firstUserMessage: "Finish the task",
+                lastUserMessageDate: lastUserMessageDate
+            ),
+            lastActivity: now.addingTimeInterval(-(11 * 60))
+        )
+
+        XCTAssertEqual(session.queueSortActivityDate, lastUserMessageDate)
+    }
+
+    func testRecentlyActiveIdleSessionPresentsAsActiveInUIForTenMinutes() {
+        let now = Date()
+        let session = SessionState(
+            sessionId: "recent-idle-session",
+            cwd: "/tmp/project",
+            phase: .idle,
+            chatItems: [
+                ChatHistoryItem(
+                    id: "assistant-1",
+                    type: .assistant("Follow-up finished"),
+                    timestamp: now.addingTimeInterval(-30)
+                )
+            ],
+            conversationInfo: ConversationInfo(
+                summary: "Follow-up finished",
+                lastMessage: "Follow-up finished",
+                lastMessageRole: "assistant",
+                lastToolName: nil,
+                firstUserMessage: "Please continue",
+                lastUserMessageDate: now.addingTimeInterval(-45)
+            ),
+            lastActivity: now.addingTimeInterval(-60)
+        )
+
+        XCTAssertTrue(session.presentsActiveInUI)
+        XCTAssertEqual(session.queueSortActivityDate, session.lastActivity)
+        XCTAssertFalse(session.shouldUseMinimalCompactPresentation)
+    }
+
+    func testIdlePromptOnlySessionDoesNotPresentAsActiveInUI() {
+        let session = SessionState(
+            sessionId: "idle-prompt-only",
+            cwd: "/tmp/project",
+            latestHookMessage: "Waiting",
+            phase: .idle,
+            lastActivity: Date().addingTimeInterval(-60)
+        )
+
+        XCTAssertFalse(session.presentsActiveInUI)
+    }
+
+    func testRecentlyActiveGraceExpiresAfterTenMinutes() {
+        let session = SessionState(
+            sessionId: "stale-idle-session",
+            cwd: "/tmp/project",
+            phase: .idle,
+            chatItems: [
+                ChatHistoryItem(
+                    id: "assistant-1",
+                    type: .assistant("Done"),
+                    timestamp: Date().addingTimeInterval(-(11 * 60))
+                )
+            ],
+            conversationInfo: ConversationInfo(
+                summary: "Done",
+                lastMessage: "Done",
+                lastMessageRole: "assistant",
+                lastToolName: nil,
+                firstUserMessage: "Do the task",
+                lastUserMessageDate: Date().addingTimeInterval(-(12 * 60))
+            ),
+            lastActivity: Date().addingTimeInterval(-(11 * 60))
+        )
+
+        XCTAssertFalse(session.presentsActiveInUI)
+        XCTAssertTrue(session.shouldUseMinimalCompactPresentation)
+    }
+
+    func testActiveSessionSortDoesNotDropBehindOlderIdleSessionWhenTranscriptBackfills() {
+        let now = Date()
+        let activeSession = SessionState(
+            sessionId: "active-session",
+            cwd: "/tmp/project",
+            phase: .processing,
+            conversationInfo: ConversationInfo(
+                summary: nil,
+                lastMessage: "Working",
+                lastMessageRole: "assistant",
+                lastToolName: nil,
+                firstUserMessage: "Do the work",
+                lastUserMessageDate: now.addingTimeInterval(-120)
+            ),
+            lastActivity: now
+        )
+        let idleSession = SessionState(
+            sessionId: "idle-session",
+            cwd: "/tmp/project",
+            phase: .idle,
+            lastActivity: now.addingTimeInterval(-20)
+        )
+
+        XCTAssertTrue(activeSession.shouldSortBeforeInQueue(idleSession))
+    }
+
+    func testActiveSessionSortsAheadOfWaitingForInputSession() {
+        let now = Date()
+        let activeSession = SessionState(
+            sessionId: "active-session",
+            cwd: "/tmp/project",
+            phase: .processing,
+            lastActivity: now
+        )
+        let waitingSession = SessionState(
+            sessionId: "waiting-session",
+            cwd: "/tmp/project",
+            phase: .waitingForInput,
+            lastActivity: now.addingTimeInterval(-5)
+        )
+
+        XCTAssertTrue(activeSession.shouldSortBeforeInQueue(waitingSession))
+        XCTAssertFalse(waitingSession.shouldSortBeforeInQueue(activeSession))
+    }
+
     func testCompactHookMessageNormalizesWhitespace() {
         let session = SessionState(
             sessionId: "hook-message",

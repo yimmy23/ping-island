@@ -367,8 +367,17 @@ extension HookEvent {
     /// Whether this event should trigger a file sync
     nonisolated var shouldSyncFile: Bool {
         guard ingress != .remoteBridge else { return false }
+        if clientInfo.isOpenClawGatewayClient {
+            switch event {
+            case let name where name.hasPrefix("message:"),
+                 let name where name.hasPrefix("session:"),
+                 let name where name.hasPrefix("command:"):
+                return true
+            default:
+                return false
+            }
+        }
         guard provider == .claude else { return false }
-        guard !clientInfo.isOpenClawGatewayClient else { return false }
 
         switch event {
         case "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop":
@@ -425,6 +434,93 @@ extension SessionEvent: CustomStringConvertible {
             return "subagentStopped(session: \(sessionId.prefix(8)), task: \(taskToolId.prefix(12)))"
         case .agentFileUpdated(let sessionId, let taskToolId, let tools):
             return "agentFileUpdated(session: \(sessionId.prefix(8)), task: \(taskToolId.prefix(12)), tools: \(tools.count))"
+        }
+    }
+}
+
+// MARK: - Log Summary
+
+extension SessionEvent {
+    nonisolated var processingLogName: String {
+        switch self {
+        case .hookReceived(let event):
+            return "hookReceived.\(event.event)"
+        case .permissionApproved:
+            return "permissionApproved"
+        case .permissionAutoApprovalChanged:
+            return "permissionAutoApprovalChanged"
+        case .permissionDenied:
+            return "permissionDenied"
+        case .permissionSocketFailed:
+            return "permissionSocketFailed"
+        case .interventionResolved:
+            return "interventionResolved"
+        case .pruneTimedOutExternalContinuations:
+            return "pruneTimedOutExternalContinuations"
+        case .fileUpdated:
+            return "fileUpdated"
+        case .interruptDetected:
+            return "interruptDetected"
+        case .subagentStarted:
+            return "subagentStarted"
+        case .subagentToolExecuted:
+            return "subagentToolExecuted"
+        case .subagentToolCompleted:
+            return "subagentToolCompleted"
+        case .subagentStopped:
+            return "subagentStopped"
+        case .agentFileUpdated:
+            return "agentFileUpdated"
+        case .clearDetected:
+            return "clearDetected"
+        case .sessionEnded:
+            return "sessionEnded"
+        case .sessionArchived:
+            return "sessionArchived"
+        case .loadHistory:
+            return "loadHistory"
+        case .historyLoaded:
+            return "historyLoaded"
+        case .toolCompleted:
+            return "toolCompleted"
+        }
+    }
+
+    nonisolated var processingLogSessionPrefix: String? {
+        switch self {
+        case .hookReceived(let event):
+            return String(event.sessionId.prefix(8))
+        case .permissionApproved(let sessionId, _),
+             .permissionAutoApprovalChanged(let sessionId, _),
+             .permissionDenied(let sessionId, _, _),
+             .permissionSocketFailed(let sessionId, _),
+             .interventionResolved(let sessionId, _, _),
+             .interruptDetected(let sessionId),
+             .clearDetected(let sessionId),
+             .sessionEnded(let sessionId),
+             .sessionArchived(let sessionId),
+             .loadHistory(let sessionId, _),
+             .historyLoaded(let sessionId, _, _, _, _, _),
+             .toolCompleted(let sessionId, _, _),
+             .subagentStarted(let sessionId, _),
+             .subagentToolExecuted(let sessionId, _),
+             .subagentToolCompleted(let sessionId, _, _),
+             .subagentStopped(let sessionId, _),
+             .agentFileUpdated(let sessionId, _, _):
+            return String(sessionId.prefix(8))
+        case .fileUpdated(let payload):
+            return String(payload.sessionId.prefix(8))
+        case .pruneTimedOutExternalContinuations:
+            return nil
+        }
+    }
+
+    nonisolated var shouldEmitProcessingLog: Bool {
+        switch self {
+        case .pruneTimedOutExternalContinuations:
+            return false
+        default:
+            return true
         }
     }
 }

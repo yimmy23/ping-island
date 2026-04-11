@@ -22,6 +22,9 @@ actor SessionLauncher {
     private init() {}
 
     func activate(_ session: SessionState) async -> Bool {
+        guard !session.clientInfo.suppressesActivationNavigation else {
+            return false
+        }
         Self.logger.debug("Activate request session=\(session.sessionId, privacy: .public) provider=\(String(describing: session.provider), privacy: .public) client=\(session.clientDisplayName, privacy: .public) pid=\(String(describing: session.pid), privacy: .public) tty=\(String(describing: session.tty), privacy: .public) inTmux=\(session.isInTmux)")
         await FocusDiagnosticsStore.shared.record(
             "SessionLauncher activate session=\(session.sessionId) provider=\(session.provider.rawValue) client=\(session.clientDisplayName) pid=\(session.pid.map(String.init) ?? "nil") tty=\(session.tty ?? "nil") inTmux=\(session.isInTmux) terminalBundle=\(session.clientInfo.terminalBundleIdentifier ?? "nil") terminalSession=\(session.clientInfo.terminalSessionIdentifier ?? "nil") iTermSession=\(session.clientInfo.iTermSessionIdentifier ?? "nil")"
@@ -118,6 +121,9 @@ actor SessionLauncher {
     }
 
     func activateClientApplication(_ session: SessionState) async -> Bool {
+        guard !session.clientInfo.suppressesActivationNavigation else {
+            return false
+        }
         let candidateBundleIdentifiers = clientApplicationBundleIdentifiers(for: session)
         let resolvedLaunchURL = session.clientInfo.launchURL
             ?? session.clientInfo.bundleIdentifier.flatMap {

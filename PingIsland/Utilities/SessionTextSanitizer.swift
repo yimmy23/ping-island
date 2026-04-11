@@ -13,6 +13,21 @@ enum SessionTextSanitizer {
 
         var cleaned = text
         cleaned = cleaned.replacingOccurrences(
+            of: #"(?is)^Conversation info \(untrusted metadata\):\s*```json.*?```\s*"#,
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: #"(?is)^Sender \(untrusted metadata\):\s*```json.*?```\s*"#,
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: #"(?is)^System:\s*\[[^\]]+\]\s*Node:.*?(?:\n\s*\n|\z)"#,
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
             of: #"(?is)<system-reminder>.*?</system-reminder>"#,
             with: " ",
             options: .regularExpression

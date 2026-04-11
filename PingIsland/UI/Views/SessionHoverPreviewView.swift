@@ -24,6 +24,7 @@ struct SessionHoverDashboardView: View {
                         )
                     } else {
                         SessionHoverCompactRow(session: session) {
+                            guard !session.clientInfo.suppressesActivationNavigation else { return }
                             Task {
                                 _ = await SessionLauncher.shared.activate(session)
                             }
@@ -57,7 +58,9 @@ struct SessionHoverPreviewView: View {
 
             HoverSessionPreviewLines(session: session)
 
-            if !session.cwd.isEmpty && session.cwd != "/" {
+            if !session.shouldHideProjectContextInUI,
+               !session.cwd.isEmpty,
+               session.cwd != "/" {
                 Text(session.cwd)
                     .font(.system(size: max(11, settings.contentFontSize - 2), weight: .medium, design: .monospaced))
                     .foregroundColor(.white.opacity(0.36))
@@ -82,12 +85,25 @@ private struct SessionHoverCompactRow: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        Button(action: onOpen) {
-            HStack(alignment: .center, spacing: 12) {
-                HoverProviderGlyph(session: session)
+        Group {
+            if session.clientInfo.suppressesActivationNavigation {
+                rowContent
+            } else {
+                Button(action: onOpen) {
+                    rowContent
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+    private var rowContent: some View {
+        HStack(alignment: .center, spacing: 12) {
+            HoverProviderGlyph(session: session)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if !session.shouldHideProjectContextInUI {
                         Text(session.projectName)
                             .font(.system(size: max(12, settings.contentFontSize), weight: .semibold))
                             .foregroundColor(.white.opacity(0.88))
@@ -95,24 +111,23 @@ private struct SessionHoverCompactRow: View {
                         Text("·")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.white.opacity(0.36))
-
-                        Text(session.displayTitle)
-                            .font(.system(size: max(14, settings.contentFontSize + 2), weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
                     }
 
-                    HoverSessionPreviewLines(session: session, compact: true)
+                    Text(session.displayTitle)
+                        .font(.system(size: max(14, settings.contentFontSize + 2), weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
                 }
 
-                Spacer(minLength: 0)
-
-                HoverSessionBadges(session: session)
+                HoverSessionPreviewLines(session: session, compact: true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+
+            Spacer(minLength: 0)
+
+            HoverSessionBadges(session: session)
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 
@@ -157,6 +172,7 @@ private struct HoverSessionCard: View {
     }
 
     private func activateSession() {
+        guard !session.clientInfo.suppressesActivationNavigation else { return }
         Task {
             _ = await SessionLauncher.shared.activate(session)
         }
@@ -209,7 +225,9 @@ private struct HoverConversationCard: View {
                 HoverSessionPreviewLines(session: session, compact: compact)
             }
 
-            if !session.cwd.isEmpty && session.cwd != "/" {
+            if !session.shouldHideProjectContextInUI,
+               !session.cwd.isEmpty,
+               session.cwd != "/" {
                 Text(session.cwd)
                     .font(.system(size: max(10, settings.contentFontSize - 2), weight: .medium, design: .monospaced))
                     .foregroundColor(.white.opacity(0.3))
@@ -407,13 +425,15 @@ private struct HoverSessionHeader: View {
 
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(session.projectName)
-                            .font(.system(size: max(13, settings.contentFontSize), weight: .semibold))
-                            .foregroundColor(.white.opacity(0.88))
+                        if !session.shouldHideProjectContextInUI {
+                            Text(session.projectName)
+                                .font(.system(size: max(13, settings.contentFontSize), weight: .semibold))
+                                .foregroundColor(.white.opacity(0.88))
 
-                        Text("·")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.42))
+                            Text("·")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.42))
+                        }
 
                         Text(session.displayTitle)
                             .font(.system(size: max(15, settings.contentFontSize + 3), weight: .bold))
@@ -427,7 +447,10 @@ private struct HoverSessionHeader: View {
                 Spacer(minLength: 0)
             }
 
-            if showPath, !session.cwd.isEmpty && session.cwd != "/" {
+            if showPath,
+               !session.shouldHideProjectContextInUI,
+               !session.cwd.isEmpty,
+               session.cwd != "/" {
                 Text(session.cwd)
                     .font(.system(size: max(11, settings.contentFontSize - 2), weight: .medium, design: .monospaced))
                     .foregroundColor(.white.opacity(0.36))
@@ -646,7 +669,7 @@ private enum HoverPreviewStyle {
     }
 
     static func assistantPrefixColor(for session: SessionState) -> Color {
-        return providerColor(for: session).opacity(session.phase.isActive ? 0.96 : 0.9)
+        return providerColor(for: session).opacity(session.presentsActiveInUI ? 0.96 : 0.9)
     }
 
     static func assistantTextColor(for session: SessionState, compact: Bool) -> Color {
@@ -656,7 +679,7 @@ private enum HoverPreviewStyle {
         if session.needsApprovalResponse {
             return .white.opacity(compact ? 0.74 : 0.8)
         }
-        if session.phase.isActive {
+        if session.presentsActiveInUI {
             return .white.opacity(compact ? 0.68 : 0.78)
         }
         return .white.opacity(compact ? 0.58 : 0.68)
@@ -808,11 +831,11 @@ private enum HoverConversationSnapshotBuilder {
 struct HoverEmptyPreviewView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("No recent session")
+            Text("No active session")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.white)
 
-            Text("Hover here to preview your most recent Agent threads.")
+            Text("Hover here to preview your active Agent sessions.")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white.opacity(0.56))
         }

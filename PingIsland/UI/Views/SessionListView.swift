@@ -103,6 +103,7 @@ struct SessionListView: View {
     // MARK: - Actions
 
     private func activateSession(_ session: SessionState) {
+        guard !session.clientInfo.suppressesActivationNavigation else { return }
         Task {
             _ = await SessionLauncher.shared.activate(session)
         }
@@ -321,7 +322,13 @@ struct InstanceRow: View {
     }
 
     private var titleLine: Text {
-        Text(session.projectName)
+        if session.shouldHideProjectContextInUI {
+            return Text(session.displayTitle)
+                .font(.system(size: sessionTitleFontSize, weight: .bold))
+                .foregroundColor(.white)
+        }
+
+        return Text(session.projectName)
             .font(.system(size: projectTitleFontSize, weight: .semibold))
             .foregroundColor(.white.opacity(0.84))
         + Text(" · ")
@@ -433,7 +440,7 @@ struct InstanceRow: View {
         if isWaitingForApproval {
             return TerminalColors.amber.opacity(isHovered ? 0.15 : 0.09)
         }
-        if session.phase.isActive {
+        if session.presentsActiveInUI {
             return Color.white.opacity(isHovered ? 0.08 : 0.04)
         }
         return isHovered ? Color.white.opacity(0.06) : Color.clear
@@ -511,7 +518,29 @@ struct InstanceRow: View {
                         .lineLimit(1)
                 }
             }
+
+            if shouldReserveIncomingPreviewLineHeight {
+                Color.clear
+                    .frame(height: reservedPreviewLineHeight)
+                    .accessibilityHidden(true)
+            }
         }
+    }
+
+    /// Active sessions often start with a single transient status line ("working...")
+    /// and then immediately grow to user + assistant preview lines once the first
+    /// durable message lands. Reserve the second line height up front so the list
+    /// and opened-notch measurement stay stable during that first content update.
+    private var shouldReserveIncomingPreviewLineHeight: Bool {
+        guard detailsEnabled else { return false }
+        guard shouldShowExpandedDetails else { return false }
+        guard session.presentsActiveInUI else { return false }
+        guard latestUserLine == nil else { return false }
+        return previewLines.count == 1
+    }
+
+    private var reservedPreviewLineHeight: CGFloat {
+        detailFontSize + 3
     }
 
     private var previewLines: [QueuePreviewLine] {
@@ -573,7 +602,7 @@ struct InstanceRow: View {
     }
 
     private var assistantPrefixColor: Color {
-        providerColor.opacity(session.phase.isActive ? 0.96 : 0.92)
+        providerColor.opacity(session.presentsActiveInUI ? 0.96 : 0.92)
     }
 
     private var assistantTextColor: Color {
@@ -583,7 +612,7 @@ struct InstanceRow: View {
         if isWaitingForApproval {
             return .white.opacity(0.74)
         }
-        if session.phase.isActive {
+        if session.presentsActiveInUI {
             return .white.opacity(0.66)
         }
         return .white.opacity(0.52)
@@ -726,7 +755,7 @@ struct InstanceRow: View {
         case .ended:
             return AppLocalization.string("会话已结束")
         case .idle:
-            return sanitized(session.lastMessage) ?? session.projectName
+            return sanitized(session.lastMessage) ?? (session.shouldHideProjectContextInUI ? nil : session.projectName)
         }
     }
 

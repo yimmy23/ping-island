@@ -50,7 +50,19 @@ final class OpenCodeIntegrationTests: XCTestCase {
         XCTAssertEqual(clientInfo.badgeLabel(for: .claude), "OpenClaw")
     }
 
-    func testOpenClawEventsDoNotEnableClaudeTranscriptSync() {
+    func testOpenClawManagedHookDirectoryIncludesSessionFallbacks() throws {
+        let profile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "openclaw-hooks"))
+        let files = HookInstaller.managedHookDirectoryFiles(for: profile)
+        let handler = try XCTUnwrap(files["handler.ts"])
+        let hookSpec = try XCTUnwrap(files["HOOK.md"])
+
+        XCTAssertTrue(handler.contains("event?.context?.sessionEntry?.id"))
+        XCTAssertTrue(handler.contains("event?.context?.workspace?.dir"))
+        XCTAssertTrue(handler.contains("session_file_path"))
+        XCTAssertTrue(hookSpec.contains("\"events\": [\"command\",\"message\",\"session\"]"))
+    }
+
+    func testOpenClawEventsEnableOpenClawTranscriptSyncWithoutClaudeWatcher() {
         let clientInfo = SessionClientInfo(
             kind: .custom,
             profileID: "openclaw",
@@ -75,8 +87,65 @@ final class OpenCodeIntegrationTests: XCTestCase {
             message: "/new"
         )
 
-        XCTAssertFalse(event.shouldSyncFile)
+        XCTAssertTrue(event.shouldSyncFile)
         XCTAssertFalse(SessionMonitor.shouldWatchTranscript(for: event, phase: .processing))
+    }
+
+    func testOpenClawClientSuppressesActivationAndProjectContext() {
+        let clientInfo = SessionClientInfo(
+            kind: .custom,
+            profileID: "openclaw",
+            name: "OpenClaw",
+            origin: "gateway",
+            originator: "OpenClaw",
+            threadSource: "openclaw-hooks"
+        )
+        let session = SessionState(
+            sessionId: "openclaw-session",
+            cwd: "/Users/wudanwu/Island",
+            projectName: "Island",
+            provider: .claude,
+            clientInfo: clientInfo,
+            previewText: "first hi",
+            latestHookMessage: "second hi"
+        )
+
+        XCTAssertTrue(clientInfo.suppressesActivationNavigation)
+        XCTAssertTrue(session.shouldHideProjectContextInUI)
+        XCTAssertEqual(session.lastMessage, "second hi")
+    }
+
+    func testOpenClawConversationParserReadsMultiTurnSessionFile() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent(".openclaw/agents/main/sessions", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        let fileURL = root.appendingPathComponent("openclaw-session.jsonl")
+        let content = """
+        {"type":"session","version":3,"id":"openclaw-session","timestamp":"2026-04-11T15:43:20.000Z","cwd":"/Users/wudanwu/.openclaw/workspace"}
+        {"type":"message","id":"u1","timestamp":"2026-04-11T15:43:24.648Z","message":{"role":"user","content":[{"type":"text","text":"Conversation info (untrusted metadata):\\n```json\\n{\\n  \\"message_id\\": \\"x\\"\\n}\\n```\\n\\nhi"}]}}
+        {"type":"message","id":"a1","timestamp":"2026-04-11T15:43:29.628Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"thinking text"},{"type":"text","text":"Hello from OpenClaw"}]}}
+        """.data(using: .utf8)
+        try XCTUnwrap(content).write(to: fileURL)
+
+        await ConversationParser.shared.resetState(for: "openclaw-session")
+        let messages = await ConversationParser.shared.parseFullConversation(
+            sessionId: "openclaw-session",
+            cwd: "/Users/wudanwu/Island",
+            explicitFilePath: fileURL.path
+        )
+        let info = await ConversationParser.shared.parse(
+            sessionId: "openclaw-session",
+            cwd: "/Users/wudanwu/Island",
+            explicitFilePath: fileURL.path
+        )
+
+        XCTAssertEqual(messages.count, 2)
+        XCTAssertEqual(messages.first?.textContent, "hi")
+        XCTAssertEqual(messages.last?.textContent, "Hello from OpenClaw")
+        XCTAssertEqual(info.firstUserMessage, "hi")
+        XCTAssertEqual(info.lastMessage, "Hello from OpenClaw")
     }
 
     func testOpenCodeManagedProfileUsesPluginFileInstallation() {

@@ -47,6 +47,11 @@ actor ConversationParser {
         var clearPending: Bool = false  // True if a /clear was just detected
     }
 
+    private enum TranscriptFormat {
+        case claudeLike
+        case openClaw
+    }
+
     /// Parsed tool result data
     struct ToolResult {
         let content: String?
@@ -73,6 +78,7 @@ actor ConversationParser {
     /// Uses caching based on file modification time
     func parse(sessionId: String, cwd: String, explicitFilePath: String? = nil) -> ConversationInfo {
         let sessionFile = Self.sessionFilePath(sessionId: sessionId, cwd: cwd, explicitFilePath: explicitFilePath)
+        let transcriptFormat = Self.transcriptFormat(for: sessionFile)
 
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: sessionFile),
@@ -90,7 +96,12 @@ actor ConversationParser {
             return ConversationInfo(summary: nil, lastMessage: nil, lastMessageRole: nil, lastToolName: nil, firstUserMessage: nil, lastUserMessageDate: nil)
         }
 
-        let info = parseContent(content)
+        let info = switch transcriptFormat {
+        case .claudeLike:
+            parseContent(content)
+        case .openClaw:
+            parseOpenClawContent(content)
+        }
         cache[sessionFile] = CachedInfo(modificationDate: modDate, info: info)
 
         return info
@@ -286,13 +297,14 @@ actor ConversationParser {
     /// Parse full conversation history for chat view (returns ALL messages - use sparingly)
     func parseFullConversation(sessionId: String, cwd: String, explicitFilePath: String? = nil) -> [ChatMessage] {
         let sessionFile = Self.sessionFilePath(sessionId: sessionId, cwd: cwd, explicitFilePath: explicitFilePath)
+        let transcriptFormat = Self.transcriptFormat(for: sessionFile)
 
         guard FileManager.default.fileExists(atPath: sessionFile) else {
             return []
         }
 
         var state = incrementalState[sessionId] ?? IncrementalParseState()
-        _ = parseNewLines(filePath: sessionFile, state: &state)
+        _ = parseNewLines(filePath: sessionFile, state: &state, transcriptFormat: transcriptFormat)
         incrementalState[sessionId] = state
 
         return state.messages
@@ -311,6 +323,7 @@ actor ConversationParser {
     /// Parse only NEW messages since last call (efficient incremental updates)
     func parseIncremental(sessionId: String, cwd: String, explicitFilePath: String? = nil) -> IncrementalParseResult {
         let sessionFile = Self.sessionFilePath(sessionId: sessionId, cwd: cwd, explicitFilePath: explicitFilePath)
+        let transcriptFormat = Self.transcriptFormat(for: sessionFile)
 
         guard FileManager.default.fileExists(atPath: sessionFile) else {
             return IncrementalParseResult(
@@ -324,7 +337,7 @@ actor ConversationParser {
         }
 
         var state = incrementalState[sessionId] ?? IncrementalParseState()
-        let newMessages = parseNewLines(filePath: sessionFile, state: &state)
+        let newMessages = parseNewLines(filePath: sessionFile, state: &state, transcriptFormat: transcriptFormat)
         let clearDetected = state.clearPending
         if clearDetected {
             state.clearPending = false
@@ -342,7 +355,11 @@ actor ConversationParser {
     }
 
     /// Parse only new lines since last read (incremental)
-    private func parseNewLines(filePath: String, state: inout IncrementalParseState) -> [ChatMessage] {
+    private func parseNewLines(
+        filePath: String,
+        state: inout IncrementalParseState,
+        transcriptFormat: TranscriptFormat
+    ) -> [ChatMessage] {
         guard let fileHandle = FileHandle(forReadingAtPath: filePath) else {
             return []
         }
@@ -378,6 +395,21 @@ actor ConversationParser {
         let isIncrementalRead = state.lastFileOffset > 0
         let lines = newContent.components(separatedBy: "\n")
         var newMessages: [ChatMessage] = []
+
+        if transcriptFormat == .openClaw {
+            for line in lines where !line.isEmpty {
+                guard let lineData = line.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                      let message = parseOpenClawMessageLine(json) else {
+                    continue
+                }
+                newMessages.append(message)
+                state.messages.append(message)
+            }
+
+            state.lastFileOffset = fileSize
+            return newMessages
+        }
 
         for line in lines where !line.isEmpty {
             if line.contains("<command-name>/clear</command-name>") {
@@ -482,6 +514,14 @@ actor ConversationParser {
     /// Build session file path
     private static func sessionFilePath(sessionId: String, cwd: String, explicitFilePath: String? = nil) -> String {
         if let explicitFilePath, !explicitFilePath.isEmpty {
+            if FileManager.default.fileExists(atPath: explicitFilePath) {
+                return explicitFilePath
+            }
+
+            if let fallbackOpenClawPath = latestOpenClawSessionFilePath(preferredPath: explicitFilePath) {
+                return fallbackOpenClawPath
+            }
+
             return explicitFilePath
         }
 
@@ -501,7 +541,88 @@ actor ConversationParser {
             return claudePath
         }
 
+        if let fallbackOpenClawPath = latestOpenClawSessionFilePath(preferredPath: nil) {
+            return fallbackOpenClawPath
+        }
+
         return claudePath
+    }
+
+    private static func latestOpenClawSessionFilePath(preferredPath: String?) -> String? {
+        let fileManager = FileManager.default
+        let sessionsDirectory: URL = {
+            if let preferredPath {
+                return URL(fileURLWithPath: preferredPath).deletingLastPathComponent()
+            }
+            return fileManager.homeDirectoryForCurrentUser
+                .appendingPathComponent(".openclaw/agents/main/sessions", isDirectory: true)
+        }()
+
+        guard let enumerator = fileManager.enumerator(
+            at: sessionsDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        var newestURL: URL?
+        var newestDate = Date.distantPast
+
+        for case let fileURL as URL in enumerator {
+            guard fileURL.pathExtension == "jsonl" else { continue }
+            let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
+            guard values?.isRegularFile == true else { continue }
+            let modifiedAt = values?.contentModificationDate ?? Date.distantPast
+            if newestURL == nil || modifiedAt > newestDate {
+                newestURL = fileURL
+                newestDate = modifiedAt
+            }
+        }
+
+        return newestURL?.path
+    }
+
+    private static func transcriptFormat(for filePath: String) -> TranscriptFormat {
+        filePath.contains("/.openclaw/agents/") ? .openClaw : .claudeLike
+    }
+
+    private func parseOpenClawContent(_ content: String) -> ConversationInfo {
+        let lines = content.components(separatedBy: "\n").filter { !$0.isEmpty }
+
+        var firstUserMessage: String?
+        var lastMessage: String?
+        var lastMessageRole: String?
+        var lastUserMessageDate: Date?
+
+        for line in lines {
+            guard let lineData = line.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  let message = parseOpenClawMessageLine(json) else {
+                continue
+            }
+
+            if firstUserMessage == nil, message.role == .user {
+                firstUserMessage = Self.truncateMessage(message.textContent, maxLength: 50)
+            }
+
+            let text = message.textContent
+            guard !text.isEmpty else { continue }
+            lastMessage = text
+            lastMessageRole = message.role.rawValue
+            if message.role == .user {
+                lastUserMessageDate = message.timestamp
+            }
+        }
+
+        return ConversationInfo(
+            summary: nil,
+            lastMessage: Self.truncateMessage(lastMessage, maxLength: 80),
+            lastMessageRole: lastMessageRole,
+            lastToolName: nil,
+            firstUserMessage: firstUserMessage,
+            lastUserMessageDate: lastUserMessageDate
+        )
     }
 
     func qoderFallbackIntervention(sessionId: String) -> SessionIntervention? {
@@ -715,6 +836,56 @@ actor ConversationParser {
             timestamp: timestamp,
             content: blocks
         )
+    }
+
+    private func parseOpenClawMessageLine(_ json: [String: Any]) -> ChatMessage? {
+        guard json["type"] as? String == "message",
+              let id = json["id"] as? String,
+              let messageDict = json["message"] as? [String: Any],
+              let roleString = messageDict["role"] as? String else {
+            return nil
+        }
+
+        let role: ChatRole
+        switch roleString {
+        case "user":
+            role = .user
+        case "assistant":
+            role = .assistant
+        default:
+            role = .system
+        }
+
+        let timestamp: Date = {
+            guard let timestampStr = json["timestamp"] as? String else { return Date() }
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return formatter.date(from: timestampStr) ?? Date()
+        }()
+
+        var blocks: [MessageBlock] = []
+        if let contentArray = messageDict["content"] as? [[String: Any]] {
+            for block in contentArray {
+                guard let blockType = block["type"] as? String else { continue }
+                switch blockType {
+                case "text":
+                    if let text = block["text"] as? String,
+                       let sanitizedText = SessionTextSanitizer.sanitizedDisplayText(text) {
+                        blocks.append(.text(sanitizedText))
+                    }
+                case "thinking":
+                    if let thinking = block["thinking"] as? String,
+                       let sanitizedThinking = SessionTextSanitizer.sanitizedDisplayText(thinking) {
+                        blocks.append(.thinking(sanitizedThinking))
+                    }
+                default:
+                    continue
+                }
+            }
+        }
+
+        guard !blocks.isEmpty else { return nil }
+        return ChatMessage(id: id, role: role, timestamp: timestamp, content: blocks)
     }
 
     private func parseToolUse(_ block: [String: Any]) -> ToolUseBlock? {

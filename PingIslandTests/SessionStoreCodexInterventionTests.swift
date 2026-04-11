@@ -48,4 +48,38 @@ final class SessionStoreCodexInterventionTests: XCTestCase {
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }
+
+    func testStaleCodexIdleRefreshDoesNotDowngradeFreshProcessingState() async {
+        let sessionId = "codex-stale-idle-\(UUID().uuidString)"
+        let store = SessionStore.shared
+        let freshActivityAt = Date()
+
+        await store.upsertCodexSession(
+            sessionId: sessionId,
+            name: "Codex",
+            preview: "Following up",
+            cwd: "/tmp/project",
+            phase: .processing,
+            intervention: nil,
+            clientInfo: SessionClientInfo(kind: .codexCLI, profileID: "codex-cli", name: "Codex"),
+            activityAt: freshActivityAt
+        )
+
+        await store.upsertCodexSession(
+            sessionId: sessionId,
+            name: "Codex",
+            preview: "Old snapshot",
+            cwd: "/tmp/project",
+            phase: .idle,
+            intervention: nil,
+            clientInfo: SessionClientInfo(kind: .codexCLI, profileID: "codex-cli", name: "Codex"),
+            activityAt: freshActivityAt.addingTimeInterval(-300)
+        )
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .processing)
+        XCTAssertEqual(session?.lastActivity, freshActivityAt)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
 }
