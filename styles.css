@@ -324,6 +324,22 @@ code {
   font-size: 0.76rem;
 }
 
+.new-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.1rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  color: #fcd34d;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .signal-chip,
 .demo-chip.is-active,
 .demo-chip:hover {
@@ -1005,6 +1021,11 @@ code {
 .mascot-card {
   margin: 0;
   padding: 0.9rem 0.85rem 0.8rem;
+}
+
+.mascot-card-new {
+  border-color: rgba(245, 158, 11, 0.22);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.06), 0 18px 40px rgba(0, 0, 0, 0.24);
 }
 
 .mascot-card img {
