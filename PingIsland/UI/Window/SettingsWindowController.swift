@@ -81,6 +81,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
         showWindow(nil)
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
     }
 
     func dismiss() {
