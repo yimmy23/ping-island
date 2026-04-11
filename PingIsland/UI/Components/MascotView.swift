@@ -1228,31 +1228,61 @@ private struct FloatingZOverlay: View {
     }
 
     private func overlayBody(time: TimeInterval) -> some View {
-        ZStack(alignment: .top) {
-            ForEach(0..<3, id: \.self) { index in
-                let cycle = 2.7 + Double(index) * 0.3
-                let delay = Double(index) * 0.75
-                let progress = max(0, ((time - delay).truncatingRemainder(dividingBy: cycle)) / cycle)
-                let fontSize = max(6, size * CGFloat(0.16 + progress * 0.10))
-                let opacity = progress < 0.82
-                    ? 0.72 - Double(index) * 0.12
-                    : max(0, (1.0 - progress) * (2.9 - Double(index) * 0.4))
-                let horizontalDrift = -0.06
-                    + Double(index) * 0.05
-                    + sin(progress * .pi * 2) * 0.02
-                let verticalOffset = 0.03 + progress * 0.28
-                let xOffset = size * CGFloat(horizontalDrift)
-                let yOffset = -size * CGFloat(verticalOffset)
-                let textColor = Color.white.opacity(opacity)
+        let cycle = 2.9
+        let baseProgress = wrappedProgress((time / cycle).truncatingRemainder(dividingBy: 1))
 
-                Text("z")
-                    .font(.system(size: fontSize, weight: .black, design: .rounded))
-                    .foregroundStyle(textColor)
-                    .offset(x: xOffset, y: yOffset)
+        return ZStack(alignment: .topLeading) {
+            ForEach(floatingZConfigs.indices, id: \.self) { index in
+                let config = floatingZConfigs[index]
+                let progress = wrappedProgress(baseProgress + config.phaseOffset)
+                let visibility = floatingZVisibility(progress: progress)
+
+                if visibility > 0.01 {
+                    let fontSize = max(6, size * CGFloat(config.fontScale + progress * 0.08))
+                    let xOffset = size * CGFloat(config.startX + progress * config.travelX)
+                    let yOffset = size * CGFloat(config.startY - progress * config.travelY)
+                    let opacity = config.maxOpacity * visibility
+
+                    Text("z")
+                        .font(.system(size: fontSize, weight: .black, design: .rounded))
+                        .foregroundStyle(Color.white.opacity(opacity))
+                        .scaleEffect(0.92 + CGFloat(progress) * 0.32)
+                        .shadow(color: Color.white.opacity(opacity * 0.18), radius: 1.2, y: 0.8)
+                        .offset(x: xOffset, y: yOffset)
+                }
             }
         }
-        .frame(width: size, height: size, alignment: .top)
+        .frame(width: size, height: size, alignment: .topLeading)
     }
+
+    private func wrappedProgress(_ progress: Double) -> Double {
+        let wrapped = progress.truncatingRemainder(dividingBy: 1)
+        return wrapped >= 0 ? wrapped : wrapped + 1
+    }
+
+    private func floatingZVisibility(progress: Double) -> Double {
+        let fadeIn = min(max(progress / 0.18, 0), 1)
+        let fadeOut = min(max((1 - progress) / 0.34, 0), 1)
+        return fadeIn * fadeOut
+    }
+
+    private var floatingZConfigs: [FloatingZConfig] {
+        [
+            FloatingZConfig(phaseOffset: 0.00, fontScale: 0.16, startX: 0.40, startY: 0.28, travelX: 0.18, travelY: 0.24, maxOpacity: 0.44),
+            FloatingZConfig(phaseOffset: 0.28, fontScale: 0.21, startX: 0.48, startY: 0.20, travelX: 0.20, travelY: 0.30, maxOpacity: 0.58),
+            FloatingZConfig(phaseOffset: 0.56, fontScale: 0.26, startX: 0.56, startY: 0.12, travelX: 0.22, travelY: 0.34, maxOpacity: 0.72)
+        ]
+    }
+}
+
+private struct FloatingZConfig {
+    let phaseOffset: Double
+    let fontScale: Double
+    let startX: Double
+    let startY: Double
+    let travelX: Double
+    let travelY: Double
+    let maxOpacity: Double
 }
 
 private struct AlertHalo: View {
