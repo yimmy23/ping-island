@@ -1023,6 +1023,18 @@ struct MascotView: View {
 
         drawShadow(in: context, space: space, centerX: 8, y: 15.5, width: 7.0 - abs(motion.bounce) * 0.25, opacity: 0.21)
 
+        if mode == .working {
+            drawKeyboard(
+                in: context,
+                space: space,
+                y: 13.0,
+                base: Color(red: 0.15, green: 0.18, blue: 0.22),
+                key: Color(red: 0.31, green: 0.36, blue: 0.42),
+                highlight: accent,
+                flashIndex: keyboardFlashIndex(time: time)
+            )
+        }
+
         context.fill(Path(space.rect(4.0 + motion.shake, 6.0 + motion.vertical, 8.0 * motion.squashX, 6.8 * motion.squashY)), with: .color(shell))
         context.fill(Path(space.rect(4.4 + motion.shake, 6.4 + motion.vertical, 7.2, 6.0)), with: .color(face))
         context.fill(Path(space.rect(5.0 + motion.shake, 13.3 + motion.vertical, 1.0, 1.1)), with: .color(trim))
