@@ -62,6 +62,24 @@ final class OpenCodeIntegrationTests: XCTestCase {
         XCTAssertTrue(profile?.reinstallDescriptionFormat.contains("插件文件") == true)
     }
 
+    func testOpenCodeManagedPluginIncludesEventMappingAndReplyFlow() throws {
+        let profile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "opencode-hooks"))
+        let source = HookInstaller.managedPluginSource(for: profile)
+
+        XCTAssertTrue(source.contains("export default async ({ client, serverUrl }) =>"))
+        XCTAssertTrue(source.contains("type === \"permission.asked\""))
+        XCTAssertTrue(source.contains("type === \"question.asked\""))
+        XCTAssertTrue(source.contains("hook_event_name: \"PermissionRequest\""))
+        XCTAssertTrue(source.contains("hook_event_name: \"PreToolUse\""))
+        XCTAssertTrue(source.contains("tool_name: \"AskUserQuestion\""))
+        XCTAssertTrue(source.contains("/permission/${requestId}/reply"))
+        XCTAssertTrue(source.contains("/question/${requestId}/reply"))
+        XCTAssertTrue(source.contains("\"shell.env\": async"))
+        XCTAssertTrue(source.contains("stdout: captureResponse ? \"pipe\" : \"ignore\""))
+        XCTAssertTrue(source.contains("_env: collectBridgeEnv()"))
+        XCTAssertTrue(source.contains("_tty: detectedTTY"))
+    }
+
     func testOpenCodeRuntimeProfileResolvesBrandAndMascot() {
         let profile = ClientProfileRegistry.matchRuntimeProfile(
             provider: .claude,

@@ -53,6 +53,113 @@ func mapsGhosttyTerminalContextFromEnvironment() throws {
 }
 
 @Test
+func opencodePermissionRequestCreatesApprovalIntervention() throws {
+    let payload = """
+    {
+      "hook_event_name": "PermissionRequest",
+      "session_id": "opencode-demo",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "npm test"
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "opencode",
+            "--client-name", "OpenCode",
+            "--thread-source", "opencode-plugin"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "PermissionRequest")
+    #expect(envelope.status?.kind == .waitingForApproval)
+    #expect(envelope.expectsResponse)
+    #expect(envelope.intervention?.kind == .approval)
+    #expect(envelope.metadata["client_kind"] == "opencode")
+}
+
+@Test
+func opencodeQuestionRequestCreatesQuestionIntervention() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "opencode-question",
+      "tool_name": "AskUserQuestion",
+      "tool_input": {
+        "questions": [
+          {
+            "id": "scope",
+            "header": "范围",
+            "question": "你想先处理哪一块？",
+            "options": [{"label": "Hooks"}]
+          }
+        ]
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "opencode",
+            "--client-name", "OpenCode",
+            "--thread-source", "opencode-plugin"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "PreToolUse")
+    #expect(envelope.status?.kind == .waitingForInput)
+    #expect(envelope.expectsResponse)
+    #expect(envelope.intervention?.kind == .question)
+    #expect(envelope.intervention?.message == "你想先处理哪一块？")
+    #expect(envelope.metadata["tool_name"] == "AskUserQuestion")
+}
+
+@Test
+func opencodeBridgePayloadEnvironmentOverridesTerminalContext() throws {
+    let payload = """
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "opencode-env",
+      "_tty": "/dev/ttys009",
+      "_env": {
+        "TERM_PROGRAM": "ghostty",
+        "TMUX_PANE": "%42",
+        "__CFBundleIdentifier": "com.mitchellh.ghostty"
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "opencode",
+            "--client-name", "OpenCode"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.terminalContext.terminalProgram == "ghostty")
+    #expect(envelope.terminalContext.terminalBundleID == "com.mitchellh.ghostty")
+    #expect(envelope.terminalContext.tmuxPane == "%42")
+    #expect(envelope.terminalContext.tty == "/dev/ttys009")
+}
+
+@Test
 func mapsWezTermTerminalContextFromEnvironment() throws {
     let payload = """
     {

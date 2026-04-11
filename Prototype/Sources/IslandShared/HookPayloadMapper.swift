@@ -19,9 +19,10 @@ public enum HookPayloadMapper {
     ) -> BridgeEnvelope {
         let rawPayload = BridgeCodec.readJSONObject(from: stdinData) ?? [:]
         let payload = normalizedPayload(rawPayload, source: source)
+        let effectiveEnvironment = bridgedEnvironment(environment: environment, payload: payload)
         let eventType = detectEventType(arguments: arguments, payload: payload)
-        let terminalContext = makeTerminalContext(environment: environment, payload: payload)
-        let sessionKey = detectSessionKey(payload: payload, environment: environment, provider: source)
+        let terminalContext = makeTerminalContext(environment: effectiveEnvironment, payload: payload)
+        let sessionKey = detectSessionKey(payload: payload, environment: effectiveEnvironment, provider: source)
         let metadata = mergedMetadata(arguments: arguments, payload: payload, terminalContext: terminalContext)
         let clientKind = normalizedClientKind(from: metadata)
         let intervention = detectIntervention(
@@ -50,7 +51,7 @@ public enum HookPayloadMapper {
             sessionKey: sessionKey,
             title: detectTitle(payload: payload),
             preview: detectPreview(payload: payload),
-            cwd: detectCWD(payload: payload, environment: environment),
+            cwd: detectCWD(payload: payload, environment: effectiveEnvironment),
             status: status,
             terminalContext: terminalContext,
             intervention: intervention,
@@ -304,9 +305,6 @@ public enum HookPayloadMapper {
         clientKind: String?,
         intervention: InterventionRequest?
     ) -> Bool {
-        if clientKind == "opencode" {
-            return false
-        }
         if isGeminiHookClient(clientKind) {
             return false
         }
@@ -554,9 +552,6 @@ public enum HookPayloadMapper {
         payload: [String: Any],
         clientKind: String?
     ) -> InterventionRequest? {
-        if clientKind == "opencode" {
-            return nil
-        }
         if isGeminiHookClient(clientKind) {
             return nil
         }
@@ -802,6 +797,26 @@ public enum HookPayloadMapper {
         }
 
         return normalized
+    }
+
+    private static func bridgedEnvironment(
+        environment: [String: String],
+        payload: [String: Any]
+    ) -> [String: String] {
+        var merged = environment
+
+        if let bridgedEnvironment = payload["_env"] as? [String: Any] {
+            for (key, value) in bridgedEnvironment {
+                guard let value = nonEmpty(summarizeValue(value)) else { continue }
+                merged[key] = value
+            }
+        }
+
+        if let bridgedTTY = nonEmpty(payload["_tty"] as? String) {
+            merged["TTY"] = bridgedTTY
+        }
+
+        return merged
     }
 
     private static func summarizeValue(_ value: Any?) -> String? {
