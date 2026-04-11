@@ -293,6 +293,24 @@ final class UpdateManager: NSObject, ObservableObject {
         return description
     }
 
+    nonisolated static func isValidFeedURL(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased() else {
+            return false
+        }
+
+        switch scheme {
+        case "https", "http":
+            return !(components.host?.isEmpty ?? true)
+        case "file":
+            return !components.path.isEmpty
+        default:
+            return false
+        }
+    }
+
     nonisolated static func terminalState(forUpdateCycleError error: NSError) -> UpdateState {
         if let noUpdateReason = noUpdateReason(from: error) {
             switch noUpdateReason {
@@ -480,7 +498,7 @@ private struct UpdateConfiguration {
 
     var status: UpdateConfigurationStatus {
         guard !feedURL.isEmpty,
-              URL(string: feedURL) != nil,
+              UpdateManager.isValidFeedURL(feedURL),
               !publicKey.isEmpty else {
             return .unconfigured
         }

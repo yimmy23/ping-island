@@ -3,6 +3,18 @@ import Sparkle
 @testable import Ping_Island
 
 final class UpdateManagerTests: XCTestCase {
+    func testTruncatedHttpsFeedURLIsRejected() {
+        XCTAssertFalse(UpdateManager.isValidFeedURL("https:"))
+    }
+
+    func testPublishedGitHubFeedURLIsAccepted() {
+        XCTAssertTrue(
+            UpdateManager.isValidFeedURL(
+                "https://github.com/erha19/ping-island/releases/latest/download/appcast.xml"
+            )
+        )
+    }
+
     func testNoUpdateErrorMapsToUpToDateState() {
         let error = NSError(
             domain: SUSparkleErrorDomain,
