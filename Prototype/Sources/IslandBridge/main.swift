@@ -384,6 +384,8 @@ private enum BridgeDebugLogger {
         switch clientKind {
         case "codebuddy":
             return "codebuddy-hooks"
+        case "openclaw":
+            return "openclaw-hooks"
         case "qoder", "qoderwork":
             return "qoder-hooks"
         default:

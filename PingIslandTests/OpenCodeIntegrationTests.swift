@@ -50,6 +50,35 @@ final class OpenCodeIntegrationTests: XCTestCase {
         XCTAssertEqual(clientInfo.badgeLabel(for: .claude), "OpenClaw")
     }
 
+    func testOpenClawEventsDoNotEnableClaudeTranscriptSync() {
+        let clientInfo = SessionClientInfo(
+            kind: .custom,
+            profileID: "openclaw",
+            name: "OpenClaw",
+            origin: "gateway",
+            originator: "OpenClaw",
+            threadSource: "openclaw-hooks"
+        )
+        let event = HookEvent(
+            sessionId: "openclaw-session",
+            cwd: "/Users/wudanwu/Island",
+            event: "command:new",
+            status: "processing",
+            provider: .claude,
+            clientInfo: clientInfo,
+            pid: nil,
+            tty: nil,
+            tool: nil,
+            toolInput: nil,
+            toolUseId: nil,
+            notificationType: nil,
+            message: "/new"
+        )
+
+        XCTAssertFalse(event.shouldSyncFile)
+        XCTAssertFalse(SessionMonitor.shouldWatchTranscript(for: event, phase: .processing))
+    }
+
     func testOpenCodeManagedProfileUsesPluginFileInstallation() {
         let profile = ClientProfileRegistry.managedHookProfile(id: "opencode-hooks")
 

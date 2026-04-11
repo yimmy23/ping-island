@@ -578,6 +578,7 @@ class SessionMonitor: ObservableObject {
         guard event.ingress != .remoteBridge else { return false }
         switch event.provider {
         case .claude:
+            guard !event.clientInfo.isOpenClawGatewayClient else { return false }
             return phase == .processing
         case .codex:
             guard event.ingress == .hookBridge else { return false }

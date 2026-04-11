@@ -368,6 +368,7 @@ extension HookEvent {
     nonisolated var shouldSyncFile: Bool {
         guard ingress != .remoteBridge else { return false }
         guard provider == .claude else { return false }
+        guard !clientInfo.isOpenClawGatewayClient else { return false }
 
         switch event {
         case "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop":
