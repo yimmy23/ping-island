@@ -26,6 +26,7 @@ SKIP_NOTARIZATION="${PING_ISLAND_SKIP_NOTARIZATION:-0}"
 
 SPARKLE_PRIVATE_KEY_PATH="${PING_ISLAND_SPARKLE_PRIVATE_KEY_PATH:-$KEYS_DIR/eddsa_private_key}"
 GENERATE_APPCAST="${PING_ISLAND_GENERATE_APPCAST:-0}"
+VALIDATE_RELEASE_PROGRESS="${PING_ISLAND_VALIDATE_RELEASE_PROGRESS:-1}"
 
 notary_args=()
 
@@ -39,6 +40,28 @@ require_command() {
         echo "ERROR: Missing required command: $1"
         exit 1
     fi
+}
+
+infer_github_repo() {
+    if [ -n "${PING_ISLAND_GITHUB_REPO:-}" ]; then
+        echo "$PING_ISLAND_GITHUB_REPO"
+        return 0
+    fi
+
+    if [ -n "${GITHUB_REPOSITORY:-}" ]; then
+        echo "$GITHUB_REPOSITORY"
+        return 0
+    fi
+
+    local remote_url
+    remote_url=$(git -C "$PROJECT_DIR" remote get-url origin 2>/dev/null || true)
+
+    if [[ "$remote_url" =~ github\.com[:/]([^/]+/[^/.]+)(\.git)?$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+
+    return 1
 }
 
 resolve_notary_credentials() {
@@ -185,6 +208,83 @@ validate_embedded_sparkle_configuration() {
     fi
 }
 
+validate_release_progression() {
+    if [ "$VALIDATE_RELEASE_PROGRESS" != "1" ]; then
+        return
+    fi
+
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "WARNING: gh CLI not found; skipping published-release version progression check."
+        return
+    fi
+
+    local repo
+    if ! repo="$(infer_github_repo)"; then
+        echo "WARNING: Could not infer GitHub repository; skipping published-release version progression check."
+        return
+    fi
+
+    local previous_release_tsv
+    previous_release_tsv=$(gh api "repos/$repo/releases" --jq ".[] | select(.draft == false and .prerelease == false and .tag_name != \"v$VERSION\") | [.tag_name, (.assets[]? | select(.name | endswith(\".zip\")) | .browser_download_url)] | @tsv" | head -n 1)
+
+    if [ -z "$previous_release_tsv" ]; then
+        echo "No earlier published release found for version progression check."
+        return
+    fi
+
+    local previous_tag previous_zip_url
+    IFS=$'\t' read -r previous_tag previous_zip_url <<< "$previous_release_tsv"
+
+    if [ -z "$previous_zip_url" ]; then
+        echo "ERROR: Previous published release $previous_tag does not include a ZIP asset for comparison."
+        exit 1
+    fi
+
+    local tmp_dir previous_plist previous_version previous_build
+    tmp_dir=$(mktemp -d)
+    previous_plist="$tmp_dir/previous-Info.plist"
+
+    curl -fsSL "$previous_zip_url" -o "$tmp_dir/previous.zip"
+    unzip -p "$tmp_dir/previous.zip" "Ping Island.app/Contents/Info.plist" > "$previous_plist"
+
+    previous_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$previous_plist" 2>/dev/null || true)
+    previous_build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$previous_plist" 2>/dev/null || true)
+
+    rm -rf "$tmp_dir"
+
+    if [ -z "$previous_version" ] || [ -z "$previous_build" ]; then
+        echo "ERROR: Could not read version metadata from previous published release $previous_tag."
+        exit 1
+    fi
+
+    python3 - <<'PY' "$VERSION" "$BUILD" "$previous_version" "$previous_build" "$previous_tag"
+import sys
+
+current_version, current_build, previous_version, previous_build, previous_tag = sys.argv[1:]
+
+def normalize(value: str):
+    try:
+        return tuple(int(part) for part in value.split("."))
+    except ValueError:
+        print(f"ERROR: Non-numeric version component encountered in '{value}'.", file=sys.stderr)
+        sys.exit(1)
+
+if normalize(current_version) < normalize(previous_version):
+    print(
+        f"ERROR: Current short version {current_version} is older than published {previous_tag} ({previous_version}).",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if normalize(current_build) <= normalize(previous_build):
+    print(
+        f"ERROR: Current build {current_build} must be greater than published {previous_tag} build {previous_build}.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+}
+
 require_command xcodebuild
 require_command xcrun
 require_command ditto
@@ -192,6 +292,7 @@ require_command hdiutil
 require_command codesign
 require_command spctl
 require_command swift
+require_command python3
 
 resolve_notary_credentials
 
@@ -212,6 +313,8 @@ codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist")
+
+validate_release_progression
 
 mkdir -p "$RELEASE_DIR"
 

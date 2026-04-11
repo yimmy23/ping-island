@@ -60,6 +60,7 @@ base64 -i developer-id-application.p12 | pbcopy
 1. Create release notes at `releases/notes/<version>.md`.
    - Use `releases/notes/README.md` as the authoring template.
 2. Make sure the app version matches the release tag.
+   - Also bump `CURRENT_PROJECT_VERSION` / `CFBundleVersion` for every release. Sparkle relies on the monotonically increasing build version (`sparkle:version`) when deciding whether an update is newer.
 3. Push a tag like `v0.0.1`, or open the workflow manually with the same tag name.
 4. Publish the GitHub Release manually after reviewing the generated draft, or uncheck the `draft` input when you intentionally want the manual workflow run to publish immediately.
 
@@ -114,5 +115,7 @@ xcrun notarytool store-credentials "PingIsland" \
 
 - `Config/LocalSecrets.xcconfig` is intentionally gitignored.
 - `scripts/package-release.sh` is the shared build + sign + notarize packaging entrypoint used by both local release tooling and GitHub Actions.
+- `scripts/package-release.sh` now compares the build against the latest earlier published GitHub release and fails if `CFBundleVersion` did not increase.
 - `scripts/create-release.sh` packages `releases/notes/<version>.md` as `PingIsland-<version>.md` and uses it as the GitHub Release body when present.
+- `scripts/create-release.sh` infers the GitHub repo from `origin` by default; set `PING_ISLAND_GITHUB_REPO=owner/repo` if you need to override it.
 - The app prefers Markdown release notes and falls back to Sparkle's explicit release notes links when Markdown is unavailable.

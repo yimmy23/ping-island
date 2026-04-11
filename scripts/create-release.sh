@@ -9,9 +9,6 @@ EXPORT_PATH="$BUILD_DIR/export"
 RELEASE_DIR="${PING_ISLAND_RELEASE_DIR:-$PROJECT_DIR/releases/signed}"
 NOTES_DIR="$PROJECT_DIR/releases/notes"
 
-# GitHub repository (owner/repo format)
-GITHUB_REPO="${PING_ISLAND_GITHUB_REPO:-farouqaldori/ping-island}"
-
 # Website repo for auto-updating appcast
 WEBSITE_DIR="${PING_ISLAND_WEBSITE:-$PROJECT_DIR/../PingIsland-website}"
 WEBSITE_PUBLIC="$WEBSITE_DIR/public"
@@ -19,6 +16,25 @@ WEBSITE_PUBLIC="$WEBSITE_DIR/public"
 APP_PATH="$EXPORT_PATH/Ping Island.app"
 APP_NAME="PingIsland"
 NOTARY_PROFILE="${PING_ISLAND_NOTARY_KEYCHAIN_PROFILE:-PingIsland}"
+
+infer_github_repo() {
+    if [ -n "${PING_ISLAND_GITHUB_REPO:-}" ]; then
+        echo "$PING_ISLAND_GITHUB_REPO"
+        return 0
+    fi
+
+    local remote_url
+    remote_url=$(git -C "$PROJECT_DIR" remote get-url origin 2>/dev/null || true)
+
+    if [[ "$remote_url" =~ github\.com[:/]([^/]+/[^/.]+)(\.git)?$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+
+    return 1
+}
+
+GITHUB_REPO="$(infer_github_repo || true)"
 
 echo "=== Creating Release ==="
 echo ""
@@ -60,6 +76,9 @@ GITHUB_DOWNLOAD_URL=""
 
 if ! command -v gh >/dev/null 2>&1; then
     echo "WARNING: gh CLI not found. Install with: brew install gh"
+    echo "Skipping GitHub release."
+elif [ -z "$GITHUB_REPO" ]; then
+    echo "WARNING: Could not infer GitHub repository. Set PING_ISLAND_GITHUB_REPO=owner/repo to enable release upload."
     echo "Skipping GitHub release."
 else
     if gh release view "v$VERSION" --repo "$GITHUB_REPO" >/dev/null 2>&1; then
