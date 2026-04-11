@@ -46,7 +46,7 @@ struct ReleaseNotesWindowView: View {
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
         .overlay {
-            FireworksCelebrationOverlay(startedAt: celebrationStartedAt)
+            EmojiBlastCelebrationOverlay(startedAt: celebrationStartedAt)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .allowsHitTesting(false)
         }
@@ -200,22 +200,25 @@ private struct ReleaseNotesSectionCard: View {
     }
 }
 
-private struct FireworksCelebrationOverlay: View {
+private struct EmojiBlastCelebrationOverlay: View {
     let startedAt: Date
 
-    private let duration: TimeInterval = 3.6
-    private let bursts: [FireworkShow] = FireworkShow.defaultBursts
+    private let duration: TimeInterval = 4.9
+    private let particles: [WindowBlastParticle] = WindowBlastParticle.defaultField
+    private let palette: [Color] = [.pink, .orange, .yellow, .mint, .cyan, .white]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 40.0)) { context in
             let elapsed = context.date.timeIntervalSince(startedAt)
             let opacity = globalOpacity(for: elapsed)
 
             if elapsed < duration && opacity > 0 {
                 GeometryReader { proxy in
                     Canvas { canvas, size in
-                        for burst in bursts {
-                            draw(burst: burst, elapsed: elapsed, in: canvas, size: size, opacity: opacity)
+                        drawBackdropFlash(elapsed: elapsed, in: canvas, size: size, opacity: opacity)
+
+                        for particle in particles {
+                            draw(particle: particle, elapsed: elapsed, in: canvas, size: size, opacity: opacity)
                         }
                     }
                     .frame(width: proxy.size.width, height: proxy.size.height)
@@ -226,254 +229,183 @@ private struct FireworksCelebrationOverlay: View {
     }
 
     private func draw(
-        burst: FireworkShow,
+        particle: WindowBlastParticle,
         elapsed: TimeInterval,
         in canvas: GraphicsContext,
         size: CGSize,
         opacity: Double
     ) {
-        drawRocketTrail(for: burst, elapsed: elapsed, in: canvas, size: size, opacity: opacity)
-        drawExplosion(for: burst, elapsed: elapsed, in: canvas, size: size, opacity: opacity)
-    }
-
-    private func drawRocketTrail(
-        for burst: FireworkShow,
-        elapsed: TimeInterval,
-        in canvas: GraphicsContext,
-        size: CGSize,
-        opacity: Double
-    ) {
-        let launchProgress = burst.launchProgress(at: elapsed)
-        guard launchProgress > 0, launchProgress < 1 else { return }
-
-        let start = burst.launchPoint(in: size)
-        let peak = burst.peakPoint(in: size)
-        let rocket = CGPoint(
-            x: start.x + (peak.x - start.x) * launchProgress,
-            y: start.y + (peak.y - start.y) * launchProgress
-        )
-        let trailLength = CGFloat(40 + 30 * launchProgress)
-        let trailStart = CGPoint(
-            x: rocket.x - (peak.x - start.x) * 0.12,
-            y: min(size.height, rocket.y + trailLength)
-        )
-        let launchOpacity = (1 - launchProgress * 0.35) * opacity
-
-        var trail = Path()
-        trail.move(to: trailStart)
-        trail.addLine(to: rocket)
-
-        var trailContext = canvas
-        trailContext.opacity = launchOpacity
-        trailContext.addFilter(.blur(radius: 1.5))
-        trailContext.stroke(
-            trail,
-            with: .linearGradient(
-                Gradient(colors: [
-                    burst.colors[0].opacity(0.05),
-                    burst.colors[0].opacity(0.95)
-                ]),
-                startPoint: trailStart,
-                endPoint: rocket
-            ),
-            style: StrokeStyle(lineWidth: 2.2, lineCap: .round)
-        )
-
-        let rocketGlow = CGRect(x: rocket.x - 5, y: rocket.y - 5, width: 10, height: 10)
-        canvas.fill(Path(ellipseIn: rocketGlow), with: .color(.white.opacity(launchOpacity)))
-    }
-
-    private func drawExplosion(
-        for burst: FireworkShow,
-        elapsed: TimeInterval,
-        in canvas: GraphicsContext,
-        size: CGSize,
-        opacity: Double
-    ) {
-        let progress = burst.explosionProgress(at: elapsed)
+        let progress = particle.progress(at: elapsed)
         guard progress > 0, progress <= 1 else { return }
 
-        let center = burst.peakPoint(in: size)
-        let burstOpacity = max(0, (1 - progress) * opacity)
-        let flashRadius = CGFloat(10 + progress * 22)
-        let ringRadius = CGFloat(8 + progress * 52)
+        let easedProgress = 1 - pow(1 - progress, 2.15)
+        let position = particle.position(in: size, progress: easedProgress)
+        let previousProgress = max(0, progress - 0.055)
+        let previousEasedProgress = 1 - pow(1 - previousProgress, 2.15)
+        let previousPosition = particle.position(in: size, progress: previousEasedProgress)
+        let particleOpacity = particle.opacity(at: progress) * opacity
+        guard particleOpacity > 0.01 else { return }
+
+        let color = palette[particle.colorIndex % palette.count].opacity(particleOpacity)
+
+        var trail = Path()
+        trail.move(to: previousPosition)
+        trail.addLine(to: position)
+
+        var trailContext = canvas
+        trailContext.opacity = particleOpacity * 0.72
+        trailContext.stroke(
+            trail,
+            with: .color(color),
+            style: StrokeStyle(lineWidth: particle.lineWidth, lineCap: .round)
+        )
+
+        let sparkRect = CGRect(
+            x: position.x - particle.sparkSize / 2,
+            y: position.y - particle.sparkSize / 2,
+            width: particle.sparkSize,
+            height: particle.sparkSize
+        )
+        canvas.fill(Path(ellipseIn: sparkRect), with: .color(color))
+
+        if let emoji = particle.emoji {
+            let resolvedEmoji = canvas.resolve(
+                Text(emoji)
+                    .font(.system(size: particle.emojiSize))
+            )
+            var emojiContext = canvas
+            let emojiScale = particle.startScale + (particle.endScale - particle.startScale) * CGFloat(progress)
+            emojiContext.opacity = particleOpacity
+            emojiContext.translateBy(x: position.x, y: position.y)
+            emojiContext.rotate(by: .degrees(particle.spin * progress))
+            emojiContext.scaleBy(x: emojiScale, y: emojiScale)
+            emojiContext.draw(resolvedEmoji, at: .zero, anchor: .center)
+        }
+    }
+
+    private func drawBackdropFlash(
+        elapsed: TimeInterval,
+        in canvas: GraphicsContext,
+        size: CGSize,
+        opacity: Double
+    ) {
+        let flashProgress = min(max(elapsed / 1.1, 0), 1)
+        let flashOpacity = (1 - flashProgress) * 0.22 * opacity
+        guard flashOpacity > 0.01 else { return }
+
+        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.38)
+        let flashRect = CGRect(
+            x: center.x - size.width * 0.34,
+            y: center.y - size.height * 0.18,
+            width: size.width * 0.68,
+            height: size.height * 0.36
+        )
 
         var glow = canvas
-        glow.opacity = burstOpacity * 0.34
-        glow.addFilter(.blur(radius: 7))
-        glow.fill(
-            Path(ellipseIn: CGRect(
-                x: center.x - flashRadius,
-                y: center.y - flashRadius,
-                width: flashRadius * 2,
-                height: flashRadius * 2
-            )),
-            with: .color(burst.colors[0])
-        )
-
-        var ring = Path()
-        ring.addEllipse(in: CGRect(
-            x: center.x - ringRadius,
-            y: center.y - ringRadius,
-            width: ringRadius * 2,
-            height: ringRadius * 2
-        ))
-
-        var ringContext = canvas
-        ringContext.opacity = burstOpacity * 0.26
-        ringContext.stroke(
-            ring,
-            with: .color(burst.colors[1 % burst.colors.count]),
-            style: StrokeStyle(lineWidth: max(1, 3 - progress * 2))
-        )
-
-        for (index, particle) in burst.particles.enumerated() {
-            let distance = CGFloat(progress) * particle.distance
-            let x = center.x + cos(particle.angle) * distance
-            let y = center.y + sin(particle.angle) * distance
-            let previousDistance = max(0, distance - (particle.distance * 0.14))
-            let trailStart = CGPoint(
-                x: center.x + cos(particle.angle) * previousDistance,
-                y: center.y + sin(particle.angle) * previousDistance
-            )
-            let color = burst.colors[index % burst.colors.count].opacity(burstOpacity)
-
-            var trail = Path()
-            trail.move(to: trailStart)
-            trail.addLine(to: CGPoint(x: x, y: y))
-
-            var trailContext = canvas
-            trailContext.opacity = burstOpacity
-            trailContext.stroke(
-                trail,
-                with: .color(color),
-                style: StrokeStyle(lineWidth: particle.lineWidth, lineCap: .round)
-            )
-
-            let sparkRect = CGRect(
-                x: x - particle.size / 2,
-                y: y - particle.size / 2,
-                width: particle.size,
-                height: particle.size
-            )
-            canvas.fill(Path(ellipseIn: sparkRect), with: .color(color))
-
-            if particle.emojiWeight > 0.45 {
-                let emoji = burst.emojis[index % burst.emojis.count]
-                let resolvedEmoji = canvas.resolve(
-                    Text(emoji)
-                        .font(.system(size: particle.emojiSize))
-                )
-                var emojiContext = canvas
-                emojiContext.opacity = burstOpacity * 0.92
-                emojiContext.draw(resolvedEmoji, at: CGPoint(x: x, y: y), anchor: .center)
-            }
-        }
+        glow.opacity = flashOpacity
+        glow.addFilter(.blur(radius: 18))
+        glow.fill(Path(ellipseIn: flashRect), with: .color(.white.opacity(0.95)))
     }
 
     private func globalOpacity(for elapsed: TimeInterval) -> Double {
-        if elapsed < 2.6 { return 1 }
-        return max(0, 1 - (elapsed - 2.6) / 1.0)
+        if elapsed < 3.6 { return 1 }
+        return max(0, 1 - (elapsed - 3.6) / 1.3)
     }
 }
 
-private struct FireworkShow {
-    let launchX: CGFloat
-    let peak: CGPoint
-    let launchDelay: TimeInterval
-    let colors: [Color]
-    let emojis: [String]
-    let particles: [FireworkParticle]
-
-    func launchPoint(in size: CGSize) -> CGPoint {
-        CGPoint(x: size.width * launchX, y: size.height + 36)
-    }
-
-    func peakPoint(in size: CGSize) -> CGPoint {
-        CGPoint(x: size.width * peak.x, y: size.height * peak.y)
-    }
-
-    func launchProgress(at elapsed: TimeInterval) -> Double {
-        let local = elapsed - launchDelay
-        guard local >= 0 else { return 0 }
-        return min(1, local / 0.82)
-    }
-
-    func explosionProgress(at elapsed: TimeInterval) -> Double {
-        let local = elapsed - (launchDelay + 0.78)
-        guard local >= 0 else { return 0 }
-        return min(1, local / 1.15)
-    }
-
-    static let defaultBursts: [FireworkShow] = [
-        FireworkShow(
-            launchX: 0.14,
-            peak: CGPoint(x: 0.22, y: 0.34),
-            launchDelay: 0.00,
-            colors: [.pink, .orange, .yellow],
-            emojis: ["✨", "🎉", "⭐️"],
-            particles: FireworkParticle.particles(seed: 0, spread: 0.95)
-        ),
-        FireworkShow(
-            launchX: 0.82,
-            peak: CGPoint(x: 0.74, y: 0.28),
-            launchDelay: 0.18,
-            colors: [.blue, .mint, .white],
-            emojis: ["🎊", "💥", "✨"],
-            particles: FireworkParticle.particles(seed: 1, spread: 1.0)
-        ),
-        FireworkShow(
-            launchX: 0.48,
-            peak: CGPoint(x: 0.52, y: 0.18),
-            launchDelay: 0.44,
-            colors: [.purple, .pink, .yellow],
-            emojis: ["🌟", "🎉", "💫"],
-            particles: FireworkParticle.particles(seed: 2, spread: 1.05)
-        ),
-        FireworkShow(
-            launchX: 0.28,
-            peak: CGPoint(x: 0.34, y: 0.22),
-            launchDelay: 0.82,
-            colors: [.orange, .yellow, .white],
-            emojis: ["💥", "✨", "🎊"],
-            particles: FireworkParticle.particles(seed: 3, spread: 0.88)
-        ),
-        FireworkShow(
-            launchX: 0.68,
-            peak: CGPoint(x: 0.62, y: 0.38),
-            launchDelay: 1.08,
-            colors: [.mint, .cyan, .white],
-            emojis: ["✨", "🌟", "💫"],
-            particles: FireworkParticle.particles(seed: 4, spread: 0.92)
-        )
-    ]
-}
-
-private struct FireworkParticle {
-    let angle: CGFloat
-    let distance: CGFloat
-    let size: CGFloat
+private struct WindowBlastParticle {
+    let start: CGPoint
+    let end: CGPoint
+    let controlOffset: CGSize
+    let delay: TimeInterval
+    let duration: TimeInterval
+    let sparkSize: CGFloat
     let lineWidth: CGFloat
     let emojiSize: CGFloat
-    let emojiWeight: Double
+    let emoji: String?
+    let colorIndex: Int
+    let spin: Double
+    let startScale: CGFloat
+    let endScale: CGFloat
 
-    static func particles(seed: Int, spread: CGFloat) -> [FireworkParticle] {
-        (0..<24).map { index in
-            let step = CGFloat(index) / 24.0
-            let angle = step * .pi * 2 + CGFloat(seed) * 0.11
-            let distance = (CGFloat(44 + ((index + seed * 9) % 6) * 12)) * spread
-            let size = CGFloat(2.2) + CGFloat((index + seed) % 3)
-            let lineWidth = CGFloat(1.2) + CGFloat((index + seed * 3) % 2) * 0.8
-            let emojiSize = CGFloat(10 + ((index + seed * 5) % 5) * 2)
-            let emojiWeight = ((Double((index * 7 + seed * 5) % 100)) / 100.0)
-            return FireworkParticle(
-                angle: angle,
-                distance: distance,
-                size: size,
+    func progress(at elapsed: TimeInterval) -> Double {
+        let local = elapsed - delay
+        guard local >= 0 else { return 0 }
+        return min(1, local / duration)
+    }
+
+    func opacity(at progress: Double) -> Double {
+        if progress < 0.10 {
+            return progress / 0.10
+        }
+        if progress < 0.44 {
+            return 1
+        }
+        return max(0, 1 - ((progress - 0.44) / 0.56))
+    }
+
+    func position(in size: CGSize, progress: Double) -> CGPoint {
+        let startPoint = CGPoint(x: size.width * start.x, y: size.height * start.y)
+        let endPoint = CGPoint(x: size.width * end.x, y: size.height * end.y)
+        let controlPoint = CGPoint(
+            x: (startPoint.x + endPoint.x) / 2 + size.width * controlOffset.width,
+            y: (startPoint.y + endPoint.y) / 2 + size.height * controlOffset.height
+        )
+
+        let t = CGFloat(progress)
+        let inverse = 1 - t
+        return CGPoint(
+            x: inverse * inverse * startPoint.x + 2 * inverse * t * controlPoint.x + t * t * endPoint.x,
+            y: inverse * inverse * startPoint.y + 2 * inverse * t * controlPoint.y + t * t * endPoint.y
+        )
+    }
+
+    static let defaultField: [WindowBlastParticle] = {
+        let emojis = ["🎉", "✨", "💥", "🎊", "🌟", "💫", "🪩", "⭐️"]
+        let center = CGPoint(x: 0.5, y: 0.38)
+
+        return (0..<96).map { index in
+            let angle = (CGFloat(index) / 96.0) * (.pi * 2) + CGFloat((index % 7)) * 0.06
+            let startRadiusX = 0.04 + CGFloat((index * 17) % 15) / 100
+            let startRadiusY = 0.03 + CGFloat((index * 11) % 11) / 100
+            let startX = center.x + cos(angle) * startRadiusX
+            let startY = center.y + sin(angle) * startRadiusY
+
+            let endRadiusX = 0.30 + CGFloat((index * 19) % 24) / 100
+            let endRadiusY = 0.24 + CGFloat((index * 23) % 22) / 100
+            let rawEndX = center.x + cos(angle) * endRadiusX
+            let rawEndY = center.y + sin(angle) * endRadiusY
+            let endX = min(max(rawEndX, 0.03), 0.97)
+            let endY = min(max(rawEndY, 0.05), 0.95)
+
+            let controlX = CGFloat(cos(angle) * (0.03 + CGFloat((index * 7) % 8) / 100))
+            let controlY = CGFloat(sin(angle) * (0.04 + CGFloat((index * 13) % 10) / 100))
+            let delay = Double((index * 7) % 18) * 0.035
+            let duration = 1.9 + Double((index * 5) % 8) * 0.14
+            let sparkSize = CGFloat(2.0 + Double((index * 3) % 4) * 1.15)
+            let lineWidth = CGFloat(1.0 + Double((index * 5) % 3) * 0.55)
+            let emojiSize = CGFloat(12 + ((index * 7) % 5) * 2)
+            let emoji = index % 4 == 0 ? nil : emojis[index % emojis.count]
+            let colorIndex = index % 6
+            let spin = Double(((index * 3) % 9) - 4) * 18
+            let startScale = CGFloat(0.76 + Double((index * 2) % 3) * 0.08)
+            let endScale = CGFloat(1.04 + Double((index * 5) % 4) * 0.08)
+
+            return WindowBlastParticle(
+                start: CGPoint(x: startX, y: startY),
+                end: CGPoint(x: endX, y: endY),
+                controlOffset: CGSize(width: controlX, height: controlY),
+                delay: delay,
+                duration: duration,
+                sparkSize: sparkSize,
                 lineWidth: lineWidth,
                 emojiSize: emojiSize,
-                emojiWeight: emojiWeight
+                emoji: emoji,
+                colorIndex: colorIndex,
+                spin: spin,
+                startScale: startScale,
+                endScale: endScale
             )
         }
-    }
+    }()
 }
