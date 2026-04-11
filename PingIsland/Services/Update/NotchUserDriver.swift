@@ -309,6 +309,10 @@ final class UpdateManager: NSObject, ObservableObject {
             }
         }
 
+        if let actionableMessage = actionableMessage(forUpdateCycleError: error) {
+            return .error(message: actionableMessage)
+        }
+
         let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         if message.isEmpty {
             return .error(message: "更新失败，请稍后再试")
@@ -329,6 +333,67 @@ final class UpdateManager: NSObject, ObservableObject {
         }
 
         return .unknown
+    }
+
+    private nonisolated static func actionableMessage(forUpdateCycleError error: NSError) -> String? {
+        if let networkMessage = updateFeedNetworkMessage(from: error) {
+            return networkMessage
+        }
+
+        return nil
+    }
+
+    private nonisolated static func updateFeedNetworkMessage(from error: NSError) -> String? {
+        guard error.domain == SUSparkleErrorDomain,
+              error.code == Int(SUError.downloadError.rawValue) else {
+            return nil
+        }
+
+        if let underlyingError = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+            if let statusCode = httpStatusCode(from: underlyingError) {
+                switch statusCode {
+                case 401, 403:
+                    return "更新源拒绝访问，请确认 appcast 发布资源仍可公开访问"
+                case 404:
+                    return "更新源不可用：未找到已发布的 appcast.xml"
+                case 500 ... 599:
+                    return "更新服务器暂时不可用，请稍后再试"
+                default:
+                    break
+                }
+            }
+
+            if underlyingError.domain == NSURLErrorDomain {
+                switch underlyingError.code {
+                case NSURLErrorNotConnectedToInternet:
+                    return "网络不可用，请检查连接后重试"
+                case NSURLErrorTimedOut:
+                    return "连接更新源超时，请稍后重试"
+                case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost, NSURLErrorDNSLookupFailed:
+                    return "无法连接更新源，请稍后再试"
+                default:
+                    break
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private nonisolated static func httpStatusCode(from error: NSError) -> Int? {
+        if let numericStatusCode = error.userInfo["HTTPStatusCode"] as? NSNumber {
+            return numericStatusCode.intValue
+        }
+
+        let message = error.localizedDescription
+        let pattern = #"\((\d{3})\)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: message, range: NSRange(message.startIndex..., in: message)),
+              let range = Range(match.range(at: 1), in: message) else {
+            return nil
+        }
+
+        return Int(message[range])
     }
 }
 

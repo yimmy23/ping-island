@@ -37,4 +37,32 @@ final class ProcessTreeBuilderTests: XCTestCase {
 
         XCTAssertNil(match)
     }
+
+    func testInteractiveSSHCarriersIgnoreXcodeSSHHelper() {
+        let tree: [Int: Ping_Island.ProcessInfo] = [
+            100: Ping_Island.ProcessInfo(
+                pid: 100,
+                ppid: 1,
+                command: "/Applications/Xcode.app/Contents/SharedFrameworks/DVTSourceControl.framework/Versions/A/XPCServices/com.apple.dt.Xcode.sourcecontrol.SSHHelper.xpc/Contents/MacOS/com.apple.dt.Xcode.sourcecontrol.SSHHelper",
+                tty: nil
+            ),
+            200: Ping_Island.ProcessInfo(
+                pid: 200,
+                ppid: 1,
+                command: "/Users/example/Library/Application Support/iTerm2/iTermServer-3.6.9 socket",
+                tty: "ttys003"
+            ),
+            210: Ping_Island.ProcessInfo(
+                pid: 210,
+                ppid: 200,
+                command: "/usr/bin/ssh devbox",
+                tty: "ttys003"
+            )
+        ]
+
+        let carriers = ProcessTreeBuilder.shared.interactiveSSHCarriers(tree: tree)
+
+        XCTAssertEqual(carriers.count, 1)
+        XCTAssertEqual(carriers.first?.sshPid, 210)
+    }
 }

@@ -20,12 +20,15 @@ protocol JSONLInterruptWatcherDelegate: AnyObject {
 /// Watches a session's JSONL file for interrupt patterns in real-time
 /// Uses DispatchSource for immediate detection when new lines are written
 class JSONLInterruptWatcher {
-    private static let retryDelay: DispatchTimeInterval = .milliseconds(250)
+    private static let initialRetryDelayMs = 250
+    private static let maxRetryDelayMs = 5_000
 
     private var fileHandle: FileHandle?
     private var source: DispatchSourceFileSystemObject?
     private var retryWorkItem: DispatchWorkItem?
     private var lastOffset: UInt64 = 0
+    private var retryAttempt = 0
+    private var loggedMissingFile = false
     private var waitingForFile = false
     private let sessionId: String
     private let filePath: String
@@ -106,9 +109,18 @@ class JSONLInterruptWatcher {
         retryWorkItem = nil
         stopInternal()
 
-        guard FileManager.default.fileExists(atPath: filePath),
-              let handle = FileHandle(forReadingAtPath: filePath) else {
-            logger.warning("Failed to open file: \(self.filePath, privacy: .public)")
+        guard FileManager.default.fileExists(atPath: filePath) else {
+            if !loggedMissingFile {
+                logger.debug("Waiting for transcript file: \(self.filePath, privacy: .public)")
+                loggedMissingFile = true
+            }
+            waitingForFile = true
+            scheduleRetry()
+            return
+        }
+
+        guard let handle = FileHandle(forReadingAtPath: filePath) else {
+            logger.warning("Failed to open transcript file: \(self.filePath, privacy: .public)")
             waitingForFile = true
             scheduleRetry()
             return
@@ -117,6 +129,11 @@ class JSONLInterruptWatcher {
         fileHandle = handle
         let needsInitialSync = waitingForFile
         waitingForFile = false
+        retryAttempt = 0
+        if loggedMissingFile {
+            logger.debug("Attached transcript watcher after file became available: \(self.sessionId.prefix(8), privacy: .public)...")
+            loggedMissingFile = false
+        }
 
         do {
             lastOffset = try handle.seekToEnd()
@@ -250,7 +267,16 @@ class JSONLInterruptWatcher {
             self?.startWatching()
         }
         retryWorkItem = workItem
-        queue.asyncAfter(deadline: .now() + Self.retryDelay, execute: workItem)
+        let delay = Self.retryDelay(forMissingFileAttempt: retryAttempt)
+        retryAttempt += 1
+        queue.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    static func retryDelay(forMissingFileAttempt attempt: Int) -> DispatchTimeInterval {
+        let boundedAttempt = max(0, min(attempt, 8))
+        let multiplier = 1 << boundedAttempt
+        let delayMs = min(initialRetryDelayMs * multiplier, maxRetryDelayMs)
+        return .milliseconds(delayMs)
     }
 
     deinit {

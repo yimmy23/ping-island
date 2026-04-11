@@ -45,4 +45,48 @@ final class UpdateManagerTests: XCTestCase {
             .error(message: "下载失败")
         )
     }
+
+    func testAppcast404ErrorMapsToActionableErrorState() {
+        let error = NSError(
+            domain: SUSparkleErrorDomain,
+            code: Int(SUError.downloadError.rawValue),
+            userInfo: [
+                NSLocalizedDescriptionKey: "获取升级信息时出现错误，请稍后再试",
+                NSUnderlyingErrorKey: NSError(
+                    domain: SUSparkleErrorDomain,
+                    code: Int(SUError.downloadError.rawValue),
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "A network error occurred while downloading https://github.com/wudanwu/Island/releases/latest/download/appcast.xml. not found (404)"
+                    ]
+                )
+            ]
+        )
+
+        XCTAssertEqual(
+            UpdateManager.terminalState(forUpdateCycleError: error),
+            .error(message: "更新源不可用：未找到已发布的 appcast.xml")
+        )
+    }
+
+    func testOfflineUpdateFeedErrorMapsToActionableErrorState() {
+        let error = NSError(
+            domain: SUSparkleErrorDomain,
+            code: Int(SUError.downloadError.rawValue),
+            userInfo: [
+                NSLocalizedDescriptionKey: "获取升级信息时出现错误，请稍后再试",
+                NSUnderlyingErrorKey: NSError(
+                    domain: NSURLErrorDomain,
+                    code: NSURLErrorNotConnectedToInternet,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "The Internet connection appears to be offline."
+                    ]
+                )
+            ]
+        )
+
+        XCTAssertEqual(
+            UpdateManager.terminalState(forUpdateCycleError: error),
+            .error(message: "网络不可用，请检查连接后重试")
+        )
+    }
 }

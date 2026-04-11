@@ -154,6 +154,44 @@ struct TerminalAppRegistry: Sendable {
         return terminalBundleIdentifiersByProgram[normalizedProgram]
     }
 
+    nonisolated static func inferredBundleIdentifier(forCommand command: String?) -> String? {
+        guard let normalizedCommand = command?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+            !normalizedCommand.isEmpty else {
+            return nil
+        }
+
+        if normalizedCommand.contains("itermserver") || normalizedCommand.contains("iterm2") {
+            return "com.googlecode.iterm2"
+        }
+        if normalizedCommand.contains("/terminal.app/")
+            || normalizedCommand.hasSuffix("/terminal")
+            || normalizedCommand.contains("apple_terminal") {
+            return "com.apple.Terminal"
+        }
+        if normalizedCommand.contains("ghostty") {
+            return "com.mitchellh.ghostty"
+        }
+        if normalizedCommand.contains("wezterm") {
+            return "com.github.wez.wezterm"
+        }
+        if normalizedCommand.contains("warp") {
+            return "dev.warp.Warp-Stable"
+        }
+        if normalizedCommand.contains("alacritty") {
+            return "io.alacritty"
+        }
+        if normalizedCommand.contains("kitty") {
+            return "net.kovidgoyal.kitty"
+        }
+        if normalizedCommand.contains("hyper") {
+            return "co.zeit.hyper"
+        }
+
+        return nil
+    }
+
     nonisolated static func canonicalDisplayName(
         bundleIdentifier: String?,
         program: String?,

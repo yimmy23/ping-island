@@ -20,4 +20,14 @@ final class JSONLInterruptWatcherTests: XCTestCase {
 
         XCTAssertEqual(resolved, rolloutURL.path)
     }
+
+    func testRetryDelayUsesExponentialBackoffWithCap() {
+        XCTAssertEqual(JSONLInterruptWatcher.retryDelay(forMissingFileAttempt: 0), .milliseconds(250))
+        XCTAssertEqual(JSONLInterruptWatcher.retryDelay(forMissingFileAttempt: 1), .milliseconds(500))
+        XCTAssertEqual(JSONLInterruptWatcher.retryDelay(forMissingFileAttempt: 2), .milliseconds(1_000))
+        XCTAssertEqual(JSONLInterruptWatcher.retryDelay(forMissingFileAttempt: 3), .milliseconds(2_000))
+        XCTAssertEqual(JSONLInterruptWatcher.retryDelay(forMissingFileAttempt: 4), .milliseconds(4_000))
+        XCTAssertEqual(JSONLInterruptWatcher.retryDelay(forMissingFileAttempt: 5), .milliseconds(5_000))
+        XCTAssertEqual(JSONLInterruptWatcher.retryDelay(forMissingFileAttempt: 99), .milliseconds(5_000))
+    }
 }

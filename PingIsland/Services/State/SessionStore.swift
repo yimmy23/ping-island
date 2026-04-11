@@ -1822,7 +1822,7 @@ actor SessionStore {
         session.lastActivity = snapshot.updatedAt
 
         let placeholderCandidate = isLikelyEmptyCodexPlaceholder(session)
-        Self.logger.info(
+        Self.logger.debug(
             "Codex snapshot sync session=\(resolvedSessionId, privacy: .public) sourceThread=\(snapshot.threadId, privacy: .public) ingress=\(ingress.rawValue, privacy: .public) historyItems=\(snapshot.historyItems.count, privacy: .public) namePresent=\(snapshot.name?.isEmpty == false, privacy: .public) previewPresent=\(snapshot.preview?.isEmpty == false, privacy: .public) filePathPresent=\(session.clientInfo.sessionFilePath?.isEmpty == false, privacy: .public) placeholderCandidate=\(placeholderCandidate, privacy: .public)"
         )
 

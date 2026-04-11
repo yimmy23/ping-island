@@ -127,40 +127,7 @@ struct ProcessTreeBuilder: Sendable {
         tree: [Int: ProcessInfo]
     ) -> SSHCarrierMatch? {
         let hostTokens = remoteHostTokens(from: remoteHostHint)
-
-        let matches = tree.values.compactMap { info -> (match: SSHCarrierMatch, score: Int)? in
-            guard isInteractiveSSHProcess(info.command) else { return nil }
-            guard let terminalPid = findTerminalPid(forProcess: info.pid, tree: tree) else { return nil }
-
-            let loweredCommand = info.command.lowercased()
-            let hostMatchCount = hostTokens.filter { loweredCommand.contains($0) }.count
-            if !hostTokens.isEmpty, hostMatchCount == 0 {
-                return nil
-            }
-
-            let tty = info.tty
-            let candidatePIDs: [Int]
-            if let tty {
-                candidatePIDs = self.candidateProcessIDs(forTTY: tty, tree: tree)
-            } else {
-                candidatePIDs = Array(Set([info.pid, terminalPid])).sorted()
-            }
-
-            var score = hostMatchCount * 100
-            if tty != nil {
-                score += 10
-            }
-
-            return (
-                SSHCarrierMatch(
-                    sshPid: info.pid,
-                    terminalPid: terminalPid,
-                    tty: tty,
-                    candidateProcessIDs: candidatePIDs
-                ),
-                score
-            )
-        }
+        let matches = interactiveSSHCarrierMatches(tree: tree, hostTokens: hostTokens)
 
         if matches.isEmpty {
             return nil
@@ -184,6 +151,10 @@ struct ProcessTreeBuilder: Sendable {
         }
 
         return best.match
+    }
+
+    nonisolated func interactiveSSHCarriers(tree: [Int: ProcessInfo]) -> [SSHCarrierMatch] {
+        interactiveSSHCarrierMatches(tree: tree, hostTokens: []).map(\.match)
     }
 
     nonisolated func candidateProcessIDs(forTTY tty: String, tree: [Int: ProcessInfo]) -> [Int] {
@@ -267,10 +238,51 @@ struct ProcessTreeBuilder: Sendable {
         guard lower.contains("ssh") else { return false }
         guard !lower.contains("sshd") else { return false }
         guard !lower.contains("ssh-agent") else { return false }
+        guard !lower.contains("sourcecontrol.sshhelper") else { return false }
+        guard !lower.contains("xcode.sourcecontrol.sshhelper") else { return false }
         guard !lower.contains("scp ") else { return false }
         guard !lower.contains("sftp ") else { return false }
         guard !lower.contains("remote-agent-attach") else { return false }
         return true
+    }
+
+    private nonisolated func interactiveSSHCarrierMatches(
+        tree: [Int: ProcessInfo],
+        hostTokens: [String]
+    ) -> [(match: SSHCarrierMatch, score: Int)] {
+        tree.values.compactMap { info -> (match: SSHCarrierMatch, score: Int)? in
+            guard isInteractiveSSHProcess(info.command) else { return nil }
+            guard let terminalPid = findTerminalPid(forProcess: info.pid, tree: tree) else { return nil }
+
+            let loweredCommand = info.command.lowercased()
+            let hostMatchCount = hostTokens.filter { loweredCommand.contains($0) }.count
+            if !hostTokens.isEmpty, hostMatchCount == 0 {
+                return nil
+            }
+
+            let tty = info.tty
+            let candidatePIDs: [Int]
+            if let tty {
+                candidatePIDs = self.candidateProcessIDs(forTTY: tty, tree: tree)
+            } else {
+                candidatePIDs = Array(Set([info.pid, terminalPid])).sorted()
+            }
+
+            var score = hostMatchCount * 100
+            if tty != nil {
+                score += 10
+            }
+
+            return (
+                SSHCarrierMatch(
+                    sshPid: info.pid,
+                    terminalPid: terminalPid,
+                    tty: tty,
+                    candidateProcessIDs: candidatePIDs
+                ),
+                score
+            )
+        }
     }
 
     private nonisolated func remoteHostTokens(from remoteHostHint: String?) -> [String] {

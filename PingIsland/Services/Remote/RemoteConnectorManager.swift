@@ -374,6 +374,10 @@ final class RemoteConnectorManager: ObservableObject {
             guard let provider = SessionProvider(rawValue: payload.provider) else {
                 return
             }
+            let resolvedRemoteHost = Self.resolvedRemoteHostHint(
+                payloadRemoteHost: payload.clientInfo.remoteHost,
+                endpoint: endpoint(for: endpointID)
+            )
             let clientInfo = SessionClientInfo(
                 kind: SessionClientKind(rawValue: payload.clientInfo.kind) ?? .custom,
                 profileID: payload.clientInfo.profileID,
@@ -384,7 +388,7 @@ final class RemoteConnectorManager: ObservableObject {
                 originator: payload.clientInfo.originator,
                 threadSource: payload.clientInfo.threadSource,
                 transport: payload.clientInfo.transport,
-                remoteHost: payload.clientInfo.remoteHost,
+                remoteHost: resolvedRemoteHost,
                 sessionFilePath: payload.clientInfo.sessionFilePath,
                 terminalBundleIdentifier: payload.clientInfo.terminalBundleIdentifier,
                 terminalProgram: payload.clientInfo.terminalProgram,
@@ -589,6 +593,41 @@ final class RemoteConnectorManager: ObservableObject {
         endpoints.first { $0.id == id }
     }
 
+    static func resolvedRemoteHostHint(
+        payloadRemoteHost: String?,
+        endpoint: RemoteEndpoint?
+    ) -> String? {
+        if let payloadRemoteHost = sanitizedNonEmpty(payloadRemoteHost) {
+            if isIPAddressLike(payloadRemoteHost),
+               let detectedHostname = sanitizedNonEmpty(endpoint?.detectedHostname) {
+                return detectedHostname
+            }
+            return payloadRemoteHost
+        }
+
+        if let detectedHostname = sanitizedNonEmpty(endpoint?.detectedHostname) {
+            return detectedHostname
+        }
+
+        guard let sshTarget = sanitizedNonEmpty(endpoint?.sshTarget) else {
+            return nil
+        }
+
+        let withoutUser = sshTarget.split(separator: "@").last.map(String.init) ?? sshTarget
+        if withoutUser.hasPrefix("["),
+           let closingBracketIndex = withoutUser.firstIndex(of: "]") {
+            let bracketHost = String(withoutUser[withoutUser.index(after: withoutUser.startIndex)..<closingBracketIndex])
+            return sanitizedNonEmpty(bracketHost)
+        }
+
+        if let colonIndex = withoutUser.lastIndex(of: ":"),
+           withoutUser[withoutUser.index(after: colonIndex)...].allSatisfy(\.isNumber) {
+            return sanitizedNonEmpty(String(withoutUser[..<colonIndex]))
+        }
+
+        return sanitizedNonEmpty(withoutUser)
+    }
+
     private func updateEndpoint(_ endpoint: RemoteEndpoint) {
         guard let index = endpoints.firstIndex(where: { $0.id == endpoint.id }) else {
             return
@@ -656,6 +695,28 @@ final class RemoteConnectorManager: ObservableObject {
     private func persistEndpoints() {
         guard let data = try? JSONEncoder().encode(endpoints) else { return }
         defaults.set(data, forKey: persistenceKey)
+    }
+
+    private static func sanitizedNonEmpty(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func isIPAddressLike(_ value: String) -> Bool {
+        let candidate = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ipv4Parts = candidate.split(separator: ".")
+        if ipv4Parts.count == 4,
+           ipv4Parts.allSatisfy({ part in
+               guard let octet = Int(part) else { return false }
+               return octet >= 0 && octet <= 255
+           }) {
+            return true
+        }
+
+        return candidate.contains(":") && candidate.range(of: "^[0-9a-fA-F:]+$", options: .regularExpression) != nil
     }
 
     private func resolvedCredential(

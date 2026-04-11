@@ -132,7 +132,8 @@ actor TerminalSessionFocuser {
             let iTermSessionIdentifier = clientInfo?.iTermSessionIdentifier ?? clientInfo?.terminalSessionIdentifier
             guard let selector = iTermScriptSelector(
                 for: tty,
-                sessionIdentifier: iTermSessionIdentifier
+                sessionIdentifier: iTermSessionIdentifier,
+                titleHint: remoteHostHint
             ) else {
                 logger.debug("No iTerm session identifier or tty available for bundle \(bundleIdentifier, privacy: .public); skipping AppleScript fallback")
                 await FocusDiagnosticsStore.shared.record(
@@ -409,9 +410,14 @@ actor TerminalSessionFocuser {
     private struct ITermScriptSelector {
         let sessionIdentifier: String?
         let tty: String?
+        let titleHint: String?
     }
 
-    private nonisolated func iTermScriptSelector(for tty: String?, sessionIdentifier: String?) -> ITermScriptSelector? {
+    private nonisolated func iTermScriptSelector(
+        for tty: String?,
+        sessionIdentifier: String?,
+        titleHint: String? = nil
+    ) -> ITermScriptSelector? {
         let normalizedSessionIdentifier = normalizedITermSessionIdentifier(sessionIdentifier)
         let normalizedTTY = tty?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -420,18 +426,33 @@ actor TerminalSessionFocuser {
         let usableSessionIdentifier = usableTTY == nil && normalizedSessionIdentifier?.isEmpty == false
             ? normalizedSessionIdentifier
             : nil
+        let usableTitleHint: String?
+        if usableTTY == nil && usableSessionIdentifier == nil,
+           let trimmedTitleHint = titleHint?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmedTitleHint.isEmpty {
+            usableTitleHint = trimmedTitleHint
+        } else {
+            usableTitleHint = nil
+        }
 
-        guard usableSessionIdentifier != nil || usableTTY != nil else {
+        guard usableSessionIdentifier != nil || usableTTY != nil || usableTitleHint != nil else {
             return nil
         }
 
         return ITermScriptSelector(
             sessionIdentifier: usableSessionIdentifier,
-            tty: usableTTY
+            tty: usableTTY,
+            titleHint: usableTitleHint
         )
     }
 
     private nonisolated func iTermRestoreScriptLines(for selector: ITermScriptSelector) -> [String] {
+        if selector.tty == nil,
+           selector.sessionIdentifier == nil,
+           selector.titleHint?.isEmpty == false {
+            return iTermUniqueTitleScriptLines(selector: selector, restoreWindowOnly: true)
+        }
+
         var lines: [String] = [
             "tell application id \"com.googlecode.iterm2\"",
             "repeat with theWindow in windows",
@@ -462,6 +483,12 @@ actor TerminalSessionFocuser {
     }
 
     private nonisolated func iTermSelectionScriptLines(for selector: ITermScriptSelector) -> [String] {
+        if selector.tty == nil,
+           selector.sessionIdentifier == nil,
+           selector.titleHint?.isEmpty == false {
+            return iTermUniqueTitleScriptLines(selector: selector, restoreWindowOnly: false)
+        }
+
         var lines: [String] = [
             "tell application id \"com.googlecode.iterm2\"",
             "repeat with theWindow in windows",
@@ -520,9 +547,96 @@ actor TerminalSessionFocuser {
         }
     }
 
+    private nonisolated func iTermUniqueTitleScriptLines(
+        selector: ITermScriptSelector,
+        restoreWindowOnly: Bool
+    ) -> [String] {
+        guard let titleHint = selector.titleHint else {
+            return []
+        }
+
+        let body: [String]
+        if restoreWindowOnly {
+            body = [
+                "set targetWindowId to (id of theWindow)",
+                "set resolvedWindow to first window whose id is targetWindowId",
+                "set miniaturized of resolvedWindow to false",
+                "select resolvedWindow",
+                "activate",
+                "return \"ok\""
+            ]
+        } else {
+            body = [
+                "set targetWindowId to (id of theWindow)",
+                "set resolvedWindow to first window whose id is targetWindowId",
+                "select theTab",
+                "select theSession",
+                "select resolvedWindow",
+                "activate",
+                "return \"ok\""
+            ]
+        }
+
+        var lines: [String] = [
+            "tell application id \"com.googlecode.iterm2\"",
+            "set targetHint to \(Self.appleScriptStringLiteral(titleHint))",
+            "set matchingSessionIDs to {}",
+            "repeat with theWindow in windows",
+            "repeat with theTab in tabs of theWindow",
+            "repeat with theSession in sessions of theTab",
+            "try",
+            "set sessionName to (name of theSession as text)",
+            "if sessionName contains targetHint then",
+            "copy (id of theSession as text) to end of matchingSessionIDs",
+            "end if",
+            "end try",
+            "end repeat",
+            "end repeat",
+            "end repeat",
+            "if (count of matchingSessionIDs) is not 1 then",
+            "return \"not-found\"",
+            "end if",
+            "set targetSessionID to item 1 of matchingSessionIDs",
+            "repeat with theWindow in windows",
+            "repeat with theTab in tabs of theWindow",
+            "repeat with theSession in sessions of theTab",
+            "try",
+            "if (id of theSession as text) is targetSessionID then"
+        ]
+
+        lines.append(contentsOf: body)
+        lines.append(contentsOf: [
+            "end if",
+            "end try",
+            "end repeat",
+            "end repeat",
+            "end repeat",
+            "return \"not-found\"",
+            "end tell"
+        ])
+
+        return lines
+    }
+
     static func iTermSelectionScriptLinesForTesting(tty: String?, sessionIdentifier: String?) -> [String] {
         let focuser = TerminalSessionFocuser.shared
         guard let selector = focuser.iTermScriptSelector(for: tty, sessionIdentifier: sessionIdentifier) else {
+            return []
+        }
+        return focuser.iTermSelectionScriptLines(for: selector)
+    }
+
+    static func iTermSelectionScriptLinesForTesting(
+        tty: String?,
+        sessionIdentifier: String?,
+        titleHint: String?
+    ) -> [String] {
+        let focuser = TerminalSessionFocuser.shared
+        guard let selector = focuser.iTermScriptSelector(
+            for: tty,
+            sessionIdentifier: sessionIdentifier,
+            titleHint: titleHint
+        ) else {
             return []
         }
         return focuser.iTermSelectionScriptLines(for: selector)

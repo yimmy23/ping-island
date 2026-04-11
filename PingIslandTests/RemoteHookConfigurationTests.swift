@@ -106,6 +106,65 @@ final class RemoteHookConfigurationTests: XCTestCase {
         )
     }
 
+    func testResolvedRemoteHostHintPrefersPayloadHost() {
+        let endpoint = RemoteEndpoint(
+            displayName: "Known Host",
+            sshTarget: "dev@example"
+        )
+
+        XCTAssertEqual(
+            RemoteConnectorManager.resolvedRemoteHostHint(
+                payloadRemoteHost: "remote-box",
+                endpoint: endpoint
+            ),
+            "remote-box"
+        )
+    }
+
+    func testResolvedRemoteHostHintFallsBackToDetectedHostnameThenSSHTarget() {
+        var detectedEndpoint = RemoteEndpoint(
+            displayName: "Known Host",
+            sshTarget: "dev@example"
+        )
+        detectedEndpoint.detectedHostname = "detected-box"
+
+        XCTAssertEqual(
+            RemoteConnectorManager.resolvedRemoteHostHint(
+                payloadRemoteHost: nil,
+                endpoint: detectedEndpoint
+            ),
+            "detected-box"
+        )
+
+        let targetOnlyEndpoint = RemoteEndpoint(
+            displayName: "Known Host",
+            sshTarget: "dev@box.example.com:2222"
+        )
+        XCTAssertEqual(
+            RemoteConnectorManager.resolvedRemoteHostHint(
+                payloadRemoteHost: nil,
+                endpoint: targetOnlyEndpoint
+            ),
+            "box.example.com"
+        )
+    }
+
+    func testResolvedRemoteHostHintPrefersDetectedHostnameOverPayloadIP() {
+        var endpoint = RemoteEndpoint(
+            displayName: "Known Host",
+            sshTarget: "dev@172.25.145.237"
+        )
+        endpoint.detectedHostname = "devbox"
+
+        XCTAssertEqual(
+            RemoteConnectorManager.resolvedRemoteHostHint(
+                payloadRemoteHost: "172.25.145.237",
+                endpoint: endpoint
+            ),
+            "devbox"
+        )
+    }
+
     func testManagedConfigurationDataInstallsClaudeHooksWithoutRemovingExistingEntries() throws {
         let existingJSON = """
         {

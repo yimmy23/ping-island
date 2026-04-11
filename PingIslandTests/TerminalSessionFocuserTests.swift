@@ -25,6 +25,19 @@ final class TerminalSessionFocuserTests: XCTestCase {
         XCTAssertTrue(script.contains("AF9E91C7-A845-4A30-8A18-54C51B61B1B4"))
     }
 
+    func testITermSelectionScriptCanUniquelyMatchRemoteHostTitleHint() {
+        let lines = TerminalSessionFocuser.iTermSelectionScriptLinesForTesting(
+            tty: nil,
+            sessionIdentifier: nil,
+            titleHint: "devbox"
+        )
+        let script = lines.joined(separator: "\n")
+
+        XCTAssertTrue(script.contains("set targetHint to \"devbox\""))
+        XCTAssertTrue(script.contains("set matchingSessionIDs to {}"))
+        XCTAssertTrue(script.contains("if (count of matchingSessionIDs) is not 1 then"))
+    }
+
     func testGhosttySelectionScriptOnlyUsesUnambiguousWorkspaceMatches() {
         let lines = TerminalSessionFocuser.ghosttySelectionScriptLines(
             terminalSessionIdentifier: nil,

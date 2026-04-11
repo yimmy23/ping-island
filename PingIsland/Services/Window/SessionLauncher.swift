@@ -449,6 +449,11 @@ actor SessionLauncher {
         }
 
         Self.logger.debug("activateTerminal(forProcess:) process \(pid, privacy: .public) -> terminalPid \(terminalPid, privacy: .public)")
+        let resolvedTerminalPid = await resolvedTerminalApplicationPID(
+            from: terminalPid,
+            clientInfo: clientInfo,
+            tree: tree
+        )
 
         let resolvedTTY = tree[pid]?.tty ?? tree[terminalPid]?.tty
         let candidateProcessIDs: [Int]
@@ -459,7 +464,7 @@ actor SessionLauncher {
         }
 
         if await TerminalSessionFocuser.shared.focusSession(
-            terminalPid: terminalPid,
+            terminalPid: resolvedTerminalPid,
             tty: resolvedTTY,
             candidateProcessIDs: candidateProcessIDs,
             sessionId: sessionId,
@@ -476,9 +481,9 @@ actor SessionLauncher {
         }
 
         await FocusDiagnosticsStore.shared.record(
-            "SessionLauncher process-terminal fallback-app session=\(sessionId) pid=\(pid) terminalPid=\(terminalPid)"
+            "SessionLauncher process-terminal fallback-app session=\(sessionId) pid=\(pid) terminalPid=\(resolvedTerminalPid)"
         )
-        return await activateApplication(processIdentifier: terminalPid, activateAllWindows: false)
+        return await activateApplication(processIdentifier: resolvedTerminalPid, activateAllWindows: false)
     }
 
     private func activateTerminal(
@@ -500,9 +505,14 @@ actor SessionLauncher {
         }
 
         Self.logger.debug("activateTerminal(forTTY:) tty=\(tty, privacy: .public) -> terminalPid \(terminalPid, privacy: .public)")
+        let resolvedTerminalPid = await resolvedTerminalApplicationPID(
+            from: terminalPid,
+            clientInfo: clientInfo,
+            tree: tree
+        )
 
         if await TerminalSessionFocuser.shared.focusSession(
-            terminalPid: terminalPid,
+            terminalPid: resolvedTerminalPid,
             tty: tty,
             candidateProcessIDs: candidateProcessIDs,
             sessionId: sessionId,
@@ -520,9 +530,9 @@ actor SessionLauncher {
 
         Self.logger.debug("Falling back to app activation for tty=\(tty, privacy: .public) terminalPid=\(terminalPid, privacy: .public)")
         await FocusDiagnosticsStore.shared.record(
-            "SessionLauncher tty-terminal fallback-app session=\(sessionId) tty=\(tty) terminalPid=\(terminalPid)"
+            "SessionLauncher tty-terminal fallback-app session=\(sessionId) tty=\(tty) terminalPid=\(resolvedTerminalPid)"
         )
-        return await activateApplication(processIdentifier: terminalPid, activateAllWindows: false)
+        return await activateApplication(processIdentifier: resolvedTerminalPid, activateAllWindows: false)
     }
 
     private func activateRemoteCarrierTerminal(_ session: SessionState) async -> Bool {
@@ -531,6 +541,38 @@ actor SessionLauncher {
             remoteHostHint: session.clientInfo.remoteHost,
             tree: tree
         ) else {
+            let fallbackCarriers = ProcessTreeBuilder.shared.interactiveSSHCarriers(tree: tree)
+            let uniqueTerminalPIDs = Set(fallbackCarriers.map(\.terminalPid))
+            if uniqueTerminalPIDs.count == 1,
+               let terminalPid = uniqueTerminalPIDs.first {
+                let candidateProcessIDs = Array(Set(fallbackCarriers.flatMap(\.candidateProcessIDs))).sorted()
+                let uniqueTTYs = Set(fallbackCarriers.compactMap(\.tty))
+                let fallbackTTY = uniqueTTYs.count == 1 ? uniqueTTYs.first : nil
+                let resolvedTerminalPid = await resolvedTerminalApplicationPID(
+                    from: terminalPid,
+                    clientInfo: session.clientInfo,
+                    tree: tree
+                )
+                await FocusDiagnosticsStore.shared.record(
+                    "SessionLauncher remote-carrier fallback-terminal session=\(session.sessionId) remoteHost=\(session.clientInfo.remoteHost ?? "nil") terminalPid=\(resolvedTerminalPid) carrierCount=\(fallbackCarriers.count) tty=\(fallbackTTY ?? "nil")"
+                )
+
+                if await TerminalSessionFocuser.shared.focusSession(
+                    terminalPid: resolvedTerminalPid,
+                    tty: fallbackTTY,
+                    candidateProcessIDs: candidateProcessIDs,
+                    sessionId: session.sessionId,
+                    clientInfo: session.clientInfo,
+                    workspacePath: session.cwd,
+                    launchURL: session.clientInfo.launchURL,
+                    remoteHostHint: session.clientInfo.remoteHost
+                ) {
+                    return true
+                }
+
+                return await activateApplication(processIdentifier: resolvedTerminalPid, activateAllWindows: false)
+            }
+
             await FocusDiagnosticsStore.shared.record(
                 "SessionLauncher remote-carrier unresolved session=\(session.sessionId) remoteHost=\(session.clientInfo.remoteHost ?? "nil")"
             )
@@ -539,6 +581,11 @@ actor SessionLauncher {
 
         await FocusDiagnosticsStore.shared.record(
             "SessionLauncher remote-carrier matched session=\(session.sessionId) remoteHost=\(session.clientInfo.remoteHost ?? "nil") sshPid=\(carrier.sshPid) terminalPid=\(carrier.terminalPid) tty=\(carrier.tty ?? "nil")"
+        )
+        let resolvedTerminalPid = await resolvedTerminalApplicationPID(
+            from: carrier.terminalPid,
+            clientInfo: session.clientInfo,
+            tree: tree
         )
 
         if let tty = carrier.tty,
@@ -554,7 +601,7 @@ actor SessionLauncher {
         }
 
         if await TerminalSessionFocuser.shared.focusSession(
-            terminalPid: carrier.terminalPid,
+            terminalPid: resolvedTerminalPid,
             tty: carrier.tty,
             candidateProcessIDs: carrier.candidateProcessIDs,
             sessionId: session.sessionId,
@@ -566,7 +613,45 @@ actor SessionLauncher {
             return true
         }
 
-        return await activateApplication(processIdentifier: carrier.terminalPid, activateAllWindows: false)
+        return await activateApplication(processIdentifier: resolvedTerminalPid, activateAllWindows: false)
+    }
+
+    private func resolvedTerminalApplicationPID(
+        from terminalPid: Int,
+        clientInfo: SessionClientInfo,
+        tree: [Int: ProcessInfo]
+    ) async -> Int {
+        let hasRunningApplication = await MainActor.run {
+            NSRunningApplication(processIdentifier: pid_t(terminalPid)) != nil
+        }
+        if hasRunningApplication {
+            return terminalPid
+        }
+
+        let candidateBundleIdentifiers = Self.orderedUniqueBundleIdentifiers(
+            [
+                clientInfo.terminalBundleIdentifier,
+                clientInfo.bundleIdentifier,
+                tree[terminalPid].flatMap { TerminalAppRegistry.inferredBundleIdentifier(forCommand: $0.command) }
+            ]
+            .compactMap { $0 }
+            .map(TerminalAppRegistry.normalizedHostBundleIdentifier(for:))
+        )
+
+        for bundleIdentifier in candidateBundleIdentifiers {
+            if let runningAppPid = await MainActor.run(resultType: Int?.self, body: {
+                NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+                    .first(where: { !$0.isTerminated })
+                    .map { Int($0.processIdentifier) }
+            }) {
+                await FocusDiagnosticsStore.shared.record(
+                    "SessionLauncher remapped-terminal helperPid=\(terminalPid) bundle=\(bundleIdentifier) appPid=\(runningAppPid)"
+                )
+                return runningAppPid
+            }
+        }
+
+        return terminalPid
     }
 
     private func findTmuxClientTerminal(forSession session: String, tree: [Int: ProcessInfo]) async -> Int? {
