@@ -3,6 +3,28 @@ import Sparkle
 @testable import Ping_Island
 
 final class UpdateManagerTests: XCTestCase {
+    func testSilentUpdateCheckIntervalMatchesTenMinuteIdlePolicy() {
+        XCTAssertEqual(UpdateManager.silentCheckInterval, 10 * 60)
+    }
+
+    func testHasActiveSessionsReturnsTrueWhenAnySessionIsProcessing() {
+        let sessions = [
+            SessionState(sessionId: "idle", cwd: "/tmp/idle", phase: .idle),
+            SessionState(sessionId: "processing", cwd: "/tmp/processing", phase: .processing)
+        ]
+
+        XCTAssertTrue(UpdateManager.hasActiveSessions(in: sessions))
+    }
+
+    func testHasActiveSessionsIgnoresWaitingAndEndedSessions() {
+        let sessions = [
+            SessionState(sessionId: "waiting", cwd: "/tmp/waiting", phase: .waitingForInput),
+            SessionState(sessionId: "ended", cwd: "/tmp/ended", phase: .ended)
+        ]
+
+        XCTAssertFalse(UpdateManager.hasActiveSessions(in: sessions))
+    }
+
     func testTruncatedHttpsFeedURLIsRejected() {
         XCTAssertFalse(UpdateManager.isValidFeedURL("https:"))
     }
