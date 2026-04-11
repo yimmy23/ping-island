@@ -96,7 +96,8 @@ final class OpenCodeIntegrationTests: XCTestCase {
         let profile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "opencode-hooks"))
         let source = HookInstaller.managedPluginSource(for: profile)
 
-        XCTAssertTrue(source.contains("export default async ({ client, serverUrl }) =>"))
+        XCTAssertTrue(source.contains("export const server = async ({ client, serverUrl }) =>"))
+        XCTAssertTrue(source.contains("export default server"))
         XCTAssertTrue(source.contains("type === \"permission.asked\""))
         XCTAssertTrue(source.contains("type === \"question.asked\""))
         XCTAssertTrue(source.contains("hook_event_name: \"PermissionRequest\""))

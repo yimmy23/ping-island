@@ -1306,7 +1306,7 @@ struct HookInstaller {
           return sessions.get(sessionID);
         }
 
-        export default async ({ client, serverUrl }) => {
+        export const server = async ({ client, serverUrl }) => {
           const internalFetch = client?._client?.getConfig?.()?.fetch ?? globalThis.fetch ?? null;
           const serverPort = Number.parseInt(serverUrl?.port || "", 10) || 4096;
 
@@ -1385,7 +1385,10 @@ struct HookInstaller {
             }
           }
         };
+
         };
+
+        export default server;
         """
     }
 
