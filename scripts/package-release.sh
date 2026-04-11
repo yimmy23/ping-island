@@ -163,6 +163,28 @@ generate_sparkle_appcast() {
     echo "Appcast generated at: $appcast_dir/appcast.xml"
 }
 
+validate_embedded_sparkle_configuration() {
+    local info_plist="$APP_PATH/Contents/Info.plist"
+    local feed_url
+    local public_key
+
+    feed_url=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$info_plist" 2>/dev/null || true)
+    public_key=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "$info_plist" 2>/dev/null || true)
+
+    if [ -z "$feed_url" ] || [ -z "$public_key" ]; then
+        echo "ERROR: Sparkle update configuration is missing from the exported app bundle."
+        echo "ERROR: SUFeedURL='$feed_url'"
+        echo "ERROR: SUPublicEDKey present=$([ -n "$public_key" ] && echo yes || echo no)"
+        exit 1
+    fi
+
+    if [[ "$feed_url" != *"://"* ]]; then
+        echo "ERROR: Sparkle feed URL in the exported app bundle looks truncated: $feed_url"
+        echo "ERROR: If this came from an xcconfig file, avoid raw // by composing the URL with a slash helper."
+        exit 1
+    fi
+}
+
 require_command xcodebuild
 require_command xcrun
 require_command ditto
@@ -229,6 +251,10 @@ fi
 if [ -f "$NOTES_PATH" ]; then
     cp "$NOTES_PATH" "$NOTES_ASSET_PATH"
     echo "Release notes copied: $NOTES_ASSET_PATH"
+fi
+
+if [ "$GENERATE_APPCAST" = "1" ]; then
+    validate_embedded_sparkle_configuration
 fi
 
 generate_sparkle_appcast

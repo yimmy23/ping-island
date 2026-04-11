@@ -41,6 +41,8 @@ Optional secrets:
 
 If you configure Sparkle updates in CI, set all three Sparkle secrets together. If you leave them unset, the workflow still produces signed `.dmg` / `.zip` packages, but it will skip appcast generation and upload.
 
+Important: when writing `SPARKLE_APPCAST_URL` into an `.xcconfig`, do not use a raw `https://...` literal. xcconfig treats `//` as the start of a comment, so compose the URL with a slash helper such as `_XC_SLASH = /`.
+
 ### Export the signing certificate
 
 1. Open `Keychain Access`.
@@ -79,6 +81,14 @@ If you want the full local release path including Sparkle appcast generation and
 2. Fill in:
    - `SPARKLE_APPCAST_URL`
    - `SPARKLE_PUBLIC_ED_KEY`
+
+   Example:
+
+```xcconfig
+_XC_SLASH = /
+SPARKLE_APPCAST_URL = https:$(_XC_SLASH)/github.com/<owner>/<repo>/releases/latest/download/appcast.xml
+SPARKLE_PUBLIC_ED_KEY = YOUR_PUBLIC_ED_KEY
+```
 3. Generate Sparkle signing keys if you have not already:
 
 ```bash

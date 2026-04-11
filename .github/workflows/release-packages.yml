@@ -179,8 +179,9 @@ jobs:
             exit 0
           fi
 
-          printf 'SPARKLE_APPCAST_URL = %s\nSPARKLE_PUBLIC_ED_KEY = %s\n' \
-            "$SPARKLE_APPCAST_URL" \
+          printf '_XC_SLASH = /\nSPARKLE_APPCAST_URL = %s$(_XC_SLASH)/%s\nSPARKLE_PUBLIC_ED_KEY = %s\n' \
+            "${SPARKLE_APPCAST_URL%%//*}" \
+            "${SPARKLE_APPCAST_URL#*//}" \
             "$SPARKLE_PUBLIC_ED_KEY" \
             > Config/LocalSecrets.xcconfig
 
