@@ -119,6 +119,7 @@ enum SoundThemeMode: String, CaseIterable, Identifiable {
 
 enum Island8BitSound: String {
     case clientStartup = "island8bit_client_startup"
+    case releaseNotesSuccess = "island8bit_release_notes_success"
     case processingStarted = "island8bit_processing_started"
     case attentionRequired = "island8bit_attention_required"
     case taskCompleted = "island8bit_task_completed"
@@ -129,6 +130,8 @@ enum Island8BitSound: String {
         switch self {
         case .clientStartup:
             return "Power Up"
+        case .releaseNotesSuccess:
+            return "Win Jingle"
         case .processingStarted:
             return "Menu Select"
         case .attentionRequired:

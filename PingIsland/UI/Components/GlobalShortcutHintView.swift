@@ -38,7 +38,10 @@ struct ShortcutVisualLabel: View {
             return nil
         }
 
-        return max(fontSize + (keyHorizontalPadding * 2), keyMinWidth)
+        // `keyMinWidth` is intended to describe the final rendered key width.
+        // Subtract the horizontal padding here so single-character keys do not
+        // get widened twice by both the frame and the outer padding.
+        return max(fontSize, keyMinWidth - (keyHorizontalPadding * 2))
     }
 }
 

@@ -40,6 +40,8 @@ final class ReleaseNotesWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func present(notes: UpdateReleaseNotes) {
+        let isNewPresentation = !(window?.isVisible ?? false)
+
         hostingController.rootView = AnyView(
             AppLocalizedRootView {
                 ReleaseNotesWindowView(notes: notes) { [weak self] in
@@ -57,6 +59,12 @@ final class ReleaseNotesWindowController: NSWindowController, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         showWindow(nil)
         window.makeKeyAndOrderFront(nil)
+
+        // Only celebrate when the installed app is showing its own release notes,
+        // not when previewing notes for a pending update.
+        if isNewPresentation, notes.currentVersion == notes.targetVersion {
+            AppSettings.playReleaseNotesSuccessSound()
+        }
     }
 
     func dismiss() {

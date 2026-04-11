@@ -9,7 +9,10 @@ final class SettingsPanelWindow: NSWindow {
 @MainActor
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static let shared = SettingsWindowController()
-    private let defaultContentSize = NSSize(SettingsWindowDefaults.defaultContentSize)
+    private let defaultContentSize = NSSize(
+        width: SettingsWindowDefaults.defaultContentSize.width,
+        height: SettingsWindowDefaults.defaultContentSize.height
+    )
     private let minimumContentSize = NSSize(
         width: AppSettings.minimumSettingsWindowSize.width,
         height: AppSettings.minimumSettingsWindowSize.height

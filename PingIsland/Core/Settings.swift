@@ -927,6 +927,11 @@ enum AppSettings {
         playBundledSound(named: Island8BitSound.clientStartup.rawValue)
     }
 
+    static func playReleaseNotesSuccessSound() {
+        guard soundEnabled else { return }
+        playBundledSound(named: Island8BitSound.releaseNotesSuccess.rawValue)
+    }
+
     static func playSound(for event: NotificationEvent) {
         guard soundEnabled, isSoundEnabled(for: event) else { return }
         guard !areReminderNotificationsSuppressed else { return }
