@@ -487,6 +487,8 @@ enum ClientProfileRegistry {
             subtitle: "管理 ~/.openclaw/hooks/ping-island-openclaw，并自动启用内部 hook",
             installationKind: .hookDirectory,
             alwaysVisibleInSettings: true,
+            logoAssetName: "OpenClawLogo",
+            prefersBundledLogoOverAppIcon: true,
             iconSymbolName: "bird.fill",
             configurationRelativePath: ".openclaw/hooks/ping-island-openclaw",
             activationConfigurationRelativePath: ".openclaw/openclaw.json",
