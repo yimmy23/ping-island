@@ -371,11 +371,23 @@ private struct HoverQuestionInterventionCard: View {
                 }
                 .buttonStyle(HoverApprovalButtonStyle(background: Color.white.opacity(0.9), foreground: .black))
             } else if intervention.supportsInlineResponse {
+                let secondaryActionTitle: String? = if session.clientInfo.prefersAnsweredQuestionFollowupAction {
+                    AppLocalization.format("打开 %@", session.interactionDisplayName)
+                } else {
+                    nil
+                }
+
                 SessionQuestionForm(
                     intervention: intervention,
                     submitLabel: "提交所有回答",
                     onSubmit: { payload in
                         sessionMonitor.answerIntervention(sessionId: session.sessionId, answers: payload)
+                    },
+                    secondaryActionTitle: secondaryActionTitle,
+                    onSecondaryAction: secondaryActionTitle == nil ? nil : {
+                        Task {
+                            _ = await SessionLauncher.shared.activateClientApplication(session)
+                        }
                     }
                 )
             } else {

@@ -68,7 +68,7 @@ enum MascotClient: String, CaseIterable, Identifiable, Sendable {
         case .qoder:
             return "Qoder、QoderWork 与 JetBrains 插件"
         case .codebuddy:
-            return "CodeBuddy 客户端"
+            return "CodeBuddy、WorkBuddy 客户端"
         case .trae:
             return "Trae IDE 中的 Claude 会话"
         case .copilot:

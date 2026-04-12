@@ -959,6 +959,155 @@ final class SessionStateTests: XCTestCase {
         )
     }
 
+    func testCodeBuddyCompletedFollowupQuestionShowsClientPrompt() {
+        let session = SessionState(
+            sessionId: "codebuddy-followup",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .claudeCode,
+                profileID: "codebuddy",
+                name: "CodeBuddy",
+                bundleIdentifier: "com.tencent.codebuddy"
+            ),
+            phase: .waitingForInput,
+            chatItems: [
+                ChatHistoryItem(
+                    id: "tool-followup",
+                    type: .toolCall(
+                        ToolCallItem(
+                            name: "ask_followup_question",
+                            input: [:],
+                            status: .success,
+                            result: nil,
+                            structuredResult: nil,
+                            subagentTools: []
+                        )
+                    ),
+                    timestamp: Date()
+                )
+            ]
+        )
+
+        XCTAssertNotNil(session.latestCompletedFollowupQuestionTool)
+        XCTAssertTrue(session.shouldShowClientFollowupPrompt)
+    }
+
+    func testClientFollowupPromptShowsWhenLatestMessageIsCompletedFollowupQuestionEvenIfInterventionExists() {
+        let session = SessionState(
+            sessionId: "workbuddy-followup",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .claudeCode,
+                profileID: "workbuddy",
+                name: "WorkBuddy",
+                bundleIdentifier: "com.workbuddy.workbuddy"
+            ),
+            intervention: SessionIntervention(
+                id: "question-1",
+                kind: .question,
+                title: "WorkBuddy 的提问",
+                message: "请回答",
+                options: [],
+                questions: [],
+                supportsSessionScope: false,
+                metadata: [:]
+            ),
+            phase: .waitingForInput,
+            chatItems: [
+                ChatHistoryItem(
+                    id: "tool-followup",
+                    type: .toolCall(
+                        ToolCallItem(
+                            name: "ask_followup_question",
+                            input: [:],
+                            status: .success,
+                            result: nil,
+                            structuredResult: nil,
+                            subagentTools: []
+                        )
+                    ),
+                    timestamp: Date()
+                )
+            ]
+        )
+
+        XCTAssertTrue(session.shouldShowClientFollowupPrompt)
+    }
+
+    func testClientFollowupPromptDoesNotShowWhenLatestMessageIsNotCompletedFollowupQuestion() {
+        let session = SessionState(
+            sessionId: "codebuddy-followup-running",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .claudeCode,
+                profileID: "codebuddy",
+                name: "CodeBuddy",
+                bundleIdentifier: "com.tencent.codebuddy"
+            ),
+            phase: .waitingForInput,
+            chatItems: [
+                ChatHistoryItem(
+                    id: "tool-followup",
+                    type: .toolCall(
+                        ToolCallItem(
+                            name: "ask_followup_question",
+                            input: [:],
+                            status: .running,
+                            result: nil,
+                            structuredResult: nil,
+                            subagentTools: []
+                        )
+                    ),
+                    timestamp: Date()
+                )
+            ]
+        )
+
+        XCTAssertFalse(session.shouldShowClientFollowupPrompt)
+    }
+
+    func testClientFollowupPromptDoesNotShowWhenACompletedFollowupQuestionIsNotLatestMessage() {
+        let session = SessionState(
+            sessionId: "workbuddy-followup-earlier",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .claudeCode,
+                profileID: "workbuddy",
+                name: "WorkBuddy",
+                bundleIdentifier: "com.workbuddy.workbuddy"
+            ),
+            phase: .waitingForInput,
+            chatItems: [
+                ChatHistoryItem(
+                    id: "tool-followup",
+                    type: .toolCall(
+                        ToolCallItem(
+                            name: "ask_followup_question",
+                            input: [:],
+                            status: .success,
+                            result: nil,
+                            structuredResult: nil,
+                            subagentTools: []
+                        )
+                    ),
+                    timestamp: Date().addingTimeInterval(-1)
+                ),
+                ChatHistoryItem(
+                    id: "assistant-after",
+                    type: .assistant("继续问你一个更具体的问题"),
+                    timestamp: Date()
+                )
+            ]
+        )
+
+        XCTAssertNil(session.latestCompletedFollowupQuestionTool)
+        XCTAssertFalse(session.shouldShowClientFollowupPrompt)
+    }
+
     func testCodexAppPrefersDirectLaunchURLBeforeWorkspaceRouting() {
         XCTAssertTrue(
             SessionLauncher.shouldPrioritizeDirectLaunchURL(
@@ -1077,6 +1226,290 @@ final class SessionStateTests: XCTestCase {
 
         XCTAssertEqual(messages.first?.textContent, "使用工具问我一个问题")
         XCTAssertEqual(messages.last?.textContent, "好的，我来问你。")
+    }
+
+    func testConversationParserReadsWorkBuddyHistoryIndexIncrementally() async throws {
+        let sessionId = "workbuddy-history-\(UUID().uuidString)"
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let historyDirectory = tempDirectory
+            .appendingPathComponent(sessionId, isDirectory: true)
+        let messagesDirectory = historyDirectory.appendingPathComponent("messages", isDirectory: true)
+        let indexURL = historyDirectory.appendingPathComponent("index.json")
+
+        try FileManager.default.createDirectory(at: messagesDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        func writeMessage(id: String, role: String, blocks: [[String: Any]]) throws {
+            let payload: [String: Any] = [
+                "id": id,
+                "role": role,
+                "message": String(
+                    data: try JSONSerialization.data(
+                        withJSONObject: [
+                            "role": role,
+                            "content": blocks
+                        ],
+                        options: [.sortedKeys]
+                    ),
+                    encoding: .utf8
+                ) ?? ""
+            ]
+            let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .prettyPrinted])
+            try data.write(to: messagesDirectory.appendingPathComponent("\(id).json"), options: .atomic)
+        }
+
+        func writeIndex(messageIDs: [(id: String, role: String)], requests: [[String: Any]]) throws {
+            let payload: [String: Any] = [
+                "messages": messageIDs.map { ["id": $0.id, "role": $0.role, "type": "text", "isComplete": true] },
+                "requests": requests
+            ]
+            let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .prettyPrinted])
+            try data.write(to: indexURL, options: .atomic)
+        }
+
+        try writeMessage(
+            id: "user-1",
+            role: "user",
+            blocks: [["type": "text", "text": "先记住我的偏好"]]
+        )
+        try writeMessage(
+            id: "assistant-1",
+            role: "assistant",
+            blocks: [["type": "text", "text": "好的，我先记录下来。"]]
+        )
+        try writeIndex(
+            messageIDs: [("user-1", "user"), ("assistant-1", "assistant")],
+            requests: [[
+                "id": "request-1",
+                "messages": ["user-1", "assistant-1"],
+                "startedAt": 1_776_006_000_000 as Int
+            ]]
+        )
+
+        await ConversationParser.shared.resetState(for: sessionId)
+        let initialMessages = await ConversationParser.shared.parseFullConversation(
+            sessionId: sessionId,
+            cwd: tempDirectory.path,
+            explicitFilePath: indexURL.path
+        )
+        XCTAssertEqual(initialMessages.map(\.id), ["user-1", "assistant-1"])
+        XCTAssertEqual(initialMessages.last?.textContent, "好的，我先记录下来。")
+
+        try writeMessage(
+            id: "assistant-2",
+            role: "assistant",
+            blocks: [["type": "text", "text": "搞定 ✅"]]
+        )
+        try writeIndex(
+            messageIDs: [("user-1", "user"), ("assistant-1", "assistant"), ("assistant-2", "assistant")],
+            requests: [
+                [
+                    "id": "request-1",
+                    "messages": ["user-1", "assistant-1"],
+                    "startedAt": 1_776_006_000_000 as Int
+                ],
+                [
+                    "id": "request-2",
+                    "messages": ["assistant-2"],
+                    "startedAt": 1_776_006_060_000 as Int
+                ]
+            ]
+        )
+
+        let incremental = await ConversationParser.shared.parseIncremental(
+            sessionId: sessionId,
+            cwd: tempDirectory.path,
+            explicitFilePath: indexURL.path
+        )
+        XCTAssertEqual(incremental.newMessages.map(\.id), ["assistant-2"])
+        XCTAssertEqual(incremental.newMessages.first?.textContent, "搞定 ✅")
+
+        let info = await ConversationParser.shared.parse(
+            sessionId: sessionId,
+            cwd: tempDirectory.path,
+            explicitFilePath: indexURL.path
+        )
+        XCTAssertEqual(info.firstUserMessage, "先记住我的偏好")
+        XCTAssertEqual(info.lastMessage, "搞定 ✅")
+        XCTAssertEqual(info.lastMessageRole, "assistant")
+    }
+
+    func testConversationParserCodeBuddyHistoryKeepsOnlyUserQueryText() async throws {
+        let sessionId = "workbuddy-query-\(UUID().uuidString)"
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let historyDirectory = tempDirectory
+            .appendingPathComponent(sessionId, isDirectory: true)
+        let messagesDirectory = historyDirectory.appendingPathComponent("messages", isDirectory: true)
+        let indexURL = historyDirectory.appendingPathComponent("index.json")
+
+        try FileManager.default.createDirectory(at: messagesDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let wrappedUserMessage = """
+        <user_info> OS Version: darwin Shell: Zsh Workspace Folder: /Users/wudanwu/WorkBuddy/20260412230308 </user_info>
+        <artifact_directory_path> Artifact Directory Path: /Users/wudanwu/Library/Application Support/WorkBuddy/User/globalStorage/tencent-cloud.coding-copilot/brain/example </artifact_directory_path>
+        <project_context> <project_layout> /Users/wudanwu/WorkBuddy/20260412230308/ </project_layout> </project_context>
+        <additional_data> current_time: Sunday, April 12, 2026，23:31 </additional_data>
+        <system_reminder> <working_memory_reminder> reminder </working_memory_reminder> </system_reminder>
+        <user_query> hi </user_query>
+        """
+
+        let userPayload: [String: Any] = [
+            "id": "user-1",
+            "role": "user",
+            "message": String(
+                data: try JSONSerialization.data(
+                    withJSONObject: [
+                        "role": "user",
+                        "content": wrappedUserMessage
+                    ],
+                    options: [.sortedKeys]
+                ),
+                encoding: .utf8
+            ) ?? ""
+        ]
+        let assistantPayload: [String: Any] = [
+            "id": "assistant-1",
+            "role": "assistant",
+            "message": String(
+                data: try JSONSerialization.data(
+                    withJSONObject: [
+                        "role": "assistant",
+                        "content": [
+                            ["type": "text", "text": "Hello there"]
+                        ]
+                    ],
+                    options: [.sortedKeys]
+                ),
+                encoding: .utf8
+            ) ?? ""
+        ]
+        try JSONSerialization.data(withJSONObject: userPayload, options: [.sortedKeys, .prettyPrinted])
+            .write(to: messagesDirectory.appendingPathComponent("user-1.json"), options: .atomic)
+        try JSONSerialization.data(withJSONObject: assistantPayload, options: [.sortedKeys, .prettyPrinted])
+            .write(to: messagesDirectory.appendingPathComponent("assistant-1.json"), options: .atomic)
+
+        let indexPayload: [String: Any] = [
+            "messages": [
+                ["id": "user-1", "role": "user", "type": "text", "isComplete": true],
+                ["id": "assistant-1", "role": "assistant", "type": "text", "isComplete": true]
+            ],
+            "requests": [[
+                "id": "request-1",
+                "messages": ["user-1", "assistant-1"],
+                "startedAt": 1_776_006_100_000 as Int
+            ]]
+        ]
+        try JSONSerialization.data(withJSONObject: indexPayload, options: [.sortedKeys, .prettyPrinted])
+            .write(to: indexURL, options: .atomic)
+
+        await ConversationParser.shared.resetState(for: sessionId)
+        let messages = await ConversationParser.shared.parseFullConversation(
+            sessionId: sessionId,
+            cwd: tempDirectory.path,
+            explicitFilePath: indexURL.path
+        )
+        let info = await ConversationParser.shared.parse(
+            sessionId: sessionId,
+            cwd: tempDirectory.path,
+            explicitFilePath: indexURL.path
+        )
+
+        XCTAssertEqual(messages.first?.textContent, "hi")
+        XCTAssertEqual(info.firstUserMessage, "hi")
+        XCTAssertEqual(info.lastMessage, "Hello there")
+    }
+
+    func testConversationParserCodeBuddyHistoryFormatsQuestionAnswerPayload() async throws {
+        let sessionId = "workbuddy-question-answer-\(UUID().uuidString)"
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let historyDirectory = tempDirectory
+            .appendingPathComponent(sessionId, isDirectory: true)
+        let messagesDirectory = historyDirectory.appendingPathComponent("messages", isDirectory: true)
+        let indexURL = historyDirectory.appendingPathComponent("index.json")
+
+        try FileManager.default.createDirectory(at: messagesDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let wrappedUserMessage = """
+        <user_query>
+        <question_answer>
+        <questions>
+        <question_item id="q5">
+        <question>你对项目有什么具体想法或需求？（可选）</question>
+        <answers>
+        还没想好，需要你推荐
+        </answers>
+        </question_item>
+        </questions>
+        </question_answer>
+        </user_query>
+        """
+
+        let userPayload: [String: Any] = [
+            "id": "user-1",
+            "role": "user",
+            "message": String(
+                data: try JSONSerialization.data(
+                    withJSONObject: [
+                        "role": "user",
+                        "content": wrappedUserMessage
+                    ],
+                    options: [.sortedKeys]
+                ),
+                encoding: .utf8
+            ) ?? ""
+        ]
+        let assistantPayload: [String: Any] = [
+            "id": "assistant-1",
+            "role": "assistant",
+            "message": String(
+                data: try JSONSerialization.data(
+                    withJSONObject: [
+                        "role": "assistant",
+                        "content": [
+                            ["type": "text", "text": "收到，我来给你一些建议。"]
+                        ]
+                    ],
+                    options: [.sortedKeys]
+                ),
+                encoding: .utf8
+            ) ?? ""
+        ]
+
+        try JSONSerialization.data(withJSONObject: userPayload, options: [.sortedKeys, .prettyPrinted])
+            .write(to: messagesDirectory.appendingPathComponent("user-1.json"), options: .atomic)
+        try JSONSerialization.data(withJSONObject: assistantPayload, options: [.sortedKeys, .prettyPrinted])
+            .write(to: messagesDirectory.appendingPathComponent("assistant-1.json"), options: .atomic)
+
+        let indexPayload: [String: Any] = [
+            "messages": [
+                ["id": "user-1", "role": "user", "type": "text", "isComplete": true],
+                ["id": "assistant-1", "role": "assistant", "type": "text", "isComplete": true]
+            ],
+            "requests": [[
+                "id": "request-1",
+                "messages": ["user-1", "assistant-1"],
+                "startedAt": 1_776_006_100_000 as Int
+            ]]
+        ]
+        try JSONSerialization.data(withJSONObject: indexPayload, options: [.sortedKeys, .prettyPrinted])
+            .write(to: indexURL, options: .atomic)
+
+        await ConversationParser.shared.resetState(for: sessionId)
+        let messages = await ConversationParser.shared.parseFullConversation(
+            sessionId: sessionId,
+            cwd: tempDirectory.path,
+            explicitFilePath: indexURL.path
+        )
+
+        XCTAssertEqual(
+            messages.first?.textContent,
+            "问题：你对项目有什么具体想法或需求？（可选） 回答：还没想好，需要你推荐"
+        )
     }
 
     func testGhosttySelectionScriptPrefersStableTerminalIdentifier() {

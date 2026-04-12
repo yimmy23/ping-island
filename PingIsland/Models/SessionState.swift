@@ -627,6 +627,36 @@ struct SessionState: Equatable, Identifiable, Sendable {
         phase.isWaitingForApproval || intervention?.kind == .approval
     }
 
+    /// CodeBuddy/WorkBuddy can show follow-up questions in the client UI without
+    /// keeping an Island-side intervention object alive. Surface a reopen affordance
+    /// when the latest completed tool was `ask_followup_question`.
+    nonisolated var latestCompletedFollowupQuestionTool: ToolCallItem? {
+        guard let latestItem = chatItems.last,
+              case .toolCall(let tool) = latestItem.type else {
+            return nil
+        }
+
+        let normalizedName = tool.name
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        guard normalizedName == "askfollowupquestion", tool.status == .success else {
+            return nil
+        }
+
+        return tool
+    }
+
+    private nonisolated var latestToolCallIsCompletedFollowupQuestion: Bool {
+        latestCompletedFollowupQuestionTool != nil
+    }
+
+    nonisolated var shouldShowClientFollowupPrompt: Bool {
+        guard phase != .ended else { return false }
+        guard clientInfo.prefersAnsweredQuestionFollowupAction else { return false }
+        return latestToolCallIsCompletedFollowupQuestion
+    }
+
     nonisolated var scopedApprovalAction: SessionScopedApprovalAction? {
         guard needsApprovalResponse else { return nil }
 

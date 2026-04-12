@@ -249,7 +249,7 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
         if normalizedProfileID == "codebuddy" || normalizedProfileID == "workbuddy" {
-            return true
+            return false
         }
 
         let normalizedHostBundleIdentifier = (terminalBundleIdentifier ?? bundleIdentifier)?
@@ -257,7 +257,7 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
             .lowercased()
         switch normalizedHostBundleIdentifier {
         case "com.tencent.codebuddy", "com.codebuddy.app", "com.workbuddy.workbuddy":
-            return true
+            return false
         default:
             return false
         }

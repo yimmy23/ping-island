@@ -593,8 +593,13 @@ class SessionMonitor: ObservableObject {
             return nil
         }
 
+        let resolvedQuestions = intervention.resolvedQuestions
+        guard !resolvedQuestions.isEmpty else {
+            return nil
+        }
+
         let answers = defaultAnswers(for: intervention)
-        guard !answers.isEmpty,
+        guard answers.count == resolvedQuestions.count,
               let updatedInput = updatedHookToolInput(
                 rawJSON: rawJSON,
                 answers: answers,

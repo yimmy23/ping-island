@@ -188,14 +188,17 @@ extension HookEvent {
             .replacingOccurrences(of: "-", with: "")
     }
 
-    private nonisolated var isQoderWorkQuestionEvent: Bool {
-        (clientInfo.profileID == "qoderwork" || clientInfo.bundleIdentifier == "com.qoder.work")
+    private nonisolated var isExternalClientQuestionEvent: Bool {
+        (clientInfo.profileID == "qoderwork"
+            || clientInfo.bundleIdentifier == "com.qoder.work"
+            || clientInfo.profileID == "workbuddy"
+            || clientInfo.bundleIdentifier == "com.workbuddy.workbuddy")
             && Self.questionToolNames.contains(normalizedToolNameForIntervention ?? "")
             && !(questionPayloads?.isEmpty ?? true)
     }
 
-    private nonisolated var qoderWorkQuestionInterventionID: String? {
-        guard isQoderWorkQuestionEvent else { return nil }
+    private nonisolated var externalClientQuestionInterventionID: String? {
+        guard isExternalClientQuestionEvent else { return nil }
         if let toolUseId, !toolUseId.isEmpty {
             return toolUseId
         }
@@ -209,11 +212,17 @@ extension HookEvent {
             .joined(separator: "|")
 
         guard let questionID, !questionID.isEmpty else { return nil }
-        return "qoderwork-question-\(sessionId)-\(questionID)"
+        let prefix: String
+        if clientInfo.profileID == "workbuddy" || clientInfo.bundleIdentifier == "com.workbuddy.workbuddy" {
+            prefix = "workbuddy-question"
+        } else {
+            prefix = "qoderwork-question"
+        }
+        return "\(prefix)-\(sessionId)-\(questionID)"
     }
 
     nonisolated var isAskUserQuestionRequest: Bool {
-        if isQoderWorkQuestionEvent {
+        if isExternalClientQuestionEvent {
             return event == "PreToolUse" || event == "PermissionRequest"
         }
 
@@ -309,7 +318,7 @@ extension HookEvent {
             metadata["originalToolUseId"] = toolUseId
         }
         let message: String
-        if isQoderWorkQuestionEvent {
+        if isExternalClientQuestionEvent {
             metadata["responseMode"] = "external_only"
             message = "\(actorName) 已在客户端内发起提问，请切回 \(actorName) 完成回答。Island 暂不支持直接提交这类回答。"
         } else {
@@ -317,7 +326,7 @@ extension HookEvent {
         }
 
         return SessionIntervention(
-            id: qoderWorkQuestionInterventionID ?? toolUseId ?? UUID().uuidString,
+            id: externalClientQuestionInterventionID ?? toolUseId ?? UUID().uuidString,
             kind: .question,
             title: title,
             message: message,
@@ -457,6 +466,10 @@ extension SessionEvent {
         switch self {
         case .hookReceived(let event):
             return "hookReceived.\(event.event)"
+        case .runtimeSessionStarted:
+            return "runtimeSessionStarted"
+        case .runtimeSessionStopped:
+            return "runtimeSessionStopped"
         case .permissionApproved:
             return "permissionApproved"
         case .permissionAutoApprovalChanged:
@@ -502,7 +515,10 @@ extension SessionEvent {
         switch self {
         case .hookReceived(let event):
             return String(event.sessionId.prefix(8))
-        case .permissionApproved(let sessionId, _),
+        case .runtimeSessionStarted(let handle):
+            return String(handle.sessionID.prefix(8))
+        case .runtimeSessionStopped(let sessionId, _),
+             .permissionApproved(let sessionId, _),
              .permissionAutoApprovalChanged(let sessionId, _),
              .permissionDenied(let sessionId, _, _),
              .permissionSocketFailed(let sessionId, _),

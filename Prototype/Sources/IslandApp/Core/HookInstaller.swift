@@ -243,42 +243,19 @@ struct HookInstaller {
     }
 
     func installCodeBuddyAssets() throws {
-        try ensureSupportFiles()
-        let fileURL = homeDirectory.appending(path: ".codebuddy/settings.json")
-        let current = try readJSON(fileURL) ?? [:]
-        var updated = current
-        var hooks = current["hooks"] as? [String: Any] ?? [:]
-
-        let plainEvents = ["UserPromptSubmit", "Stop", "SubagentStop", "SessionStart", "SessionEnd"]
-        let wildcardEvents = ["PreToolUse", "PostToolUse", "Notification"]
-        let compactEvents = ["PreCompact": ["auto", "manual"]]
-        let command = bridgeCommand(
-            source: "claude",
-            extraArguments: [
-                "--client-kind", "codebuddy",
-                "--client-name", "CodeBuddy",
-                "--client-originator", "CodeBuddy"
-            ]
+        try installCodeBuddyCompatibleAssets(
+            relativePath: ".codebuddy/settings.json",
+            clientKind: "codebuddy",
+            clientName: "CodeBuddy"
         )
+    }
 
-        for event in plainEvents {
-            hooks[event] = installHookArray(existing: hooks[event], command: command, matcher: nil)
-        }
-
-        for event in wildcardEvents {
-            hooks[event] = installHookArray(existing: hooks[event], command: command, matcher: "*")
-        }
-
-        for (event, matchers) in compactEvents {
-            var entries = hooks[event] as? [[String: Any]]
-            for matcher in matchers {
-                entries = installHookArray(existing: entries, command: command, matcher: matcher)
-            }
-            hooks[event] = entries
-        }
-
-        updated["hooks"] = hooks
-        try writeJSON(updated, to: fileURL)
+    func installWorkBuddyAssets() throws {
+        try installCodeBuddyCompatibleAssets(
+            relativePath: ".workbuddy/settings.json",
+            clientKind: "workbuddy",
+            clientName: "WorkBuddy"
+        )
     }
 
     func installCursorAssets() throws {
@@ -339,6 +316,49 @@ struct HookInstaller {
                 timeout: event == "PermissionRequest" ? 86_400 : (event == "PreToolUse" ? preToolUseTimeout : nil),
                 matcher: "*"
             )
+        }
+
+        updated["hooks"] = hooks
+        try writeJSON(updated, to: fileURL)
+    }
+
+    private func installCodeBuddyCompatibleAssets(
+        relativePath: String,
+        clientKind: String,
+        clientName: String
+    ) throws {
+        try ensureSupportFiles()
+        let fileURL = homeDirectory.appending(path: relativePath)
+        let current = try readJSON(fileURL) ?? [:]
+        var updated = current
+        var hooks = current["hooks"] as? [String: Any] ?? [:]
+
+        let plainEvents = ["UserPromptSubmit", "Stop", "SubagentStop", "SessionStart", "SessionEnd"]
+        let wildcardEvents = ["PreToolUse", "PostToolUse", "Notification"]
+        let compactEvents = ["PreCompact": ["auto", "manual"]]
+        let command = bridgeCommand(
+            source: "claude",
+            extraArguments: [
+                "--client-kind", clientKind,
+                "--client-name", clientName,
+                "--client-originator", clientName
+            ]
+        )
+
+        for event in plainEvents {
+            hooks[event] = installHookArray(existing: hooks[event], command: command, matcher: nil)
+        }
+
+        for event in wildcardEvents {
+            hooks[event] = installHookArray(existing: hooks[event], command: command, matcher: "*")
+        }
+
+        for (event, matchers) in compactEvents {
+            var entries = hooks[event] as? [[String: Any]]
+            for matcher in matchers {
+                entries = installHookArray(existing: entries, command: command, matcher: matcher)
+            }
+            hooks[event] = entries
         }
 
         updated["hooks"] = hooks

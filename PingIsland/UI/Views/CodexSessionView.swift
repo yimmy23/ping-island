@@ -131,6 +131,13 @@ struct CodexSessionView: View {
                     .buttonStyle(CodexCapsuleButtonStyle(background: Color.white.opacity(0.9), foreground: .black))
                 }
             } else {
+                let secondaryActionTitle: String? = if intervention.supportsInlineResponse
+                    && session.clientInfo.prefersAnsweredQuestionFollowupAction {
+                    AppLocalization.format("打开 %@", session.interactionDisplayName)
+                } else {
+                    "Cancel"
+                }
+
                 SessionQuestionForm(
                     intervention: intervention,
                     submitLabel: "Submit",
@@ -138,9 +145,13 @@ struct CodexSessionView: View {
                         sessionMonitor.answerIntervention(sessionId: session.sessionId, answers: payload)
                         viewModel.exitChat()
                     },
-                    secondaryActionTitle: "Cancel",
+                    secondaryActionTitle: secondaryActionTitle,
                     onSecondaryAction: {
-                        viewModel.exitChat()
+                        if intervention.supportsInlineResponse && session.clientInfo.prefersAnsweredQuestionFollowupAction {
+                            openClient()
+                        } else {
+                            viewModel.exitChat()
+                        }
                     }
                 )
             }

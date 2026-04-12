@@ -151,11 +151,32 @@ func installerDeduplicatesManagedHooksButKeepsUnrelatedHooks() throws {
     """
     try Data(qoderWorkExisting.utf8).write(to: qoderWorkSettingsURL)
 
+    let workBuddySettingsURL = root.appending(path: ".workbuddy/settings.json")
+    try FileManager.default.createDirectory(at: workBuddySettingsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let workBuddyExisting = """
+    {
+      "hooks": {
+        "PostToolUse": [
+          {
+            "hooks": [{"type": "command", "command": "/Users/test/.ping-island/bin/ping-island-bridge --source claude --client-kind workbuddy --client-name WorkBuddy --client-originator WorkBuddy"}],
+            "matcher": "*"
+          },
+          {
+            "hooks": [{"type": "command", "command": "/usr/bin/printf workbuddy-keep"}],
+            "matcher": "*"
+          }
+        ]
+      }
+    }
+    """
+    try Data(workBuddyExisting.utf8).write(to: workBuddySettingsURL)
+
     let installer = HookInstaller(homeDirectory: root)
     try installer.installClaudeAssets()
     try installer.installCodexAssets()
     try installer.installQoderAssets()
     try installer.installQoderWorkAssets()
+    try installer.installWorkBuddyAssets()
 
     let claudeData = try Data(contentsOf: claudeSettingsURL)
     let claudeJSON = try #require(JSONSerialization.jsonObject(with: claudeData) as? [String: Any])
@@ -221,10 +242,26 @@ func installerDeduplicatesManagedHooksButKeepsUnrelatedHooks() throws {
     )
     let qoderWorkManagedPreToolUseHook = try #require((qoderWorkManagedPreToolUse["hooks"] as? [[String: Any]])?.first)
     #expect(qoderWorkManagedPreToolUseHook["timeout"] as? Int == 86_400)
+
+    let workBuddyData = try Data(contentsOf: workBuddySettingsURL)
+    let workBuddyJSON = try #require(JSONSerialization.jsonObject(with: workBuddyData) as? [String: Any])
+    let workBuddyHooks = try #require(workBuddyJSON["hooks"] as? [String: Any])
+    let workBuddyPostToolUse = try #require(workBuddyHooks["PostToolUse"] as? [[String: Any]])
+    let workBuddyCommands = workBuddyPostToolUse.compactMap { hook in
+        ((hook["hooks"] as? [[String: Any]])?.first?["command"] as? String)
+    }
+    #expect(workBuddyCommands.contains("/usr/bin/printf workbuddy-keep"))
+    #expect(workBuddyCommands.contains { $0.contains("/.ping-island/bin/ping-island-bridge --source claude --client-kind workbuddy --client-name WorkBuddy --client-originator WorkBuddy") })
+    #expect(workBuddyCommands.filter { $0.contains("/.ping-island/bin/ping-island-bridge --source claude --client-kind workbuddy --client-name WorkBuddy --client-originator WorkBuddy") }.count == 1)
+    #expect(workBuddyHooks["SessionEnd"] != nil)
+    #expect(workBuddyHooks["PreCompact"] != nil)
+    #expect(workBuddyHooks["Notification"] != nil)
+    #expect(workBuddyHooks["SubagentStop"] != nil)
+    #expect(workBuddyHooks["PermissionRequest"] == nil)
 }
 
 @Test
-func installerAddsCodeBuddyAndCursorHooks() throws {
+func installerAddsCodeBuddyWorkBuddyAndCursorHooks() throws {
     let root = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: UUID().uuidString, directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
@@ -245,12 +282,29 @@ func installerAddsCodeBuddyAndCursorHooks() throws {
     """
     try Data(codeBuddyExisting.utf8).write(to: codeBuddyURL)
 
+    let workBuddyURL = root.appending(path: ".workbuddy/settings.json")
+    try FileManager.default.createDirectory(at: workBuddyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let workBuddyExisting = """
+    {
+      "hooks": {
+        "PreToolUse": [
+          {
+            "hooks": [{"type": "command", "command": "/usr/bin/printf keep-workbuddy"}],
+            "matcher": "*"
+          }
+        ]
+      }
+    }
+    """
+    try Data(workBuddyExisting.utf8).write(to: workBuddyURL)
+
     let cursorSettingsDirectory = root.appending(path: "Library/Application Support/Cursor/User", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: cursorSettingsDirectory, withIntermediateDirectories: true)
     let cursorURL = cursorSettingsDirectory.appending(path: "settings.json")
 
     let installer = HookInstaller(homeDirectory: root)
     try installer.installCodeBuddyAssets()
+    try installer.installWorkBuddyAssets()
     try installer.installCursorAssets()
 
     let codeBuddyData = try Data(contentsOf: codeBuddyURL)
@@ -269,6 +323,23 @@ func installerAddsCodeBuddyAndCursorHooks() throws {
     #expect(codeBuddyHooks["PermissionRequest"] == nil)
     #expect(codeBuddyHooks["Notification"] != nil)
     #expect(codeBuddyHooks["SubagentStop"] != nil)
+
+    let workBuddyData = try Data(contentsOf: workBuddyURL)
+    let workBuddyJSON = try #require(JSONSerialization.jsonObject(with: workBuddyData) as? [String: Any])
+    let workBuddyHooks = try #require(workBuddyJSON["hooks"] as? [String: Any])
+    let workBuddyPreToolUse = try #require(workBuddyHooks["PreToolUse"] as? [[String: Any]])
+    let workBuddyCommands = workBuddyPreToolUse.compactMap { hook in
+        ((hook["hooks"] as? [[String: Any]])?.first?["command"] as? String)
+    }
+    #expect(workBuddyCommands.contains("/usr/bin/printf keep-workbuddy"))
+    #expect(workBuddyCommands.contains {
+        $0.contains("/.ping-island/bin/ping-island-bridge --source claude --client-kind workbuddy --client-name WorkBuddy --client-originator WorkBuddy")
+    })
+    #expect(workBuddyHooks["SessionEnd"] != nil)
+    #expect(workBuddyHooks["PreCompact"] != nil)
+    #expect(workBuddyHooks["PermissionRequest"] == nil)
+    #expect(workBuddyHooks["Notification"] != nil)
+    #expect(workBuddyHooks["SubagentStop"] != nil)
 
     let cursorData = try Data(contentsOf: cursorURL)
     let cursorJSON = try #require(JSONSerialization.jsonObject(with: cursorData) as? [String: Any])

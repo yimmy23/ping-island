@@ -9,6 +9,7 @@ final class ClientProfileIconTests: XCTestCase {
             "gemini-hooks": "GeminiLogo",
             "openclaw-hooks": "OpenClawLogo",
             "codebuddy-hooks": "CodeBuddyLogo",
+            "workbuddy-hooks": "WorkBuddyLogo",
             "cursor-hooks": "CursorLogo",
             "qoder-hooks": "QoderLogo",
             "qoderwork-hooks": "QoderWorkLogo",
@@ -31,6 +32,7 @@ final class ClientProfileIconTests: XCTestCase {
             "vscode-extension": "VSCodeLogo",
             "cursor-extension": "CursorLogo",
             "codebuddy-extension": "CodeBuddyLogo",
+            "workbuddy-extension": "WorkBuddyLogo",
             "qoder-extension": "QoderLogo",
         ]
 

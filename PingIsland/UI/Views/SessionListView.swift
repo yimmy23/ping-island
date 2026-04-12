@@ -96,6 +96,7 @@ struct SessionListView: View {
                     onToggleExpanded: { toggleExpanded(session) },
                     onFocus: { activateSession(session) },
                     onChat: { openChat(session) },
+                    onOpenClient: { openClient(session) },
                     onArchive: { archiveSession(session) },
                     onTerminate: { terminateSession(session) },
                     onApprove: { approveSession(session) },
@@ -156,6 +157,12 @@ struct SessionListView: View {
         viewModel.showChat(for: session)
     }
 
+    private func openClient(_ session: SessionState) {
+        Task {
+            _ = await SessionLauncher.shared.activateClientApplication(session)
+        }
+    }
+
     private func approveSession(_ session: SessionState) {
         sessionMonitor.approvePermission(sessionId: session.sessionId)
     }
@@ -211,6 +218,7 @@ struct InstanceRow: View {
     let onToggleExpanded: () -> Void
     let onFocus: () -> Void
     let onChat: () -> Void
+    let onOpenClient: () -> Void
     let onArchive: () -> Void
     let onTerminate: () -> Void
     let onApprove: () -> Void
@@ -761,6 +769,21 @@ struct InstanceRow: View {
             HStack(spacing: 6) {
                 IconButton(icon: "bubble.left") {
                     onChat()
+                }
+
+                if session.clientInfo.prefersAnsweredQuestionFollowupAction {
+                    Button {
+                        onOpenClient()
+                    } label: {
+                        Text(verbatim: AppLocalization.format("打开 %@", interactionLabel))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.9))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 if session.isInTmux && isYabaiAvailable {

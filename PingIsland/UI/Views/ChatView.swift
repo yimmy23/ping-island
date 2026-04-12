@@ -57,6 +57,22 @@ struct ChatView: View {
         return session.intervention
     }
 
+    private var shouldShowCompletedFollowupPrompt: Bool {
+        guard session.phase != .ended else { return false }
+        guard session.clientInfo.prefersAnsweredQuestionFollowupAction else { return false }
+        guard let latestTool = history.reversed().compactMap({ item -> ToolCallItem? in
+            guard case .toolCall(let tool) = item.type else { return nil }
+            return tool
+        }).first else { return false }
+
+        let normalizedName = latestTool.name
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        let isRelevantStatus = latestTool.status == .success || latestTool.status == .running
+        return normalizedName == "askfollowupquestion" && isRelevantStatus
+    }
+
     /// When an external client like Qoder is waiting for input, top-align sparse
     /// history so the reminder area doesn't leave a large empty gap above it.
     private var shouldTopAlignMessages: Bool {
@@ -88,7 +104,13 @@ struct ChatView: View {
                 }
 
                 // Approval bar, question form, or Input bar
-                if let intervention = activeQuestionIntervention {
+                if shouldShowCompletedFollowupPrompt {
+                    completedFollowupPromptBar
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .bottom)),
+                            removal: .opacity
+                        ))
+                } else if let intervention = activeQuestionIntervention {
                     questionForm(intervention)
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .move(edge: .bottom)),
@@ -471,6 +493,58 @@ struct ChatView: View {
         )
     }
 
+    private var completedFollowupPromptBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Button {
+                    openClientApplication()
+                } label: {
+                    Text(verbatim: AppLocalization.format("打开 %@", session.interactionDisplayName))
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(Color.white.opacity(0.9)))
+
+                if session.isInTmux {
+                    Button {
+                        focusTerminal()
+                    } label: {
+                        Text(appLocalized: "打开终端")
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(Color.white.opacity(0.1)))
+                }
+            }
+
+            Text(AppLocalization.format("%@ 已在客户端中发起追问，请打开并继续回答。", session.interactionDisplayName))
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.68))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.black.opacity(0.2))
+        .overlay(alignment: .top) {
+            LinearGradient(
+                colors: [fadeColor.opacity(0), fadeColor.opacity(0.7)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 24)
+            .offset(y: -24)
+            .allowsHitTesting(false)
+        }
+        .zIndex(1)
+    }
+
     // MARK: - Question Form
 
     private func questionForm(_ intervention: SessionIntervention) -> some View {
@@ -527,14 +601,30 @@ struct ChatView: View {
                     .background(Capsule().fill(Color.white.opacity(0.9)))
                 }
             } else if intervention.supportsInlineResponse {
+                let secondaryActionTitle: String? = if session.clientInfo.prefersAnsweredQuestionFollowupAction {
+                    AppLocalization.format("打开 %@", session.interactionDisplayName)
+                } else if session.isInTmux {
+                    AppLocalization.string("打开终端")
+                } else {
+                    nil
+                }
+
+                let onSecondaryAction: (() -> Void)? = if session.clientInfo.prefersAnsweredQuestionFollowupAction {
+                    { openClientApplication() }
+                } else if session.isInTmux {
+                    { focusTerminal() }
+                } else {
+                    nil
+                }
+
                 SessionQuestionForm(
                     intervention: intervention,
                     submitLabel: "提交所有回答",
                     onSubmit: { payload in
                         sessionMonitor.answerIntervention(sessionId: sessionId, answers: payload)
                     },
-                    secondaryActionTitle: session.isInTmux ? AppLocalization.string("打开终端") : nil,
-                    onSecondaryAction: session.isInTmux ? { focusTerminal() } : nil
+                    secondaryActionTitle: secondaryActionTitle,
+                    onSecondaryAction: onSecondaryAction
                 )
             } else {
                 HStack(spacing: 8) {

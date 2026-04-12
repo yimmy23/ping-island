@@ -63,7 +63,7 @@
 "按客户端自动切换" = "Automatic per client";
 "按客户端切换 + 自定义覆盖" = "Per-client switching with overrides";
 "当前策略" = "Current strategy";
-"Claude Code、Codex、Gemini CLI、OpenCode、Cursor、Qoder、CodeBuddy、Trae 等客户端会显示各自独立的宠物形象与动作，并支持逐客户端改成别的宠物。" = "Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Qoder, CodeBuddy, Trae, and other clients can each show their own mascot and motion, with optional per-client overrides.";
+"Claude Code、Codex、Gemini CLI、OpenCode、Cursor、Qoder、CodeBuddy、WorkBuddy、Trae 等客户端会显示各自独立的宠物形象与动作，并支持逐客户端改成别的宠物。" = "Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Qoder, CodeBuddy, WorkBuddy, Trae, and other clients can each show their own mascot and motion, with optional per-client overrides.";
 "已自定义 %lld" = "Customized %lld";
 
 "通知" = "Notifications";
@@ -100,6 +100,7 @@
 "管理 ~/.codex/hooks.json" = "Manage ~/.codex/hooks.json";
 "管理 ~/.gemini/settings.json，按 Gemini CLI 官方 hooks 协议接入 Island" = "Manage ~/.gemini/settings.json using Gemini CLI's official hooks protocol for Island";
 "管理 ~/.codebuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island" = "Manage ~/.codebuddy/settings.json using the CodeBuddy Hooks protocol for Island";
+"管理 ~/.workbuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island" = "Manage ~/.workbuddy/settings.json using the CodeBuddy Hooks protocol for Island";
 "管理 ~/Library/Application Support/Cursor/User/settings.json，按 Claude Hooks 协议接入 Island" = "Manage ~/Library/Application Support/Cursor/User/settings.json using the Claude Hooks protocol for Island";
 "管理 ~/.qoder/settings.json，支持 Qoder 会话、提问与权限提醒事件" = "Manage ~/.qoder/settings.json with support for Qoder sessions, questions, and permission prompts";
 "管理 ~/.qoderwork/settings.json，按 Qoder CLI 同款 Claude Hooks 协议接入 Island" = "Manage ~/.qoderwork/settings.json using the same Claude Hooks protocol as Qoder CLI";
@@ -199,7 +200,7 @@
 "OpenCode 插件 hooks 会话" = "OpenCode plugin hook sessions";
 "Cursor IDE 中的 Claude 会话" = "Claude sessions inside Cursor";
 "Qoder、QoderWork 与 JetBrains 插件" = "Qoder, QoderWork, and JetBrains plugin";
-"CodeBuddy 客户端" = "CodeBuddy client";
+"CodeBuddy、WorkBuddy 客户端" = "CodeBuddy and WorkBuddy clients";
 "Trae IDE 中的 Claude 会话" = "Claude sessions inside Trae";
 "GitHub Copilot Hooks 客户端" = "GitHub Copilot Hooks client";
 

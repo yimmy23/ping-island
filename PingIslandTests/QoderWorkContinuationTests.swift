@@ -85,7 +85,7 @@ final class QoderWorkContinuationTests: XCTestCase {
         let session = await store.session(for: sessionId)
         XCTAssertEqual(session?.phase, .waitingForInput)
         XCTAssertTrue(session?.intervention?.awaitsExternalContinuation ?? false)
-        XCTAssertTrue(session?.intervention?.supportsInlineResponse ?? false)
+        XCTAssertFalse(session?.intervention?.supportsInlineResponse ?? true)
         XCTAssertEqual(session?.intervention?.submittedAnswers["topic"], ["A 方案"])
 
         await store.process(.sessionArchived(sessionId: sessionId))
@@ -136,7 +136,7 @@ final class QoderWorkContinuationTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
-    func testCodeBuddyContinuationStaysVisibleAfterNewMessageArrives() async {
+    func testCodeBuddyContinuationClearsAfterNewMessageArrives() async {
         let sessionId = "codebuddy-msg-\(UUID().uuidString)"
         let store = SessionStore.shared
 
@@ -175,14 +175,13 @@ final class QoderWorkContinuationTests: XCTestCase {
         ))
 
         let session = await store.session(for: sessionId)
-        XCTAssertTrue(session?.intervention?.awaitsExternalContinuation ?? false)
-        XCTAssertEqual(session?.intervention?.submittedAnswers["topic"], ["A 方案"])
-        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertNil(session?.intervention)
+        XCTAssertEqual(session?.phase, .processing)
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
-    func testWorkBuddyContinuationStaysVisibleAfterNewMessageArrives() async {
+    func testWorkBuddyContinuationClearsAfterNewMessageArrives() async {
         let sessionId = "workbuddy-msg-\(UUID().uuidString)"
         let store = SessionStore.shared
 
@@ -221,9 +220,8 @@ final class QoderWorkContinuationTests: XCTestCase {
         ))
 
         let session = await store.session(for: sessionId)
-        XCTAssertTrue(session?.intervention?.awaitsExternalContinuation ?? false)
-        XCTAssertEqual(session?.intervention?.submittedAnswers["topic"], ["A 方案"])
-        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertNil(session?.intervention)
+        XCTAssertEqual(session?.phase, .processing)
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }

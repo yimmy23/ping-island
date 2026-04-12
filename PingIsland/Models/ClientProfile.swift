@@ -544,6 +544,35 @@ enum ClientProfileRegistry {
             ]
         ),
         ManagedHookClientProfile(
+            id: "workbuddy-hooks",
+            title: "WorkBuddy",
+            subtitle: "管理 ~/.workbuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island",
+            logoAssetName: "WorkBuddyLogo",
+            prefersBundledLogoOverAppIcon: true,
+            localAppBundleIdentifiers: ["com.workbuddy.workbuddy"],
+            iconSymbolName: "bubble.left.and.bubble.right.fill",
+            configurationRelativePath: ".workbuddy/settings.json",
+            bridgeSource: "claude",
+            bridgeExtraArguments: [
+                "--client-kind", "workbuddy",
+                "--client-name", "WorkBuddy",
+                "--client-originator", "WorkBuddy"
+            ],
+            defaultEnabled: false,
+            brand: .codebuddy,
+            events: [
+                HookInstallEventDescriptor(name: "UserPromptSubmit", templates: [.plain]),
+                HookInstallEventDescriptor(name: "PreToolUse", templates: [.matcher("*")]),
+                HookInstallEventDescriptor(name: "PostToolUse", templates: [.matcher("*")]),
+                HookInstallEventDescriptor(name: "Notification", templates: [.matcher("*")]),
+                HookInstallEventDescriptor(name: "Stop", templates: [.plain]),
+                HookInstallEventDescriptor(name: "SubagentStop", templates: [.plain]),
+                HookInstallEventDescriptor(name: "SessionStart", templates: [.plain]),
+                HookInstallEventDescriptor(name: "SessionEnd", templates: [.plain]),
+                HookInstallEventDescriptor(name: "PreCompact", templates: [.matcher("auto"), .matcher("manual")]),
+            ]
+        ),
+        ManagedHookClientProfile(
             id: "cursor-hooks",
             title: "Cursor",
             subtitle: "管理 ~/Library/Application Support/Cursor/User/settings.json，按 Claude Hooks 协议接入 Island",
@@ -958,6 +987,8 @@ enum ClientProfileRegistry {
             title: "WorkBuddy",
             subtitle: "安装 Ping Island，支持终端精准聚焦",
             showsInSettings: false,
+            logoAssetName: "WorkBuddyLogo",
+            prefersBundledLogoOverAppIcon: true,
             localAppBundleIdentifiers: ["com.workbuddy.workbuddy"],
             iconSymbolName: "bubble.left.and.bubble.right.fill",
             extensionRootRelativePath: ".workbuddy/extensions",

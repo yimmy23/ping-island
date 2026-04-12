@@ -68,7 +68,7 @@ Ping Island focuses on the moments that actually interrupt coding flow, then kee
 - **Claude Code auto-approve** - Turn on per-session auto-approval when you want Claude Code to stop pausing on every permission request.
 - **One-click return** - Jump back to the right iTerm2, Ghostty, Terminal.app, tmux pane, or IDE window.
 - **SSH terminal support** - Bootstrap a remote PingIslandBridge over SSH, rewrite the remote Claude-compatible hooks to point back at your Mac, and keep remote terminal activity visible in the same local Island UI.
-- **Multi-agent coverage** - Track Claude Code, Codex, Gemini CLI, OpenClaw, OpenCode, Cursor, Qoder, CodeBuddy, GitHub Copilot, and other compatible sessions in one place.
+- **Multi-agent coverage** - Track Claude Code, Codex, Gemini CLI, OpenClaw, OpenCode, Cursor, Qoder, CodeBuddy, WorkBuddy, GitHub Copilot, and other compatible sessions in one place.
 - **OpenClaw gateway support** - Follow OpenClaw sessions from managed internal hooks, then refill the conversation from OpenClaw's local session transcripts so the Island UI can show the actual back-and-forth instead of a single inbound message.
 - **Codex hook + app-server sync** - Support Codex CLI hooks, live app-server threads, and rollout parsing fallback when needed.
 - **Custom sounds** - Pick per-event macOS sounds or import local sound packs for your own notification style.
@@ -81,11 +81,11 @@ Ping Island focuses on the moments that actually interrupt coding flow, then kee
   <img src="docs/images/ping-island-mascot-poster.png" width="960" alt="Ping Island supported tools poster">
 </p>
 
-Ping Island also ships VS Code-compatible focus extensions for VS Code, Cursor, CodeBuddy, and Qoder. `QoderWork` is hook-only today and does not participate in the IDE extension path.
+Ping Island also ships VS Code-compatible focus extensions for VS Code, Cursor, CodeBuddy, WorkBuddy, and Qoder. `QoderWork` is hook-only today and does not participate in the IDE extension path.
 
 OpenClaw is supported through a managed internal hook directory under `~/.openclaw/hooks/` plus transcript-aware session refresh from `~/.openclaw/agents/main/sessions/`. That combination lets Ping Island surface OpenClaw's lightweight message hooks quickly, then backfill the full conversation from the local session log once the assistant reply lands.
 
-SSH support is a core workflow, not a sidecar script. Ping Island can bootstrap a bridge onto a remote macOS or Linux host, rewrite the remote Claude-compatible hook config to use that bridge, and keep a bidirectional forwarding path back into the local menu-bar UI. That means approvals, follow-up questions, notifications, and jump-back routing from remote SSH terminals still land in the same Island surface on your Mac.
+SSH support is a core workflow, not a sidecar script. Ping Island can bootstrap a bridge onto a remote macOS or Linux host, rewrite the remote Claude-compatible hook config to use that bridge, install supported OpenClaw internal hooks on the remote host, and keep a bidirectional forwarding path back into the local menu-bar UI. That means approvals, follow-up questions, notifications, and jump-back routing from remote SSH terminals still land in the same Island surface on your Mac.
 
 The mascot GIFs used throughout this README are generated from the live `MascotView` implementation via `./scripts/render-mascots.sh`.
 The OpenClaw feature poster in `docs/images/ping-island-openclaw-poster.png` is generated via `./scripts/render-openclaw-poster.sh`.
@@ -246,7 +246,7 @@ Sound packs can use `.wav`, `.mp3`, or `.ogg` files. If a selected pack does not
 ## How It Works
 
 ```text
-Claude / Codex / Gemini CLI / OpenCode / Cursor / Qoder / CodeBuddy / Copilot / ...
+Claude / Codex / Gemini CLI / OpenCode / Cursor / Qoder / CodeBuddy / WorkBuddy / Copilot / ...
   -> hook or app-server event
     -> Ping Island monitor + normalization layer
       -> SessionStore
