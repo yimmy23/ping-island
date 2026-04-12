@@ -37,6 +37,8 @@ private struct PosterOptions {
     let outputName: String
     let canvasSize: CGSize
     let iconURL: URL
+    let codeBuddyIconURL: URL
+    let workBuddyIconURL: URL
     let notchPreviewURL: URL
     let questionPreviewURL: URL
     let variant: PosterVariant
@@ -48,6 +50,8 @@ private struct PosterOptions {
         var width = 2800
         var height = 1800
         var iconURL = cwd.appendingPathComponent("PingIsland/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png")
+        var codeBuddyIconURL = cwd.appendingPathComponent("docs/images/product-icons/codebuddy-app-icon.png")
+        var workBuddyIconURL = cwd.appendingPathComponent("docs/images/product-icons/workbuddy-app-icon.png")
         var notchPreviewURL = cwd.appendingPathComponent("docs/images/notch-panel.png")
         var questionPreviewURL = cwd.appendingPathComponent("docs/images/question-panel.png")
         var variant = PosterVariant.remoteWorkflows
@@ -74,6 +78,12 @@ private struct PosterOptions {
             case "--icon":
                 index += 1
                 iconURL = URL(fileURLWithPath: try Self.value(after: argument, at: index, in: arguments))
+            case "--codebuddy-icon":
+                index += 1
+                codeBuddyIconURL = URL(fileURLWithPath: try Self.value(after: argument, at: index, in: arguments))
+            case "--workbuddy-icon":
+                index += 1
+                workBuddyIconURL = URL(fileURLWithPath: try Self.value(after: argument, at: index, in: arguments))
             case "--notch-preview":
                 index += 1
                 notchPreviewURL = URL(fileURLWithPath: try Self.value(after: argument, at: index, in: arguments))
@@ -99,6 +109,8 @@ private struct PosterOptions {
         self.outputName = outputName
         self.canvasSize = CGSize(width: width, height: height)
         self.iconURL = iconURL
+        self.codeBuddyIconURL = codeBuddyIconURL
+        self.workBuddyIconURL = workBuddyIconURL
         self.notchPreviewURL = notchPreviewURL
         self.questionPreviewURL = questionPreviewURL
         self.variant = variant
@@ -128,6 +140,7 @@ private enum PosterVariant: String {
     case remoteWorkflows = "remote-workflows"
     case smoothUpdates = "smooth-updates"
     case v010Chinese = "v0.1.0-cn"
+    case v011CodeBuddyWorkBuddyChinese = "v0.1.1-codebuddy-workbuddy-cn"
 
     init(rawValue: String) throws {
         guard let value = PosterVariant(rawValue: rawValue) else {
@@ -166,9 +179,11 @@ private enum PosterExportError: LocalizedError {
               --width <pixels>           Canvas width (default: 2800)
               --height <pixels>          Canvas height (default: 1800)
               --icon <path>              App icon path
+              --codebuddy-icon <path>    CodeBuddy product icon path
+              --workbuddy-icon <path>    WorkBuddy product icon path
               --notch-preview <path>     Notch preview image path
               --question-preview <path>  Question preview image path
-              --variant <name>           remote-workflows | smooth-updates | v0.1.0-cn
+              --variant <name>           remote-workflows | smooth-updates | v0.1.0-cn | v0.1.1-codebuddy-workbuddy-cn
             """
         }
     }
@@ -185,6 +200,8 @@ private struct ReleaseHighlightsPosterView: View {
             SmoothUpdatesPoster(options: options)
         case .v010Chinese:
             V010ChinesePoster(options: options)
+        case .v011CodeBuddyWorkBuddyChinese:
+            V011CodeBuddyWorkBuddyChinesePoster(options: options)
         }
     }
 }
@@ -410,6 +427,91 @@ private struct V010ChinesePoster: View {
     }
 }
 
+private struct V011CodeBuddyWorkBuddyChinesePoster: View {
+    let options: PosterOptions
+
+    private let featureRows = [
+        "0.1.1 重点补强 CodeBuddy 与 WorkBuddy 监控",
+        "WorkBuddy 现在作为独立客户端画像接入 Island",
+        "客户端内追问改成 external-only 展示，不再误导成可在 Island 内直接提交",
+        "回答完成后会继续等待客户端续跑，并提供一键打开客户端回到现场",
+        "CodeBuddy / WorkBuddy 的历史记录支持按 index.json 做增量回填",
+        "用户 query 文本会从包裹字段里提纯，列表与 hover 里的内容更干净",
+    ]
+
+    var body: some View {
+        ZStack {
+            SharedPosterBackground(
+                topGlow: Color(red: 0.43, green: 0.38, blue: 0.98),
+                bottomGlow: Color(red: 0.12, green: 0.78, blue: 0.62)
+            )
+
+            VStack(spacing: 44) {
+                PosterHeader(
+                    iconURL: options.iconURL,
+                    eyebrow: "PING ISLAND VERSION 0.1.1",
+                    title: "CodeBuddy / WorkBuddy 监控优化",
+                    subtitle: "这一版把两个客户端的识别、追问状态、客户端回跳和历史回填都重新梳顺，让 Island 对它们的监控更像“正式支持”，而不是兼容兜底。"
+                )
+
+                HStack(alignment: .top, spacing: 34) {
+                    VStack(spacing: 28) {
+                        BigFeatureCard(
+                            title: "本次重点",
+                            bullets: featureRows,
+                            accent: Color(red: 0.43, green: 0.38, blue: 0.98),
+                            minHeight: 760,
+                            bulletFontSize: 44
+                        )
+
+                        HStack(spacing: 22) {
+                            MonitoringPositionCard()
+                            MonitoringKeywordsCard()
+                        }
+                    }
+
+                    VStack(spacing: 28) {
+                        PreviewCard(
+                            title: "提问状态更准确",
+                            caption: "当 CodeBuddy / WorkBuddy 在客户端内发起 follow-up question 时，Island 会明确提示切回客户端完成回答，并保留更自然的续跑节奏。",
+                            imageURL: options.questionPreviewURL,
+                            accent: Color(red: 0.19, green: 0.68, blue: 0.98)
+                        )
+
+                        ClientProductPairCard(
+                            title: "客户端画像更完整",
+                            subtitle: "CodeBuddy 与 WorkBuddy 现在都能以更清楚的品牌与交互路径出现在监控面板里。",
+                            accent: Color(red: 0.12, green: 0.78, blue: 0.62),
+                            clients: [
+                                ClientPosterIdentity(
+                                    title: "CodeBuddy",
+                                    subtitle: "追问回跳\n历史回填",
+                                    imageURL: options.codeBuddyIconURL
+                                ),
+                                ClientPosterIdentity(
+                                    title: "WorkBuddy",
+                                    subtitle: "独立识别\n外部续跑",
+                                    imageURL: options.workBuddyIconURL
+                                ),
+                            ]
+                        )
+                    }
+                    .frame(width: 920)
+                }
+
+                PosterFooter(tags: [
+                    "独立客户端识别",
+                    "follow-up 状态修正",
+                    "一键打开客户端",
+                    "历史增量回填",
+                ])
+            }
+            .padding(.horizontal, 106)
+            .padding(.vertical, 88)
+        }
+    }
+}
+
 private struct SharedPosterBackground: View {
     let topGlow: Color
     let bottomGlow: Color
@@ -522,6 +624,7 @@ private struct BigFeatureCard: View {
     let bullets: [String]
     let accent: Color
     var minHeight: CGFloat = 920
+    var bulletFontSize: CGFloat = 38
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -535,7 +638,7 @@ private struct BigFeatureCard: View {
                         .padding(.top, 14)
 
                     Text(bullet)
-                        .font(.system(size: 38, weight: .semibold, design: .rounded))
+                        .font(.system(size: bulletFontSize, weight: .semibold, design: .rounded))
                         .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -700,6 +803,117 @@ private struct ChineseKeywordsCard: View {
         .frame(maxWidth: .infinity, minHeight: 240, alignment: .topLeading)
         .padding(30)
         .background(PosterCardBackground())
+    }
+}
+
+private struct MonitoringPositionCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            CardLabel(text: "版本定位", accent: Color(red: 0.43, green: 0.38, blue: 0.98))
+
+            Text("0.1.1 是一次针对客户端监控质量的补强。")
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("不是简单地“多认出两个名字”，而是把 CodeBuddy / WorkBuddy 的真实交互节奏重新映射到 Island，让提问、续跑、跳转和消息回填更贴近客户端本身。")
+                .font(.system(size: 26, weight: .medium, design: .rounded))
+                .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.28))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+        .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct MonitoringKeywordsCard: View {
+    private let tags = [
+        "CodeBuddy",
+        "WorkBuddy",
+        "follow-up question",
+        "外部续跑",
+        "打开客户端",
+        "history index",
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            CardLabel(text: "关键词", accent: Color(red: 0.12, green: 0.78, blue: 0.62))
+
+            Text("这一版的核心变化")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
+
+            FlowTagCloud(tags: tags)
+        }
+        .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+        .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct ClientPosterIdentity {
+    let title: String
+    let subtitle: String
+    let imageURL: URL
+}
+
+private struct ClientProductPairCard: View {
+    let title: String
+    let subtitle: String
+    let accent: Color
+    let clients: [ClientPosterIdentity]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            CardLabel(text: title, accent: accent)
+
+            Text(subtitle)
+                .font(.system(size: 28, weight: .medium, design: .rounded))
+                .foregroundStyle(Color(red: 0.37, green: 0.32, blue: 0.28))
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 18) {
+                ForEach(Array(clients.enumerated()), id: \.offset) { _, client in
+                    ClientProductTile(client: client)
+                }
+            }
+        }
+        .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct ClientProductTile: View {
+    let client: ClientPosterIdentity
+
+    var body: some View {
+        VStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(.white.opacity(0.76))
+                .frame(maxWidth: .infinity, minHeight: 194)
+                .overlay {
+                    if let image = loadedImage(from: client.imageURL) {
+                        image
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(width: 124, height: 124)
+                            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                    }
+                }
+
+            Text(client.title)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.19, green: 0.16, blue: 0.13))
+
+            Text(client.subtitle)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color(red: 0.40, green: 0.34, blue: 0.29))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 }
 
