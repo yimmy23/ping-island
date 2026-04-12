@@ -4,6 +4,7 @@
 </h1>
 <p align="center">
   <b>macOS 菜单栏里的灵动岛风格 AI 编码会话监视器</b><br>
+  <a href="https://erha19.github.io/ping-island/">官网</a> •
   <a href="#installation">安装</a> •
   <a href="#features">功能</a> •
   <a href="#supported-tools">支持的工具</a> •
@@ -27,6 +28,10 @@
 <p align="center">
   <img src="docs/images/notch-panel.png" width="960" alt="Ping Island 预览图">
 </p>
+<p align="center">
+  <sub>官网：<a href="https://erha19.github.io/ping-island/">erha19.github.io/ping-island/</a></sub>
+</p>
+
 <p align="center">
   <sub>在菜单栏里查看活跃编码会话、回答追问，并一键跳回正确的终端或 IDE 窗口。</sub>
 </p>
@@ -99,9 +104,10 @@ SSH 远程支持是 Ping Island 的正式能力，而不是额外脚本。它可
 ### 下载发行版
 
 1. 打开 [Releases](https://github.com/erha19/ping-island/releases)
-2. 下载最新的 DMG 或 zip 包
-3. 将 `Ping Island.app` 拖到 Applications
-4. 启动应用，并打开你希望 Ping Island 监控的客户端
+2. 或访问[官网](https://erha19.github.io/ping-island/)查看产品介绍和最新下载入口
+3. 下载最新的 DMG 或 zip 包
+4. 将 `Ping Island.app` 拖到 Applications
+5. 启动应用，并打开你希望 Ping Island 监控的客户端
 
 > 首次启动时，macOS 可能会要求你确认应用，或授予辅助功能 / Apple Events 权限以支持聚焦能力。
 

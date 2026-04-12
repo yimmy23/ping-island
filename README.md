@@ -4,6 +4,7 @@
 </h1>
 <p align="center">
   <b>Dynamic Island-style AI coding session monitor for the macOS menu bar</b><br>
+  <a href="https://erha19.github.io/ping-island/">Website</a> •
   <a href="#installation">Install</a> •
   <a href="#features">Features</a> •
   <a href="#supported-tools">Supported Tools</a> •
@@ -28,6 +29,10 @@
   <img src="docs/images/notch-panel.png" width="480" alt="Ping Island preview">
 </p>
 
+
+<p align="center">
+  <sub>Official website: <a href="https://erha19.github.io/ping-island/">erha19.github.io/ping-island/</a></sub>
+</p>
 
 <p align="center">
   <sub>Watch active coding sessions, answer follow-up questions, and jump back to the right terminal or IDE window.</sub>
@@ -86,9 +91,10 @@ The mascot GIFs used throughout this README are generated from the live `MascotV
 ### Download a Release
 
 1. Go to [Releases](https://github.com/erha19/ping-island/releases).
-2. Download the latest DMG.
-3. Move `Ping Island.app` into your Applications folder.
-4. Launch the app and start the clients you want Ping Island to monitor.
+2. Or visit the [official website](https://erha19.github.io/ping-island/) for the product overview and latest download link.
+3. Download the latest DMG.
+4. Move `Ping Island.app` into your Applications folder.
+5. Launch the app and start the clients you want Ping Island to monitor.
 
 > On first launch, macOS may ask you to confirm the app or grant Accessibility / Apple Events permissions for focus features.
 
