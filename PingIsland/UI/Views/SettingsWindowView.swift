@@ -1,17 +1,178 @@
 import AppKit
 import Carbon.HIToolbox
 import Combine
+import CoreImage
 import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
 
+struct NativeRuntimeLaunchResult: Equatable, Sendable {
+    let sessionID: String?
+    let remoteControlURL: String?
+    let statusMessage: String?
+}
+
 protocol NativeRuntimeLaunching {
-    func startSession(provider: SessionProvider, cwd: String) async throws
+    func startSession(provider: SessionProvider, cwd: String) async throws -> NativeRuntimeLaunchResult
+    func terminateSession(provider: SessionProvider, sessionID: String) async throws
 }
 
 struct SharedRuntimeLauncher: NativeRuntimeLaunching {
-    func startSession(provider: SessionProvider, cwd: String) async throws {
-        _ = try await RuntimeCoordinator.shared.launchPreferredSession(provider: provider, cwd: cwd)
+    func startSession(provider: SessionProvider, cwd: String) async throws -> NativeRuntimeLaunchResult {
+        if provider == .claude {
+            return try await HappyClaudeLauncher().startSession(cwd: cwd)
+        }
+
+        let handle = try await RuntimeCoordinator.shared.launchPreferredSession(provider: provider, cwd: cwd)
+        return NativeRuntimeLaunchResult(sessionID: handle.sessionID, remoteControlURL: nil, statusMessage: nil)
+    }
+
+    func terminateSession(provider: SessionProvider, sessionID: String) async throws {
+        if provider == .claude {
+            try await HappyClaudeLauncher().terminateSession(sessionID: sessionID)
+            return
+        }
+
+        try await RuntimeCoordinator.shared.terminateSession(provider: provider, sessionID: sessionID)
+    }
+}
+
+struct HappyClaudeLauncher {
+    private struct DaemonState: Decodable {
+        let pid: Int32
+        let httpPort: Int
+    }
+
+    private struct SpawnRequest: Encodable {
+        let directory: String
+        let sessionId: String?
+        let agent: String
+    }
+
+    private struct SpawnResponse: Decodable {
+        let success: Bool
+        let sessionId: String?
+        let error: String?
+        let requiresUserApproval: Bool?
+        let actionRequired: String?
+        let directory: String?
+    }
+
+    private enum LaunchError: LocalizedError {
+        case daemonStateMissing
+        case daemonUnavailable
+        case spawnFailed(String)
+        case missingSessionID
+
+        var errorDescription: String? {
+            switch self {
+            case .daemonStateMissing:
+                return "Happy daemon 未运行，请先执行 `happy daemon start`"
+            case .daemonUnavailable:
+                return "Happy daemon 不可用，请确认 `happy auth status` 正常且 daemon 仍在运行"
+            case .spawnFailed(let message):
+                return message
+            case .missingSessionID:
+                return "Happy 启动 Claude 成功，但没有返回会话 ID"
+            }
+        }
+    }
+
+    func startSession(cwd: String) async throws -> NativeRuntimeLaunchResult {
+        let state = try loadDaemonState()
+        try ensureProcessAlive(pid: state.pid)
+
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(state.httpPort)/spawn-session")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(
+            SpawnRequest(directory: cwd, sessionId: nil, agent: "claude")
+        )
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LaunchError.daemonUnavailable
+        }
+
+        let result = try JSONDecoder().decode(SpawnResponse.self, from: data)
+
+        switch httpResponse.statusCode {
+        case 200:
+            guard result.success else {
+                throw LaunchError.spawnFailed(result.error ?? "Happy daemon 启动 Claude 失败")
+            }
+            guard let sessionId = result.sessionId?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !sessionId.isEmpty else {
+                throw LaunchError.missingSessionID
+            }
+
+            let remoteURL = Self.makeSessionURL(sessionID: sessionId)
+            return NativeRuntimeLaunchResult(
+                sessionID: sessionId,
+                remoteControlURL: remoteURL,
+                statusMessage: "Claude Native Runtime 已通过 Happy 通道启动"
+            )
+        case 409:
+            throw LaunchError.spawnFailed("Happy daemon 需要额外确认：\(result.actionRequired ?? "CREATE_DIRECTORY")")
+        default:
+            throw LaunchError.spawnFailed(result.error ?? "Happy daemon 请求失败（HTTP \(httpResponse.statusCode)）")
+        }
+    }
+
+    private func loadDaemonState() throws -> DaemonState {
+        let daemonStateURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".happy", isDirectory: true)
+            .appendingPathComponent("daemon.state.json")
+
+        guard FileManager.default.fileExists(atPath: daemonStateURL.path) else {
+            throw LaunchError.daemonStateMissing
+        }
+
+        let data = try Data(contentsOf: daemonStateURL)
+        return try JSONDecoder().decode(DaemonState.self, from: data)
+    }
+
+    private func ensureProcessAlive(pid: Int32) throws {
+        guard kill(pid, 0) == 0 else {
+            throw LaunchError.daemonUnavailable
+        }
+    }
+
+    static func makeSessionURL(
+        sessionID: String,
+        environmentValue: String? = {
+            guard let rawValue = getenv("HAPPY_WEBAPP_URL") else {
+                return nil
+            }
+            return String(validatingUTF8: rawValue)
+        }()
+    ) -> String {
+        let trimmedValue = environmentValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseURLString = (trimmedValue?.isEmpty == false ? trimmedValue : nil)
+            ?? "https://app.happy.engineering"
+        let baseURL = URL(string: baseURLString) ?? URL(string: "https://app.happy.engineering")!
+        return baseURL.appendingPathComponent("session").appendingPathComponent(sessionID).absoluteString
+    }
+
+    func terminateSession(sessionID: String) async throws {
+        let state = try loadDaemonState()
+        try ensureProcessAlive(pid: state.pid)
+
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(state.httpPort)/stop-session")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["sessionId": sessionID])
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LaunchError.daemonUnavailable
+        }
+
+        struct StopResponse: Decodable { let success: Bool }
+        let result = try JSONDecoder().decode(StopResponse.self, from: data)
+        guard httpResponse.statusCode == 200, result.success else {
+            throw LaunchError.spawnFailed("Happy daemon 终止 Claude 会话失败")
+        }
     }
 }
 
@@ -125,6 +286,9 @@ final class SettingsPanelViewModel: ObservableObject {
     @Published var nativeCodexRuntimeEnabled = FeatureFlags.nativeCodexRuntime
     @Published var nativeRuntimeWorkingDirectory = FileManager.default.homeDirectoryForCurrentUser.path
     @Published var nativeRuntimeStatusMessage: String?
+    @Published var nativeRuntimeRemoteControlURL: String?
+    @Published private(set) var nativeRuntimeLaunchingProvider: SessionProvider?
+    @Published private(set) var nativeRuntimeActiveSessionIDs: [String: String] = [:]
 
     private var hookFeedbackClearTasks: [String: Task<Void, Never>] = [:]
     private let runtimeLauncher: any NativeRuntimeLaunching
@@ -337,29 +501,81 @@ final class SettingsPanelViewModel: ObservableObject {
     }
 
     func startNativeRuntimeSession(provider: SessionProvider) {
+        guard nativeRuntimeLaunchingProvider == nil else { return }
+        guard activeNativeRuntimeSessionID(for: provider) == nil else { return }
+
         let cwd = nativeRuntimeWorkingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cwd.isEmpty else {
             nativeRuntimeStatusMessage = "请先选择工作目录"
+            nativeRuntimeRemoteControlURL = nil
             return
         }
 
         guard fileExists(cwd) else {
             nativeRuntimeStatusMessage = "目录不存在：\(cwd)"
+            nativeRuntimeRemoteControlURL = nil
             return
         }
 
+        nativeRuntimeRemoteControlURL = nil
+        nativeRuntimeLaunchingProvider = provider
+
         Task {
             do {
-                try await runtimeLauncher.startSession(provider: provider, cwd: cwd)
+                let launchResult = try await runtimeLauncher.startSession(provider: provider, cwd: cwd)
                 await MainActor.run {
-                    nativeRuntimeStatusMessage = "\(provider.displayName) Native Runtime 已启动"
+                    nativeRuntimeLaunchingProvider = nil
+                    if let sessionID = launchResult.sessionID, !sessionID.isEmpty {
+                        nativeRuntimeActiveSessionIDs[provider.rawValue] = sessionID
+                    }
+                    nativeRuntimeRemoteControlURL = launchResult.remoteControlURL
+                    nativeRuntimeStatusMessage = launchResult.statusMessage ?? "\(provider.displayName) Native Runtime 已启动"
                 }
             } catch {
                 await MainActor.run {
+                    nativeRuntimeLaunchingProvider = nil
+                    nativeRuntimeRemoteControlURL = nil
                     nativeRuntimeStatusMessage = error.localizedDescription
                 }
             }
         }
+    }
+
+    func terminateNativeRuntimeSession(provider: SessionProvider) {
+        guard nativeRuntimeLaunchingProvider == nil,
+              let sessionID = activeNativeRuntimeSessionID(for: provider),
+              !sessionID.isEmpty else {
+            return
+        }
+
+        nativeRuntimeLaunchingProvider = provider
+
+        Task {
+            do {
+                try await runtimeLauncher.terminateSession(provider: provider, sessionID: sessionID)
+                await MainActor.run {
+                    nativeRuntimeLaunchingProvider = nil
+                    nativeRuntimeActiveSessionIDs[provider.rawValue] = nil
+                    if provider == .claude {
+                        nativeRuntimeRemoteControlURL = nil
+                    }
+                    nativeRuntimeStatusMessage = "\(provider.displayName) Native Runtime 已终止"
+                }
+            } catch {
+                await MainActor.run {
+                    nativeRuntimeLaunchingProvider = nil
+                    nativeRuntimeStatusMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func isLaunchingNativeRuntime(for provider: SessionProvider) -> Bool {
+        nativeRuntimeLaunchingProvider == provider
+    }
+
+    func activeNativeRuntimeSessionID(for provider: SessionProvider) -> String? {
+        nativeRuntimeActiveSessionIDs[provider.rawValue]
     }
 
     func exportLogs() {
@@ -1039,7 +1255,7 @@ private struct SettingsPanelContentView: View {
 
                 SettingsInfoLine(
                     title: "当前策略",
-                    subtitle: "Claude Code、Codex、Gemini CLI、OpenCode、Cursor、Qoder、CodeBuddy、Trae 等客户端会显示各自独立的宠物形象与动作，并支持逐客户端改成别的宠物。"
+                    subtitle: "Claude Code、Codex、Gemini CLI、OpenCode、Cursor、Qoder、CodeBuddy、WorkBuddy、Trae 等客户端会显示各自独立的宠物形象与动作，并支持逐客户端改成别的宠物。"
                 ) {
                     Text(
                         settings.customizedMascotClientCount == 0
@@ -2773,6 +2989,8 @@ private struct NativeRuntimePreviewSection: View {
                             .foregroundColor(.white)
                     }
                     .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .scaleEffect(0.88, anchor: .leading)
 
                     Toggle(isOn: Binding(
                         get: { viewModel.nativeCodexRuntimeEnabled },
@@ -2783,6 +3001,8 @@ private struct NativeRuntimePreviewSection: View {
                             .foregroundColor(.white)
                     }
                     .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .scaleEffect(0.88, anchor: .leading)
                 }
             }
 
@@ -2819,16 +3039,41 @@ private struct NativeRuntimePreviewSection: View {
                 HookManagementButton(
                     title: "启动 Claude",
                     tint: brandTint(.claude),
-                    isDisabled: !viewModel.nativeClaudeRuntimeEnabled,
+                    isLoading: viewModel.isLaunchingNativeRuntime(for: .claude),
+                    isDisabled: !viewModel.nativeClaudeRuntimeEnabled
+                        || viewModel.activeNativeRuntimeSessionID(for: .claude) != nil,
                     action: { viewModel.startNativeRuntimeSession(provider: .claude) }
                 )
 
                 HookManagementButton(
                     title: "启动 Codex",
                     tint: brandTint(.codex),
-                    isDisabled: !viewModel.nativeCodexRuntimeEnabled,
+                    isLoading: viewModel.isLaunchingNativeRuntime(for: .codex),
+                    isDisabled: !viewModel.nativeCodexRuntimeEnabled
+                        || viewModel.activeNativeRuntimeSessionID(for: .codex) != nil,
                     action: { viewModel.startNativeRuntimeSession(provider: .codex) }
                 )
+            }
+
+            if viewModel.activeNativeRuntimeSessionID(for: .claude) != nil
+                || viewModel.activeNativeRuntimeSessionID(for: .codex) != nil {
+                HStack(spacing: 10) {
+                    HookManagementButton(
+                        title: "终止 Claude",
+                        tint: TerminalColors.amber,
+                        isDisabled: viewModel.activeNativeRuntimeSessionID(for: .claude) == nil
+                            || viewModel.isLaunchingNativeRuntime(for: .claude),
+                        action: { viewModel.terminateNativeRuntimeSession(provider: .claude) }
+                    )
+
+                    HookManagementButton(
+                        title: "终止 Codex",
+                        tint: TerminalColors.amber,
+                        isDisabled: viewModel.activeNativeRuntimeSessionID(for: .codex) == nil
+                            || viewModel.isLaunchingNativeRuntime(for: .codex),
+                        action: { viewModel.terminateNativeRuntimeSession(provider: .codex) }
+                    )
+                }
             }
 
             if let nativeRuntimeStatusMessage = viewModel.nativeRuntimeStatusMessage,
@@ -2838,10 +3083,113 @@ private struct NativeRuntimePreviewSection: View {
                     .foregroundColor(.white.opacity(0.68))
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            if let remoteControlURL = viewModel.nativeRuntimeRemoteControlURL,
+               !remoteControlURL.isEmpty {
+                NativeRuntimeQRCodeCard(
+                    title: "Happy Remote Link",
+                    subtitle: "扫码可在 Happy Web 中打开当前 Claude 会话。若设备已登录 Happy，同步后即可直接进入会话。",
+                    url: remoteControlURL
+                )
+            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct NativeRuntimeQRCodeCard: View {
+    let title: String
+    let subtitle: String
+    let url: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            QRCodeImageView(payload: url)
+                .frame(width: 116, height: 116)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                )
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.62))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(url)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.72))
+                    .textSelection(.enabled)
+                    .lineLimit(3)
+
+                Button("在浏览器打开") {
+                    guard let remoteURL = URL(string: url) else { return }
+                    NSWorkspace.shared.open(remoteURL)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(TerminalColors.blue)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+        )
+    }
+}
+
+private struct QRCodeImageView: View {
+    let payload: String
+
+    var body: some View {
+        Group {
+            if let image = makeImage(from: payload) {
+                Image(nsImage: image)
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(10)
+            } else {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.1))
+            }
+        }
+    }
+
+    private func makeImage(from payload: String) -> NSImage? {
+        guard let data = payload.data(using: .utf8),
+              let filter = CIFilter(name: "CIQRCodeGenerator") else {
+            return nil
+        }
+
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+
+        guard let outputImage = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)) else {
+            return nil
+        }
+
+        let representation = NSCIImageRep(ciImage: outputImage)
+        let image = NSImage(size: representation.size)
+        image.addRepresentation(representation)
+        return image
     }
 }
 

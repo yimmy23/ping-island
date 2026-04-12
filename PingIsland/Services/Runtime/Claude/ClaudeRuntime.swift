@@ -228,19 +228,106 @@ actor ClaudeRuntime: SessionRuntime {
         "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
-    nonisolated private static func resolveClaudeExecutable(
-        environment: [String: String] = Foundation.ProcessInfo.processInfo.environment
+    nonisolated static func resolveClaudeExecutable(
+        environment: [String: String] = Foundation.ProcessInfo.processInfo.environment,
+        isExecutable: @escaping @Sendable (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) },
+        shellResolver: @escaping @Sendable ([String: String]) -> String? = probeClaudeExecutableFromShell(environment:)
     ) -> String? {
-        if let explicit = environment["HAPPY_CLAUDE_PATH"], !explicit.isEmpty {
+        if let explicit = environment["PING_CLAUDE_PATH"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !explicit.isEmpty,
+            isExecutable(explicit) {
             return explicit
         }
 
-        let candidates = [
+        let pathCandidates = environment["PATH"]?
+            .split(separator: ":")
+            .map(String.init)
+            .map { "\($0)/claude" } ?? []
+        let fixedCandidates = [
             "/opt/homebrew/bin/claude",
             "/usr/local/bin/claude",
             "/usr/bin/claude",
         ]
 
-        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+        if let resolved = (pathCandidates + fixedCandidates).first(where: isExecutable) {
+            return resolved
+        }
+
+        guard let shellResolved = shellResolver(environment)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !shellResolved.isEmpty,
+            isExecutable(shellResolved) else {
+            return nil
+        }
+
+        return shellResolved
     }
+
+    nonisolated private static func probeClaudeExecutableFromShell(
+        environment: [String: String]
+    ) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-lc", claudeDetectionScript]
+
+        var shellEnvironment = environment
+        if let home = environment["HOME"], !home.isEmpty {
+            shellEnvironment["HOME"] = home
+        }
+        process.environment = shellEnvironment
+
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+
+        guard process.terminationStatus == 0 else {
+            return nil
+        }
+
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+
+        return output
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { !$0.isEmpty && $0.hasPrefix("/") })
+    }
+
+    nonisolated private static let claudeDetectionScript = """
+    if [ -n "${PING_CLAUDE_PATH:-}" ] && [ -x "${PING_CLAUDE_PATH}" ]; then
+      printf '%s\n' "${PING_CLAUDE_PATH}"
+      exit 0
+    fi
+
+    if [ -n "${PATH:-}" ]; then
+      found="$(command -v claude 2>/dev/null || true)"
+      if [ -n "${found}" ] && [ -x "${found}" ]; then
+        printf '%s\n' "${found}"
+        exit 0
+      fi
+    fi
+
+    export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+    if [ -s "${NVM_DIR}/nvm.sh" ]; then
+      . "${NVM_DIR}/nvm.sh" >/dev/null 2>&1
+      found="$(command -v claude 2>/dev/null || true)"
+      if [ -n "${found}" ] && [ -x "${found}" ]; then
+        printf '%s\n' "${found}"
+        exit 0
+      fi
+    fi
+
+    exit 1
+    """
 }
