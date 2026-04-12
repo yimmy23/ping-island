@@ -85,8 +85,18 @@ struct NotchView: View {
         }
     }
 
+    private var activeSessions: [SessionState] {
+        sessionMonitor.instances.filter(\.phase.isActive)
+    }
+
+    private var countedClosedSessions: [SessionState] {
+        sessionMonitor.instances.filter { session in
+            session.phase.isActive || session.phase.needsAttention
+        }
+    }
+
     private var activeSessionCount: Int {
-        sessionMonitor.instances.count
+        countedClosedSessions.count
     }
 
     /// Most recently active live session that has a hook message we can surface in the compact notch.
@@ -408,8 +418,7 @@ struct NotchView: View {
     }
 
     private var sortedHoverSessions: [SessionState] {
-        sessionMonitor.instances
-            .filter(\.phase.isActive)
+        activeSessions
             .sorted { $0.shouldSortBeforeInQueue($1) }
     }
 
