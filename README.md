@@ -76,7 +76,7 @@ Ping Island focuses on the moments that actually interrupt coding flow, then kee
 - **Custom sounds** - Pick per-event macOS sounds or import local sound packs for your own notification style.
 - **Custom agent mascots** - Give each client its own animated mascot override across the notch, session list, and hover UI.
 - **Hermes courier-fox mascot** - Hermes Agent uses a gold courier fox with a winged helmet and satchel so plugin-hook sessions stay visually distinct from the Claude/Qwen family.
-- **Qwen capybara mascot** - Qwen Code now ships with a scarf-wearing capybara mascot tuned for prompt, reply, and notification-heavy flows.
+- **Qwen capybara mascot** - Qwen Code now ships with a taller, scarf-wearing capybara mascot with an apple on its head.
 
 <a id="supported-tools"></a>
 ## Supported Tools
@@ -89,7 +89,7 @@ Ping Island also ships VS Code-compatible focus extensions for VS Code, Cursor, 
 
 Hermes Agent is integrated through a generated plugin directory at `~/.hermes/plugins/ping_island/`. Hermes' gateway hook directories under `~/.hermes/hooks/` do not run in the CLI, so Ping Island uses the official `ctx.register_hook()` plugin surface to observe prompt submission, tool activity, model replies, and session end events.
 
-Qwen Code is supported as a first-class hook client through `~/.qwen/settings.json`, and its built-in mascot is now a scarf-wearing capybara shown in the README GIF strip. The visual is meant to feel calm, sturdy, and a little deadpan instead of another fast courier-bird silhouette.
+Qwen Code is supported as a first-class hook client through `~/.qwen/settings.json`, and its built-in mascot is now a taller scarf-wearing capybara with an apple balanced on its head. The visual is meant to feel calm and cute without collapsing back into another round blob or bird silhouette.
 
 OpenClaw is supported through a managed internal hook directory under `~/.openclaw/hooks/` plus transcript-aware session refresh from `~/.openclaw/agents/main/sessions/`. That combination lets Ping Island surface OpenClaw's lightweight message hooks quickly, then backfill the full conversation from the local session log once the assistant reply lands.
 
