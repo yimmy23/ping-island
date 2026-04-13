@@ -251,11 +251,13 @@ private struct MascotPosterView: View {
         .claude: 0.15,
         .codex: 0.42,
         .gemini: 0.68,
-        .opencode: 0.91,
-        .cursor: 1.14,
-        .qoder: 1.36,
-        .codebuddy: 1.62,
-        .copilot: 1.88,
+        .hermes: 0.90,
+        .qwen: 1.12,
+        .opencode: 1.34,
+        .cursor: 1.56,
+        .qoder: 1.78,
+        .codebuddy: 2.00,
+        .copilot: 2.22,
     ]
 
     var body: some View {
@@ -305,7 +307,7 @@ private struct MascotPosterView: View {
         let time = animationTime ?? 0.48
         let glowScale = 1 + 0.05 * sin(time * .pi * 2 / 2.4)
 
-        ZStack {
+        return ZStack {
             Circle()
                 .fill(
                     RadialGradient(

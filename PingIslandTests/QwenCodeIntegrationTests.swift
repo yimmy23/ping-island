@@ -43,6 +43,8 @@ final class QwenCodeIntegrationTests: XCTestCase {
         XCTAssertTrue(clientInfo.prefersHookMessageAsLastMessageFallback)
         XCTAssertEqual(MascotClient(clientInfo: clientInfo, provider: .claude), .qwen)
         XCTAssertEqual(MascotKind(clientInfo: clientInfo, provider: .claude), .qwen)
+        XCTAssertEqual(MascotClient.qwen.subtitle, "Qwen Code 官方 hooks 与薄荷围巾卡皮巴拉")
+        XCTAssertEqual(MascotKind.qwen.subtitle, "薄荷围巾卡皮巴拉")
     }
 
     func testQwenCodeLastMessageFallsBackToHookMessageForPopupPreview() {
