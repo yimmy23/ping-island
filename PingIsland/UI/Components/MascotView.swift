@@ -889,7 +889,7 @@ struct MascotView: View {
         let apple = Color(red: 0.93, green: 0.23, blue: 0.18)
         let leaf = Color(red: 0.33, green: 0.72, blue: 0.32)
 
-        drawShadow(in: context, space: space, centerX: 8.9, y: 15.8, width: 6.7 - abs(motion.bounce) * 0.18, opacity: 0.2)
+        drawShadow(in: context, space: space, centerX: 8.9, y: 15.8, width: 6.0 - abs(motion.bounce) * 0.14, opacity: 0.18)
 
         if mode == .working {
             drawKeyboard(
@@ -904,16 +904,15 @@ struct MascotView: View {
         }
 
         let bodyRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (4.9, 7.0, 1.8),
-            (5.8, 6.0, 3.8),
-            (6.7, 5.2, 5.5),
-            (7.6, 4.5, 6.6),
-            (8.5, 4.0, 7.2),
-            (9.4, 4.0, 7.4),
-            (10.3, 4.3, 7.0),
-            (11.2, 4.9, 6.2),
-            (12.1, 5.7, 4.8),
-            (13.0, 6.8, 3.0)
+            (5.1, 6.8, 1.6),
+            (6.1, 5.8, 3.4),
+            (7.1, 5.0, 4.8),
+            (8.1, 4.5, 5.8),
+            (9.1, 4.4, 6.0),
+            (10.1, 4.7, 5.6),
+            (11.1, 5.2, 4.9),
+            (12.1, 5.9, 3.9),
+            (13.1, 6.8, 2.4)
         ]
         for row in bodyRows {
             context.fill(
@@ -922,11 +921,25 @@ struct MascotView: View {
             )
         }
 
+        let headRows: [(CGFloat, CGFloat, CGFloat)] = [
+            (7.2, 10.3, 2.1),
+            (8.1, 10.8, 2.4),
+            (9.0, 11.0, 2.6),
+            (9.9, 10.7, 2.3),
+            (10.8, 10.1, 1.7)
+        ]
+        for row in headRows {
+            context.fill(
+                Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.9)),
+                with: .color(fur)
+            )
+        }
+
         let earRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (4.0, 6.0, 0.9),
-            (3.8, 7.0, 0.8),
-            (4.1, 9.6, 0.9),
-            (3.9, 10.6, 0.8)
+            (6.4, 10.7, 0.7),
+            (6.1, 11.5, 0.6),
+            (6.5, 12.5, 0.7),
+            (6.2, 13.3, 0.6)
         ]
         for row in earRows {
             context.fill(
@@ -935,16 +948,16 @@ struct MascotView: View {
             )
         }
 
-        context.fill(Path(space.rect(8.4 + motion.shake, 2.6 + motion.vertical, 1.1, 1.0)), with: .color(apple))
-        context.fill(Path(space.rect(9.0 + motion.shake, 2.1 + motion.vertical, 0.12, 0.55)), with: .color(shade))
-        context.fill(Path(space.rect(9.05 + motion.shake, 2.0 + motion.vertical, 0.5, 0.22)), with: .color(leaf))
+        context.fill(Path(space.rect(11.8 + motion.shake, 3.3 + motion.vertical, 1.0, 0.95)), with: .color(apple))
+        context.fill(Path(space.rect(12.3 + motion.shake, 2.8 + motion.vertical, 0.12, 0.5)), with: .color(shade))
+        context.fill(Path(space.rect(12.35 + motion.shake, 2.7 + motion.vertical, 0.42, 0.2)), with: .color(leaf))
 
         let bellyRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (8.3, 6.2, 1.7),
-            (9.2, 5.8, 2.9),
-            (10.1, 5.8, 3.1),
-            (11.0, 6.1, 2.8),
-            (11.9, 6.7, 1.8)
+            (8.4, 6.0, 1.2),
+            (9.3, 5.8, 2.1),
+            (10.2, 5.9, 2.3),
+            (11.1, 6.2, 2.0),
+            (12.0, 6.8, 1.3)
         ]
         for row in bellyRows {
             context.fill(
@@ -954,10 +967,10 @@ struct MascotView: View {
         }
 
         let muzzleRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (7.9, 10.8, 1.6),
-            (8.8, 10.5, 2.3),
-            (9.7, 10.3, 2.8),
-            (10.6, 10.5, 2.3)
+            (8.2, 10.9, 1.2),
+            (9.1, 10.7, 1.8),
+            (10.0, 10.6, 2.1),
+            (10.9, 10.8, 1.8)
         ]
         for row in muzzleRows {
             context.fill(
@@ -967,40 +980,40 @@ struct MascotView: View {
         }
 
         let legRows: [(CGFloat, CGFloat)] = [
-            (11.3, 5.3),
-            (11.4, 6.9),
-            (11.3, 9.0),
-            (11.4, 10.6)
+            (11.5, 5.4),
+            (11.6, 6.9),
+            (11.5, 8.8),
+            (11.6, 10.2)
         ]
         for leg in legRows {
-            context.fill(Path(space.rect(leg.1 + motion.shake, leg.0 + motion.vertical, 0.8, 2.3)), with: .color(shade))
+            context.fill(Path(space.rect(leg.1 + motion.shake, leg.0 + motion.vertical, 0.62, 2.0)), with: .color(shade))
         }
 
-        context.fill(Path(space.rect(7.7 + motion.shake, 10.0 + motion.vertical, 4.0, 0.34)), with: .color(scarf))
-        context.fill(Path(space.rect(9.2 + motion.shake, 10.1 + motion.vertical, 0.62, 2.2)), with: .color(scarfDeep))
-        context.fill(Path(space.rect(9.8 + motion.shake, 11.3 + motion.vertical, 0.62, 1.3)), with: .color(scarf))
+        context.fill(Path(space.rect(7.8 + motion.shake, 9.9 + motion.vertical, 3.2, 0.32)), with: .color(scarf))
+        context.fill(Path(space.rect(8.9 + motion.shake, 10.0 + motion.vertical, 0.54, 1.9)), with: .color(scarfDeep))
+        context.fill(Path(space.rect(9.4 + motion.shake, 11.0 + motion.vertical, 0.54, 1.1)), with: .color(scarf))
 
         let eyeHeight: CGFloat = mode == .idle ? 0.35 : (mode == .warning ? 1.0 : blinkHeight(time: time, closedHeight: 0.16, openHeight: 1.0))
-        context.fill(Path(space.rect(8.2 + motion.shake, 7.0 + motion.vertical, 0.55, eyeHeight)), with: .color(eye))
-        context.fill(Path(space.rect(10.0 + motion.shake, 7.1 + motion.vertical, 0.55, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(8.3 + motion.shake, 7.4 + motion.vertical, 0.5, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(9.9 + motion.shake, 7.5 + motion.vertical, 0.5, eyeHeight)), with: .color(eye))
 
-        context.fill(Path(space.rect(12.0 + motion.shake, 8.9 + motion.vertical, 0.62, 0.62)), with: .color(nose))
-        context.fill(Path(space.rect(12.8 + motion.shake, 9.15 + motion.vertical, 0.22, 0.22)), with: .color(nose.opacity(0.7)))
+        context.fill(Path(space.rect(11.5 + motion.shake, 8.8 + motion.vertical, 0.55, 0.55)), with: .color(nose))
+        context.fill(Path(space.rect(12.2 + motion.shake, 9.0 + motion.vertical, 0.18, 0.18)), with: .color(nose.opacity(0.7)))
 
         if mode == .idle {
-            context.fill(Path(space.rect(8.8 + motion.shake, 9.8 + motion.vertical, 1.3, 0.15)), with: .color(eye.opacity(0.24)))
+            context.fill(Path(space.rect(8.8 + motion.shake, 9.6 + motion.vertical, 1.1, 0.14)), with: .color(eye.opacity(0.22)))
         } else {
-            context.fill(Path(space.rect(12.5 + motion.shake, 4.4 + motion.vertical, 1.15, 0.92)), with: .color(bubble.opacity(0.95)))
-            context.fill(Path(space.rect(12.85 + motion.shake, 5.15 + motion.vertical, 0.4, 0.36)), with: .color(bubble.opacity(0.95)))
-            context.fill(Path(space.rect(12.78 + motion.shake, 4.72 + motion.vertical, 0.16, 0.16)), with: .color(scarfDeep))
-            context.fill(Path(space.rect(13.08 + motion.shake, 4.72 + motion.vertical, 0.16, 0.16)), with: .color(scarfDeep))
-            context.fill(Path(space.rect(13.38 + motion.shake, 4.72 + motion.vertical, 0.16, 0.16)), with: .color(scarfDeep))
+            context.fill(Path(space.rect(11.8 + motion.shake, 4.0 + motion.vertical, 1.0, 0.84)), with: .color(bubble.opacity(0.95)))
+            context.fill(Path(space.rect(12.1 + motion.shake, 4.68 + motion.vertical, 0.34, 0.3)), with: .color(bubble.opacity(0.95)))
+            context.fill(Path(space.rect(12.02 + motion.shake, 4.28 + motion.vertical, 0.14, 0.14)), with: .color(scarfDeep))
+            context.fill(Path(space.rect(12.28 + motion.shake, 4.28 + motion.vertical, 0.14, 0.14)), with: .color(scarfDeep))
+            context.fill(Path(space.rect(12.54 + motion.shake, 4.28 + motion.vertical, 0.14, 0.14)), with: .color(scarfDeep))
         }
 
         if mode == .warning {
-            context.fill(Path(space.rect(5.4 + motion.shake, 4.7 + motion.vertical, 0.5, 0.9)), with: .color(bubble.opacity(0.92)))
-            context.fill(Path(space.rect(5.05 + motion.shake, 5.02 + motion.vertical, 1.15, 0.45)), with: .color(bubble.opacity(0.92)))
-            drawAlertGlyph(in: context, space: space, x: 12.4 + motion.shake, y: 2.0, color: kind.alertColor)
+            context.fill(Path(space.rect(6.0 + motion.shake, 4.6 + motion.vertical, 0.46, 0.82)), with: .color(bubble.opacity(0.92)))
+            context.fill(Path(space.rect(5.68 + motion.shake, 4.92 + motion.vertical, 1.04, 0.42)), with: .color(bubble.opacity(0.92)))
+            drawAlertGlyph(in: context, space: space, x: 11.9 + motion.shake, y: 2.0, color: kind.alertColor)
         }
     }
 
