@@ -70,7 +70,7 @@ enum MascotClient: String, CaseIterable, Identifiable, Sendable {
         case .hermes:
             return "Hermes plugin hooks 与翼盔信使狐"
         case .qwen:
-            return "Qwen Code 官方 hooks 与青羽问答燕"
+            return "Qwen Code 官方 hooks 与青围巾卡皮巴拉"
         case .openclaw:
             return "OpenClaw Gateway hooks 与默认小龙虾形象"
         case .opencode:
@@ -265,7 +265,7 @@ enum MascotKind: String, CaseIterable, Identifiable, Sendable {
         case .hermes:
             return "翼盔信使狐"
         case .qwen:
-            return "青羽问答燕"
+            return "青围巾卡皮巴拉"
         case .openclaw:
             return "像素小龙虾"
         case .opencode:
@@ -878,66 +878,67 @@ struct MascotView: View {
     ) {
         let space = PixelSpace(canvasSize, logicalWidth: 17, logicalHeight: 15, yOffset: 1.5)
         let motion = motionValues(for: mode, time: time)
-        let body = Color(red: 0.16, green: 0.73, blue: 0.87)
-        let deep = Color(red: 0.08, green: 0.49, blue: 0.64)
-        let wing = Color(red: 0.11, green: 0.58, blue: 0.72)
-        let belly = Color(red: 0.86, green: 0.99, blue: 0.97)
-        let beak = Color(red: 1.0, green: 0.75, blue: 0.27)
-        let eye = Color(red: 0.05, green: 0.15, blue: 0.22)
-        let accent = Color.white
-        let bubble = Color(red: 0.77, green: 0.97, blue: 1.0)
+        let fur = Color(red: 0.73, green: 0.60, blue: 0.43)
+        let shade = Color(red: 0.56, green: 0.43, blue: 0.28)
+        let belly = Color(red: 0.89, green: 0.82, blue: 0.67)
+        let scarf = Color(red: 0.18, green: 0.74, blue: 0.85)
+        let scarfDeep = Color(red: 0.10, green: 0.53, blue: 0.63)
+        let eye = Color(red: 0.12, green: 0.10, blue: 0.08)
+        let nose = Color(red: 0.23, green: 0.18, blue: 0.14)
+        let bubble = Color(red: 0.79, green: 0.98, blue: 1.0)
 
-        drawShadow(in: context, space: space, centerX: 8.7, y: 15.7, width: 7.1 - abs(motion.bounce) * 0.22, opacity: 0.2)
+        drawShadow(in: context, space: space, centerX: 8.8, y: 15.8, width: 7.6 - abs(motion.bounce) * 0.22, opacity: 0.2)
 
         if mode == .working {
             drawKeyboard(
                 in: context,
                 space: space,
                 y: 13.2,
-                base: Color(red: 0.11, green: 0.18, blue: 0.22),
-                key: Color(red: 0.22, green: 0.36, blue: 0.44),
-                highlight: belly,
+                base: Color(red: 0.16, green: 0.14, blue: 0.12),
+                key: Color(red: 0.31, green: 0.26, blue: 0.22),
+                highlight: scarf,
                 flashIndex: keyboardFlashIndex(time: time)
             )
         }
 
-        let rows: [(CGFloat, CGFloat, CGFloat)] = [
-            (4.9, 7.8, 1.4),
-            (5.8, 6.6, 3.6),
-            (6.8, 5.2, 6.3),
-            (7.8, 4.2, 8.5),
-            (8.8, 3.7, 9.4),
-            (9.8, 3.5, 9.6),
-            (10.8, 3.9, 8.7),
-            (11.8, 4.8, 7.0),
-            (12.8, 6.0, 5.1),
-            (13.8, 7.2, 2.8)
+        let bodyRows: [(CGFloat, CGFloat, CGFloat)] = [
+            (5.2, 6.7, 2.6),
+            (6.1, 5.4, 5.2),
+            (7.0, 4.1, 8.0),
+            (7.9, 3.6, 9.3),
+            (8.8, 3.2, 10.2),
+            (9.7, 3.3, 10.4),
+            (10.6, 3.9, 9.6),
+            (11.5, 4.8, 8.4),
+            (12.4, 5.9, 6.6),
+            (13.3, 7.2, 4.0)
         ]
-        for row in rows {
+        for row in bodyRows {
             context.fill(
                 Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2 * motion.squashX, 1 * motion.squashY)),
-                with: .color(body)
+                with: .color(fur)
             )
         }
 
-        let crestRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (3.9, 7.0, 0.7),
-            (4.2, 7.8, 0.9),
-            (4.3, 8.7, 0.7)
+        let earRows: [(CGFloat, CGFloat, CGFloat)] = [
+            (4.2, 5.4, 1.0),
+            (4.0, 6.7, 0.9),
+            (4.3, 9.0, 1.0),
+            (4.1, 10.2, 0.9)
         ]
-        for row in crestRows {
+        for row in earRows {
             context.fill(
                 Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.8)),
-                with: .color(deep.opacity(0.92))
+                with: .color(shade)
             )
         }
 
         let bellyRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (8.3, 6.6, 2.7),
-            (9.3, 5.9, 4.0),
-            (10.3, 5.5, 4.5),
-            (11.3, 5.8, 4.0),
-            (12.3, 6.6, 2.7)
+            (8.5, 6.4, 2.0),
+            (9.4, 5.9, 3.4),
+            (10.3, 5.8, 3.7),
+            (11.2, 6.2, 3.2),
+            (12.1, 6.9, 2.0)
         ]
         for row in bellyRows {
             context.fill(
@@ -946,69 +947,54 @@ struct MascotView: View {
             )
         }
 
-        let leftWingRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (8.6, 3.6, 1.8),
-            (9.6, 3.1, 2.3),
-            (10.6, 3.6, 2.0),
-            (11.6, 4.3, 1.4)
+        let muzzleRows: [(CGFloat, CGFloat, CGFloat)] = [
+            (8.0, 11.7, 1.6),
+            (8.9, 11.4, 2.1),
+            (9.8, 11.1, 2.5),
+            (10.7, 11.3, 2.1)
         ]
-        for row in leftWingRows {
+        for row in muzzleRows {
             context.fill(
-                Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.9)),
-                with: .color(wing)
+                Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.82)),
+                with: .color(belly.opacity(0.96))
             )
         }
 
-        let rightWingRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (8.4, 11.3, 1.8),
-            (9.4, 11.7, 2.2),
-            (10.4, 11.1, 2.4),
-            (11.4, 10.5, 1.7)
+        let legRows: [(CGFloat, CGFloat)] = [
+            (11.8, 5.3),
+            (11.8, 7.0),
+            (11.8, 9.1),
+            (11.8, 10.7)
         ]
-        for row in rightWingRows {
-            context.fill(
-                Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.9)),
-                with: .color(deep.opacity(0.9))
-            )
+        for leg in legRows {
+            context.fill(Path(space.rect(leg.1 + motion.shake, leg.0 + motion.vertical, 0.9, 2.0)), with: .color(shade))
         }
 
-        let tailRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (12.9, 8.4, 0.8),
-            (13.6, 8.1, 0.8),
-            (13.6, 9.0, 0.8)
-        ]
-        for row in tailRows {
-            context.fill(
-                Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 1.2)),
-                with: .color(deep)
-            )
-        }
-
-        context.fill(Path(space.rect(8.2 + motion.shake, 4.2 + motion.vertical, 1.4, 0.8)), with: .color(accent.opacity(0.7)))
-        context.fill(Path(space.rect(7.1 + motion.shake, 5.0 + motion.vertical, 2.4, 0.42)), with: .color(accent.opacity(0.4)))
+        context.fill(Path(space.rect(8.0 + motion.shake, 10.9 + motion.vertical, 3.7, 0.32)), with: .color(scarf))
+        context.fill(Path(space.rect(9.3 + motion.shake, 11.0 + motion.vertical, 0.7, 2.0)), with: .color(scarfDeep))
+        context.fill(Path(space.rect(10.0 + motion.shake, 12.1 + motion.vertical, 0.7, 1.2)), with: .color(scarf))
 
         let eyeHeight: CGFloat = mode == .idle ? 0.35 : (mode == .warning ? 1.0 : blinkHeight(time: time, closedHeight: 0.16, openHeight: 1.0))
-        context.fill(Path(space.rect(6.8 + motion.shake, 8.6 + motion.vertical, 0.7, eyeHeight)), with: .color(eye))
-        context.fill(Path(space.rect(9.6 + motion.shake, 8.6 + motion.vertical, 0.7, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(8.2 + motion.shake, 7.7 + motion.vertical, 0.62, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(10.2 + motion.shake, 7.8 + motion.vertical, 0.62, eyeHeight)), with: .color(eye))
 
-        context.fill(Path(space.rect(11.6 + motion.shake, 8.9 + motion.vertical, 1.1, 0.8)), with: .color(beak))
-        context.fill(Path(space.rect(12.5 + motion.shake, 9.2 + motion.vertical, 0.8, 0.42)), with: .color(beak.opacity(0.82)))
+        context.fill(Path(space.rect(11.9 + motion.shake, 9.1 + motion.vertical, 0.7, 0.7)), with: .color(nose))
+        context.fill(Path(space.rect(12.8 + motion.shake, 9.4 + motion.vertical, 0.25, 0.25)), with: .color(nose.opacity(0.7)))
 
         if mode == .idle {
-            context.fill(Path(space.rect(7.3 + motion.shake, 11.1 + motion.vertical, 2.6, 0.18)), with: .color(eye.opacity(0.26)))
+            context.fill(Path(space.rect(8.7 + motion.shake, 10.1 + motion.vertical, 1.6, 0.16)), with: .color(eye.opacity(0.24)))
         } else {
-            context.fill(Path(space.rect(7.0 + motion.shake, 10.9 + motion.vertical, 3.0, 0.35)), with: .color(belly.opacity(0.94)))
-            context.fill(Path(space.rect(12.7 + motion.shake, 5.1 + motion.vertical, 1.4, 1.1)), with: .color(bubble.opacity(0.95)))
-            context.fill(Path(space.rect(13.1 + motion.shake, 6.0 + motion.vertical, 0.5, 0.45)), with: .color(bubble.opacity(0.95)))
-            context.fill(Path(space.rect(13.0 + motion.shake, 5.4 + motion.vertical, 0.22, 0.22)), with: .color(deep))
-            context.fill(Path(space.rect(13.45 + motion.shake, 5.4 + motion.vertical, 0.22, 0.22)), with: .color(deep))
-            context.fill(Path(space.rect(13.9 + motion.shake, 5.4 + motion.vertical, 0.22, 0.22)), with: .color(deep))
+            context.fill(Path(space.rect(12.6 + motion.shake, 4.7 + motion.vertical, 1.3, 1.0)), with: .color(bubble.opacity(0.95)))
+            context.fill(Path(space.rect(12.9 + motion.shake, 5.5 + motion.vertical, 0.45, 0.4)), with: .color(bubble.opacity(0.95)))
+            context.fill(Path(space.rect(12.9 + motion.shake, 5.05 + motion.vertical, 0.18, 0.18)), with: .color(scarfDeep))
+            context.fill(Path(space.rect(13.25 + motion.shake, 5.05 + motion.vertical, 0.18, 0.18)), with: .color(scarfDeep))
+            context.fill(Path(space.rect(13.6 + motion.shake, 5.05 + motion.vertical, 0.18, 0.18)), with: .color(scarfDeep))
         }
 
         if mode == .warning {
-            context.fill(Path(space.rect(5.6 + motion.shake, 3.0 + motion.vertical, 0.6, 1.4)), with: .color(accent.opacity(0.78)))
-            context.fill(Path(space.rect(5.2 + motion.shake, 3.4 + motion.vertical, 1.4, 0.55)), with: .color(accent.opacity(0.78)))
-            drawAlertGlyph(in: context, space: space, x: 12.5 + motion.shake, y: 2.0, color: kind.alertColor)
+            context.fill(Path(space.rect(5.6 + motion.shake, 5.2 + motion.vertical, 0.55, 0.95)), with: .color(bubble.opacity(0.92)))
+            context.fill(Path(space.rect(5.25 + motion.shake, 5.55 + motion.vertical, 1.25, 0.48)), with: .color(bubble.opacity(0.92)))
+            drawAlertGlyph(in: context, space: space, x: 12.6 + motion.shake, y: 2.0, color: kind.alertColor)
         }
     }
 
