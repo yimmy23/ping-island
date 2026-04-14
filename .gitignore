@@ -38,7 +38,10 @@ Pods/
 Config/LocalSecrets.xcconfig
 
 # Release artifacts
-releases/
+releases/*
+!releases/notes/
+releases/notes/*
+!releases/notes/*.md
 
 # Xcode backup
 *.xcodeproj.backup/
