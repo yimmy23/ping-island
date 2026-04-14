@@ -3567,7 +3567,7 @@ private struct ShortcutRecorderControl: View {
     let defaultShortcut: GlobalShortcut?
 
     @State private var isRecording = false
-    @State private var helperText: String?
+    @State private var helperTextKey: String?
     @State private var eventMonitor: Any?
 
     var body: some View {
@@ -3617,7 +3617,7 @@ private struct ShortcutRecorderControl: View {
                 if shortcut != nil {
                     Button {
                         shortcut = nil
-                        helperText = nil
+                        helperTextKey = nil
                         stopRecording()
                     } label: {
                         Image(systemName: "trash")
@@ -3630,7 +3630,7 @@ private struct ShortcutRecorderControl: View {
                 if defaultShortcut != nil {
                     Button {
                         shortcut = defaultShortcut
-                        helperText = nil
+                        helperTextKey = nil
                         stopRecording()
                     } label: {
                         Image(systemName: "arrow.counterclockwise")
@@ -3641,7 +3641,7 @@ private struct ShortcutRecorderControl: View {
                 }
             }
 
-            Text(helperText ?? AppLocalization.string(isRecording ? "录制中，按 Esc 取消，Delete 清空" : "需要同时按下至少一个修饰键"))
+            Text(appLocalized: helperTextKey ?? (isRecording ? "录制中，按 Esc 取消，Delete 清空" : "需要同时按下至少一个修饰键"))
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(isRecording ? TerminalColors.green.opacity(0.90) : .white.opacity(0.42))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -3691,7 +3691,7 @@ private struct ShortcutRecorderControl: View {
     }
 
     private func startRecording() {
-        helperText = nil
+        helperTextKey = nil
         isRecording = true
 
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
@@ -3711,14 +3711,14 @@ private struct ShortcutRecorderControl: View {
 
     private func handleRecording(_ event: NSEvent) {
         if event.keyCode == UInt16(kVK_Escape) {
-            helperText = nil
+            helperTextKey = nil
             stopRecording()
             return
         }
 
         if event.keyCode == UInt16(kVK_Delete) || event.keyCode == UInt16(kVK_ForwardDelete) {
             shortcut = nil
-            helperText = nil
+            helperTextKey = nil
             stopRecording()
             return
         }
@@ -3727,12 +3727,12 @@ private struct ShortcutRecorderControl: View {
             keyCode: event.keyCode,
             modifierFlags: event.modifierFlags
         ) else {
-            helperText = AppLocalization.string("需要同时按下至少一个修饰键")
+            helperTextKey = "需要同时按下至少一个修饰键"
             return
         }
 
         shortcut = recordedShortcut
-        helperText = nil
+        helperTextKey = nil
         stopRecording()
     }
 }
