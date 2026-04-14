@@ -16,7 +16,7 @@ final class QwenCodeIntegrationTests: XCTestCase {
         )
     }
 
-    func testQwenAskUserQuestionPermissionRequestSupportsInlineQuestionResponse() {
+    func testQwenAskUserQuestionPermissionRequestSurfacesExternalQuestion() {
         let clientInfo = SessionClientInfo(
             kind: .custom,
             profileID: "qwen-code",
@@ -53,12 +53,12 @@ final class QwenCodeIntegrationTests: XCTestCase {
         )
 
         XCTAssertTrue(event.isAskUserQuestionRequest)
-        XCTAssertTrue(event.expectsResponse)
+        XCTAssertFalse(event.expectsResponse)
         XCTAssertEqual(event.determinePhase(), .waitingForInput)
         XCTAssertEqual(event.intervention?.kind, .question)
-        XCTAssertTrue(event.intervention?.supportsInlineResponse ?? false)
-        XCTAssertNil(event.intervention?.metadata["responseMode"])
-        XCTAssertTrue(event.intervention?.message.contains("提交后会继续执行") ?? false)
+        XCTAssertFalse(event.intervention?.supportsInlineResponse ?? true)
+        XCTAssertEqual(event.intervention?.metadata["responseMode"], "external_only")
+        XCTAssertTrue(event.intervention?.message.contains("暂不支持直接提交") ?? false)
     }
 
     func testQwenCodeManagedProfileUsesOfficialHooksSettings() {
@@ -238,7 +238,7 @@ final class QwenCodeIntegrationTests: XCTestCase {
         let session = await store.session(for: sessionId)
         XCTAssertEqual(session?.phase, .waitingForInput)
         XCTAssertEqual(session?.intervention?.kind, .question)
-        XCTAssertTrue(session?.intervention?.supportsInlineResponse ?? false)
+        XCTAssertEqual(session?.intervention?.metadata["responseMode"], "external_only")
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }

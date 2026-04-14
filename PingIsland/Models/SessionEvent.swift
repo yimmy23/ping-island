@@ -190,6 +190,7 @@ extension HookEvent {
 
     private nonisolated var isExternalClientQuestionEvent: Bool {
         (clientInfo.profileID == "qoderwork"
+            || clientInfo.isQwenCodeClient
             || clientInfo.bundleIdentifier == "com.qoder.work"
             || clientInfo.profileID == "workbuddy"
             || clientInfo.bundleIdentifier == "com.workbuddy.workbuddy")
@@ -215,6 +216,8 @@ extension HookEvent {
         let prefix: String
         if clientInfo.profileID == "workbuddy" || clientInfo.bundleIdentifier == "com.workbuddy.workbuddy" {
             prefix = "workbuddy-question"
+        } else if clientInfo.isQwenCodeClient {
+            prefix = "qwen-question"
         } else {
             prefix = "qoderwork-question"
         }
@@ -228,12 +231,6 @@ extension HookEvent {
 
         if isExternalClientQuestionEvent {
             return event == "PreToolUse" || event == "PermissionRequest"
-        }
-
-        if clientInfo.isQwenCodeClient {
-            return (event == "PreToolUse" || event == "PermissionRequest")
-                && Self.questionToolNames.contains(normalizedToolNameForIntervention ?? "")
-                && !(questionPayloads?.isEmpty ?? true)
         }
 
         return event == "PreToolUse"

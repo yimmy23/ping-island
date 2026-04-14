@@ -318,6 +318,12 @@ public enum HookPayloadMapper {
             return false
         }
 
+        if clientKind == "qwen-code",
+           questionToolNames.contains(normalizedToolName(from: payload) ?? ""),
+           questionPayloads(from: payload) != nil {
+            return false
+        }
+
         if hasAnsweredQuestionPayload(payload) {
             return false
         }

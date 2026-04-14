@@ -1502,6 +1502,7 @@ actor SessionStore {
               event.event == "Notification",
               event.notificationType == "permission_prompt",
               currentIntervention?.kind == .question,
+              currentIntervention?.metadata["responseMode"] == "external_only",
               newPhase != .waitingForInput else {
             return false
         }

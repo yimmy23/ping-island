@@ -403,10 +403,6 @@ struct HookInstaller {
             }
             setInternalHookEnabled(true, for: profile)
         }
-
-        if profile.id == "qwen-code-hooks" {
-            applyQwenAskUserQuestionCompatibilityPatchIfNeeded()
-        }
     }
 
     private static func uninstall(_ profile: ManagedHookClientProfile, persistPreference: Bool) {
@@ -703,99 +699,6 @@ struct HookInstaller {
             let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
             return lhsDate < rhsDate
         }
-    }
-
-    private static func applyQwenAskUserQuestionCompatibilityPatchIfNeeded() {
-        guard let cliURL = qwenCLIEntryPointURL(),
-              let source = try? String(contentsOf: cliURL, encoding: .utf8),
-              let patched = patchedQwenCLISourceIfNeeded(source),
-              patched != source else {
-            return
-        }
-
-        try? patched.write(to: cliURL, atomically: true, encoding: .utf8)
-    }
-
-    private static func qwenCLIEntryPointURL() -> URL? {
-        let process = Process()
-        let stdout = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["which", "qwen"]
-        process.standardOutput = stdout
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-            let data = stdout.fileHandleForReading.readDataToEndOfFile()
-            guard let path = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-                !path.isEmpty else {
-                return nil
-            }
-            return URL(fileURLWithPath: path).resolvingSymlinksInPath()
-        } catch {
-            return nil
-        }
-    }
-
-    static func patchedQwenCLISourceIfNeeded(_ source: String) -> String? {
-        let marker = #"const hookAnswerPayload = confirmationDetails.type === "ask_user_question""#
-        if source.contains(marker) {
-            return source
-        }
-
-        let replacements = [
-            (
-                """
-                      if (hookResult.updatedInput && typeof reqInfo.args === "object") {
-                        this.setArgsInternal(reqInfo.callId, hookResult.updatedInput);
-                      }
-                      await confirmationDetails.onConfirm(ToolConfirmationOutcome.ProceedOnce);
-                """,
-                """
-                      if (hookResult.updatedInput && typeof reqInfo.args === "object") {
-                        this.setArgsInternal(reqInfo.callId, hookResult.updatedInput);
-                      }
-                      const hookAnswerPayload = confirmationDetails.type === "ask_user_question" && hookResult.updatedInput && typeof hookResult.updatedInput === "object" && "answers" in hookResult.updatedInput ? { answers: hookResult.updatedInput.answers } : void 0;
-                      await confirmationDetails.onConfirm(ToolConfirmationOutcome.ProceedOnce, hookAnswerPayload);
-                """
-            ),
-            (
-                """
-                if (hookResult.updatedInput) {
-                  args2 = hookResult.updatedInput;
-                  invocation.params = hookResult.updatedInput;
-                }
-                await confirmationDetails.onConfirm(
-                  ToolConfirmationOutcome.ProceedOnce
-                );
-                """,
-                """
-                if (hookResult.updatedInput) {
-                  args2 = hookResult.updatedInput;
-                  invocation.params = hookResult.updatedInput;
-                }
-                const hookAnswerPayload = confirmationDetails.type === "ask_user_question" && hookResult.updatedInput && typeof hookResult.updatedInput === "object" && "answers" in hookResult.updatedInput ? { answers: hookResult.updatedInput.answers } : void 0;
-                await confirmationDetails.onConfirm(
-                  ToolConfirmationOutcome.ProceedOnce,
-                  hookAnswerPayload
-                );
-                """
-            )
-        ]
-
-        var patched = source
-        var didChange = false
-        for (needle, replacement) in replacements {
-            if patched.contains(needle) {
-                patched = patched.replacingOccurrences(of: needle, with: replacement)
-                didChange = true
-            }
-        }
-
-        return didChange ? patched : nil
     }
 
     private static func normalizedHookEntries(
