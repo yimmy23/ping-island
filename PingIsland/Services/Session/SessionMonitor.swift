@@ -488,6 +488,7 @@ class SessionMonitor: ObservableObject {
     private enum HookAnswerEncodingStrategy {
         case lookupAliases
         case questionText
+        case questionIndex
     }
 
     private nonisolated static func answerEncodingStrategy(for clientInfo: SessionClientInfo?) -> HookAnswerEncodingStrategy {
@@ -504,6 +505,10 @@ class SessionMonitor: ObservableObject {
             || bundleIdentifier == "com.codebuddy.app"
             || bundleIdentifier == "com.workbuddy.workbuddy" {
             return .lookupAliases
+        }
+
+        if clientInfo?.isQwenCodeClient == true {
+            return .questionIndex
         }
 
         return .questionText
@@ -542,6 +547,8 @@ class SessionMonitor: ObservableObject {
                 for key in lookupKeys {
                     encodedAnswers[key] = encodedValue
                 }
+            case .questionIndex:
+                encodedAnswers["\(index)"] = encodedValue
             case .questionText:
                 let outputKey = (question["question"] as? String)
                     ?? (question["prompt"] as? String)

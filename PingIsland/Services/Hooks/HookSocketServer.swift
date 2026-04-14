@@ -88,6 +88,9 @@ struct HookEvent: Sendable {
         let normalizedTool = tool?
             .lowercased()
             .replacingOccurrences(of: "_", with: "")
+        if clientInfo.isQwenCodeClient && normalizedTool == "askuserquestion" {
+            return false
+        }
         return (event == "PermissionRequest" && status == "waiting_for_approval")
             || (
                 event == "PreToolUse"

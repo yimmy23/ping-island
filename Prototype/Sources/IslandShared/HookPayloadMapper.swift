@@ -312,6 +312,12 @@ public enum HookPayloadMapper {
             return false
         }
 
+        if clientKind == "qwen-code",
+           questionToolNames.contains(normalizedToolName(from: payload) ?? ""),
+           questionPayloads(from: payload) != nil {
+            return false
+        }
+
         if let intervention {
             switch intervention.kind {
             case .approval:
@@ -1044,7 +1050,7 @@ public enum HookPayloadMapper {
         payload: [String: Any],
         clientKind: String?
     ) -> Bool {
-        if clientKind == "qoderwork" {
+        if clientKind == "qoderwork" || clientKind == "qwen-code" {
             return isQoderWorkPreToolQuestionEvent(eventType: eventType, payload: payload)
                 || isQoderWorkPermissionQuestionEvent(eventType: eventType, payload: payload)
         }

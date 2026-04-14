@@ -120,8 +120,7 @@ struct CodexSessionView: View {
 
     private func questionForm(_ intervention: SessionIntervention) -> some View {
         Group {
-            if intervention.metadata["responseMode"] == "external_only",
-               session.clientInfo.kind == .codexCLI {
+            if intervention.metadata["responseMode"] == "external_only" {
                 HStack(spacing: 0) {
                     Button {
                         openClient()

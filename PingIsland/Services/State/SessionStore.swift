@@ -2954,6 +2954,7 @@ actor SessionStore {
         let bundleIdentifier = event.clientInfo.bundleIdentifier?.lowercased()
         if profileID == "qoder"
             || profileID == "qoderwork"
+            || profileID == "qwen-code"
             || bundleIdentifier == "com.qoder.ide"
             || bundleIdentifier == "com.qoder.work" {
             return false

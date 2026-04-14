@@ -65,4 +65,39 @@ final class SessionMonitorAskUserQuestionTests: XCTestCase {
         XCTAssertEqual(answers?["topic"] as? String, "A 方案")
         XCTAssertEqual(answers?["先选一个主题"] as? String, "A 方案")
     }
+
+    func testUpdatedHookToolInputUsesQuestionIndexForQwenCode() {
+        let rawJSON = """
+        {
+          "questions": [
+            {
+              "question": "你最喜欢哪种编程语言？",
+              "header": "编程语言",
+              "options": [
+                { "label": "Python" },
+                { "label": "Rust" }
+              ],
+              "multiSelect": false
+            }
+          ]
+        }
+        """
+
+        let updated = SessionMonitor.updatedHookToolInput(
+            rawJSON: rawJSON,
+            answers: ["你最喜欢哪种编程语言？": ["Python"]],
+            clientInfo: SessionClientInfo(
+                kind: .custom,
+                profileID: "qwen-code",
+                name: "Qwen Code",
+                origin: "cli",
+                originator: "Qwen Code",
+                threadSource: "qwen-code-hooks"
+            )
+        )
+
+        let answers = updated?["answers"] as? [String: Any]
+        XCTAssertEqual(answers?["0"] as? String, "Python")
+        XCTAssertNil(answers?["你最喜欢哪种编程语言？"])
+    }
 }

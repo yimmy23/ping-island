@@ -2,13 +2,58 @@ import XCTest
 @testable import Ping_Island
 
 final class QwenCodeIntegrationTests: XCTestCase {
+    func testQwenAskUserQuestionPermissionRequestSurfacesExternalQuestion() {
+        let clientInfo = SessionClientInfo(
+            kind: .custom,
+            profileID: "qwen-code",
+            name: "Qwen Code",
+            origin: "cli",
+            originator: "Qwen Code",
+            threadSource: "qwen-code-hooks"
+        )
+
+        let event = HookEvent(
+            sessionId: "qwen-session",
+            cwd: "/tmp/qwen-project",
+            event: "PermissionRequest",
+            status: "waiting_for_approval",
+            provider: .claude,
+            clientInfo: clientInfo,
+            pid: nil,
+            tty: nil,
+            tool: "AskUserQuestion",
+            toolInput: [
+                "questions": AnyCodable([
+                    [
+                        "question": "你想做什么项目？",
+                        "header": "项目类型",
+                        "options": [
+                            ["label": "网站开发"]
+                        ]
+                    ]
+                ])
+            ],
+            toolUseId: nil,
+            notificationType: nil,
+            message: "Qwen Code needs your permission to use ask_user_question"
+        )
+
+        XCTAssertTrue(event.isAskUserQuestionRequest)
+        XCTAssertFalse(event.expectsResponse)
+        XCTAssertEqual(event.determinePhase(), .waitingForInput)
+        XCTAssertEqual(event.intervention?.kind, .question)
+        XCTAssertFalse(event.intervention?.supportsInlineResponse ?? true)
+        XCTAssertEqual(event.intervention?.metadata["responseMode"], "external_only")
+        XCTAssertTrue(event.intervention?.message.contains("暂不支持直接提交") ?? false)
+    }
+
     func testQwenCodeManagedProfileUsesOfficialHooksSettings() {
         let profile = ClientProfileRegistry.managedHookProfile(id: "qwen-code-hooks")
 
         XCTAssertNotNil(profile)
         XCTAssertEqual(profile?.title, "Qwen Code")
         XCTAssertEqual(profile?.brand, .qwen)
-        XCTAssertNil(profile?.logoAssetName)
+        XCTAssertEqual(profile?.logoAssetName, "QwenLogo")
         XCTAssertEqual(profile?.primaryConfigurationURL.path, NSHomeDirectory() + "/.qwen/settings.json")
         XCTAssertTrue(profile?.alwaysVisibleInSettings == true)
     }
