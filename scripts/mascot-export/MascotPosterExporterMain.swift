@@ -113,9 +113,9 @@ private struct PosterOptions {
     init(arguments: [String]) throws {
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         var outputDirectory = cwd.appendingPathComponent("docs/images", isDirectory: true)
-        var outputName = "ping-island-mascot-poster.gif"
+        var outputName = "ping-island-mascot-poster.png"
         var width = 2800
-        var height = 1800
+        var height = 2120
         var iconURL = cwd.appendingPathComponent("PingIsland/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png")
         var fps = 18
         var duration = 2.4
@@ -224,9 +224,9 @@ private enum PosterExportError: LocalizedError {
             Usage: render-mascot-poster.sh [options]
 
               --output-dir <path>   Output directory (default: docs/images)
-              --output-name <name>  Output filename (default: ping-island-mascot-poster.gif)
+              --output-name <name>  Output filename (default: ping-island-mascot-poster.png)
               --width <pixels>      Canvas width (default: 2800)
-              --height <pixels>     Canvas height (default: 1800)
+              --height <pixels>     Canvas height (default: 2120)
               --icon <path>         App icon path (default: AppIcon 1024 PNG)
               --fps <number>        GIF frame rate (default: 18)
               --duration <seconds>  GIF duration (default: 2.4)
@@ -264,12 +264,12 @@ private struct MascotPosterView: View {
         ZStack {
             PosterBackground(animationTime: animationTime)
 
-            VStack(spacing: 56) {
+            VStack(spacing: 44) {
                 header
                 mascotGrid
             }
             .padding(.horizontal, 120)
-            .padding(.vertical, 100)
+            .padding(.vertical, 84)
         }
     }
 
@@ -357,8 +357,8 @@ private struct MascotPosterView: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                .white.opacity(0.92),
-                                Color(red: 0.98, green: 0.95, blue: 0.90).opacity(0.88),
+                                .white.opacity(0.95),
+                                Color(red: 0.98, green: 0.98, blue: 0.99).opacity(0.92),
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -371,17 +371,17 @@ private struct MascotPosterView: View {
 
                 Circle()
                     .fill(kind.alertColor.opacity(0.20))
-                    .frame(width: 190, height: 190)
-                    .blur(radius: 12)
+                    .frame(width: 176, height: 176)
+                    .blur(radius: 16)
 
                 MascotView(
                     kind: kind,
                     status: .working,
-                    size: 170,
+                    size: 164,
                     animationTime: (mascotTimes[kind] ?? 0.2) + (animationTime ?? 0.0)
                 )
             }
-            .frame(height: 242)
+            .frame(height: 226)
 
             VStack(spacing: 8) {
                 Text(kind.title)
@@ -398,10 +398,10 @@ private struct MascotPosterView: View {
             }
         }
         .padding(22)
-        .frame(maxWidth: .infinity, minHeight: 360)
+        .frame(maxWidth: .infinity, minHeight: 332)
         .background(
             RoundedRectangle(cornerRadius: 38, style: .continuous)
-                .fill(.white.opacity(0.55))
+                .fill(.white.opacity(0.70))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 38, style: .continuous)
@@ -418,50 +418,32 @@ private struct PosterBackground: View {
         let time = animationTime ?? 0.0
 
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.99, green: 0.96, blue: 0.90),
-                    Color(red: 0.98, green: 0.91, blue: 0.80),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            Color.white
 
-            RadialGradient(
-                colors: [
-                    Color(red: 1.0, green: 0.90, blue: 0.63).opacity(0.52),
-                    .clear,
-                ],
-                center: .topLeading,
-                startRadius: 20,
-                endRadius: 900
-            )
-            .scaleEffect(1 + 0.03 * sin(time * .pi / 1.4))
-
-            RadialGradient(
-                colors: [
-                    Color(red: 1.0, green: 0.63, blue: 0.20).opacity(0.16),
-                    .clear,
-                ],
-                center: .bottomTrailing,
-                startRadius: 40,
-                endRadius: 760
-            )
-            .scaleEffect(1 + 0.04 * sin(time * .pi / 1.8))
-        }
-        .overlay(alignment: .topTrailing) {
             Circle()
-                .fill(Color.white.opacity(0.30))
-                .frame(width: 420, height: 420)
-                .blur(radius: 8)
-                .offset(x: 120 + 20 * sin(time * .pi / 1.6), y: -120)
-        }
-        .overlay(alignment: .bottomLeading) {
-            RoundedRectangle(cornerRadius: 160, style: .continuous)
-                .fill(Color.white.opacity(0.20))
-                .frame(width: 560, height: 220)
+                .fill(Color(red: 1.0, green: 0.65, blue: 0.28).opacity(0.28))
+                .frame(width: 880, height: 880)
+                .blur(radius: 130)
+                .offset(x: -760 + 30 * sin(time * .pi / 1.6), y: -520)
+
+            Circle()
+                .fill(Color(red: 0.28, green: 0.78, blue: 0.99).opacity(0.24))
+                .frame(width: 980, height: 980)
+                .blur(radius: 150)
+                .offset(x: 820 + 24 * cos(time * .pi / 1.8), y: -360)
+
+            Circle()
+                .fill(Color(red: 0.37, green: 0.91, blue: 0.66).opacity(0.20))
+                .frame(width: 920, height: 920)
+                .blur(radius: 150)
+                .offset(x: -600, y: 620 + 22 * sin(time * .pi / 1.7))
+
+            RoundedRectangle(cornerRadius: 240, style: .continuous)
+                .fill(Color(red: 0.95, green: 0.60, blue: 0.94).opacity(0.12))
+                .frame(width: 1200, height: 520)
+                .blur(radius: 120)
                 .rotationEffect(.degrees(-12))
-                .offset(x: -80, y: 90 + 12 * cos(time * .pi / 1.5))
+                .offset(x: 720, y: 560)
         }
     }
 }
