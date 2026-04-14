@@ -190,28 +190,40 @@ enum GlobalShortcutAction: String, CaseIterable, Identifiable {
         case .openActiveSession:
             return GlobalShortcut(
                 keyCode: UInt16(kVK_ANSI_J),
-                modifierFlags: [.option, .command]
+                modifierFlags: [.option]
             )
         case .openSessionList:
             return GlobalShortcut(
                 keyCode: UInt16(kVK_ANSI_L),
-                modifierFlags: [.option, .command]
+                modifierFlags: [.option]
             )
         }
     }
 
-    var legacyDefaultShortcut: GlobalShortcut? {
+    var legacyDefaultShortcuts: [GlobalShortcut] {
         switch self {
         case .openActiveSession:
-            return GlobalShortcut(
-                keyCode: UInt16(kVK_ANSI_J),
-                modifierFlags: [.control, .option, .command]
-            )
+            return [
+                GlobalShortcut(
+                    keyCode: UInt16(kVK_ANSI_J),
+                    modifierFlags: [.option, .command]
+                ),
+                GlobalShortcut(
+                    keyCode: UInt16(kVK_ANSI_J),
+                    modifierFlags: [.control, .option, .command]
+                )
+            ].compactMap { $0 }
         case .openSessionList:
-            return GlobalShortcut(
-                keyCode: UInt16(kVK_ANSI_L),
-                modifierFlags: [.control, .option, .command]
-            )
+            return [
+                GlobalShortcut(
+                    keyCode: UInt16(kVK_ANSI_L),
+                    modifierFlags: [.option, .command]
+                ),
+                GlobalShortcut(
+                    keyCode: UInt16(kVK_ANSI_L),
+                    modifierFlags: [.control, .option, .command]
+                )
+            ].compactMap { $0 }
         }
     }
 

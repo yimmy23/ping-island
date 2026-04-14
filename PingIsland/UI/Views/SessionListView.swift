@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import Carbon.HIToolbox
 import Combine
 import SwiftUI
 
@@ -13,6 +14,8 @@ struct SessionListView: View {
     @ObservedObject var sessionMonitor: SessionMonitor
     @ObservedObject var viewModel: NotchViewModel
     @State private var expandedSessionStableID: String?
+    @State private var selectedSessionStableID: String?
+    @State private var keyEventMonitor: Any?
 
     var body: some View {
         if sessionMonitor.instances.isEmpty {
@@ -92,6 +95,8 @@ struct SessionListView: View {
                 InstanceRow(
                     session: session,
                     isExpanded: expandedSessionStableID == session.stableId,
+                    isSelected: selectedSessionStableID == session.stableId,
+                    onSelect: { selectSession(session) },
                     onActivate: { activateSession(session) },
                     onToggleExpanded: { toggleExpanded(session) },
                     onFocus: { activateSession(session) },
@@ -118,19 +123,36 @@ struct SessionListView: View {
     }
 
     private var instancesList: some View {
-        Group {
-            if shouldUseScrollContainer {
-                ScrollView(.vertical, showsIndicators: false) {
+        ScrollViewReader { proxy in
+            Group {
+                if shouldUseScrollContainer {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        listContent
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                } else {
                     listContent
                 }
-                .scrollBounceBehavior(.basedOnSize)
-            } else {
-                listContent
             }
-        }
-        .onChange(of: sortedInstances.map(\.stableId)) { _, stableIDs in
-            guard let expandedSessionStableID, !stableIDs.contains(expandedSessionStableID) else { return }
-            self.expandedSessionStableID = nil
+            .onAppear {
+                selectedSessionStableID = nil
+                installKeyEventMonitorIfNeeded()
+            }
+            .onDisappear {
+                removeKeyEventMonitor()
+            }
+            .onChange(of: sortedInstances.map(\.stableId)) { _, stableIDs in
+                if let expandedSessionStableID, !stableIDs.contains(expandedSessionStableID) {
+                    self.expandedSessionStableID = nil
+                }
+                syncSelection(with: sortedInstances)
+            }
+            .onChange(of: selectedSessionStableID) { _, stableID in
+                guard let stableID else { return }
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    proxy.scrollTo(stableID, anchor: .center)
+                }
+            }
         }
     }
 
@@ -144,6 +166,7 @@ struct SessionListView: View {
     }
 
     private func toggleExpanded(_ session: SessionState) {
+        selectSession(session)
         withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
             if expandedSessionStableID == session.stableId {
                 expandedSessionStableID = nil
@@ -154,33 +177,126 @@ struct SessionListView: View {
     }
 
     private func openChat(_ session: SessionState) {
+        selectSession(session)
         viewModel.showChat(for: session)
     }
 
     private func openClient(_ session: SessionState) {
+        selectSession(session)
         Task {
             _ = await SessionLauncher.shared.activateClientApplication(session)
         }
     }
 
     private func approveSession(_ session: SessionState) {
+        selectSession(session)
         sessionMonitor.approvePermission(sessionId: session.sessionId)
     }
 
     private func approveSessionForScope(_ session: SessionState) {
+        selectSession(session)
         sessionMonitor.approvePermission(sessionId: session.sessionId, forSession: true)
     }
 
     private func rejectSession(_ session: SessionState) {
+        selectSession(session)
         sessionMonitor.denyPermission(sessionId: session.sessionId, reason: nil)
     }
 
     private func archiveSession(_ session: SessionState) {
+        selectSession(session)
         sessionMonitor.archiveSession(sessionId: session.sessionId)
     }
 
     private func terminateSession(_ session: SessionState) {
+        selectSession(session)
         sessionMonitor.terminateNativeSession(sessionId: session.sessionId)
+    }
+
+    private func selectSession(_ session: SessionState) {
+        guard selectedSessionStableID != session.stableId else { return }
+        selectedSessionStableID = session.stableId
+    }
+
+    private func syncSelection(with sessions: [SessionState]) {
+        guard !sessions.isEmpty else {
+            selectedSessionStableID = nil
+            return
+        }
+
+        guard let selectedSessionStableID else {
+            return
+        }
+
+        guard sessions.contains(where: { $0.stableId == selectedSessionStableID }) else {
+            self.selectedSessionStableID = nil
+            return
+        }
+    }
+
+    private func installKeyEventMonitorIfNeeded() {
+        guard keyEventMonitor == nil else { return }
+
+        keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            handleKeyDown(event) ? nil : event
+        }
+    }
+
+    private func removeKeyEventMonitor() {
+        guard let keyEventMonitor else { return }
+        NSEvent.removeMonitor(keyEventMonitor)
+        self.keyEventMonitor = nil
+    }
+
+    private func handleKeyDown(_ event: NSEvent) -> Bool {
+        guard viewModel.status == .opened else { return false }
+        guard case .instances = viewModel.contentType else { return false }
+        guard NSApp.keyWindow is NotchPanel else { return false }
+
+        let sessions = sortedInstances
+        guard !sessions.isEmpty else { return false }
+
+        switch event.keyCode {
+        case UInt16(kVK_UpArrow):
+            moveSelection(delta: -1, in: sessions)
+            return true
+        case UInt16(kVK_DownArrow):
+            moveSelection(delta: 1, in: sessions)
+            return true
+        case UInt16(kVK_Return), UInt16(kVK_ANSI_KeypadEnter):
+            activateSelectedSession(in: sessions)
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func moveSelection(delta: Int, in sessions: [SessionState]) {
+        guard !sessions.isEmpty else { return }
+
+        let currentIndex: Int
+        if let selectedSessionStableID,
+           let existingIndex = sessions.firstIndex(where: { $0.stableId == selectedSessionStableID }) {
+            currentIndex = existingIndex
+        } else {
+            currentIndex = delta > 0 ? -1 : sessions.count
+        }
+
+        let targetIndex = min(max(currentIndex + delta, 0), sessions.count - 1)
+        selectedSessionStableID = sessions[targetIndex].stableId
+    }
+
+    private func activateSelectedSession(in sessions: [SessionState]) {
+        guard let selectedSessionStableID,
+              let targetSession = sessions.first(where: { $0.stableId == selectedSessionStableID }) else {
+            return
+        }
+
+        viewModel.notchClose()
+
+        Task {
+            _ = await SessionLauncher.shared.activate(targetSession)
+        }
     }
 
     private func launchNativeRuntime(_ provider: SessionProvider) {
@@ -214,6 +330,8 @@ struct SessionListView: View {
 struct InstanceRow: View {
     let session: SessionState
     let isExpanded: Bool
+    let isSelected: Bool
+    let onSelect: () -> Void
     let onActivate: () -> Void
     let onToggleExpanded: () -> Void
     let onFocus: () -> Void
@@ -361,7 +479,12 @@ struct InstanceRow: View {
                         .strokeBorder(rowBorderColor, lineWidth: 1)
                 )
         )
-        .onHover { isHovered = $0 }
+        .onHover {
+            isHovered = $0
+            if $0 {
+                onSelect()
+            }
+        }
         .task {
             isYabaiAvailable = await WindowFinder.shared.isYabaiAvailable()
         }
@@ -371,12 +494,24 @@ struct InstanceRow: View {
         Group {
             if isMinimalCompactPresentation {
                 baseLeadingContent
-                    .onTapGesture(count: 2) { onActivate() }
-                    .onTapGesture { onToggleExpanded() }
+                    .onTapGesture(count: 2) {
+                        onSelect()
+                        onActivate()
+                    }
+                    .onTapGesture {
+                        onSelect()
+                        onToggleExpanded()
+                    }
             } else {
                 baseLeadingContent
-                    .onTapGesture(count: 2) { onChat() }
-                    .onTapGesture { onActivate() }
+                    .onTapGesture(count: 2) {
+                        onSelect()
+                        onChat()
+                    }
+                    .onTapGesture {
+                        onSelect()
+                        onActivate()
+                    }
             }
         }
     }
@@ -508,6 +643,15 @@ struct InstanceRow: View {
     }
 
     private var rowBackgroundColor: Color {
+        if isSelected {
+            if session.needsQuestionResponse {
+                return TerminalColors.blue.opacity(isHovered ? 0.23 : 0.19)
+            }
+            if isWaitingForApproval {
+                return TerminalColors.amber.opacity(isHovered ? 0.22 : 0.17)
+            }
+            return Color.white.opacity(isHovered ? 0.14 : 0.11)
+        }
         if isExpanded {
             if session.needsQuestionResponse {
                 return TerminalColors.blue.opacity(isHovered ? 0.2 : 0.16)
@@ -530,6 +674,15 @@ struct InstanceRow: View {
     }
 
     private var rowBorderColor: Color {
+        if isSelected {
+            if session.needsQuestionResponse {
+                return TerminalColors.blue.opacity(0.34)
+            }
+            if isWaitingForApproval {
+                return TerminalColors.amber.opacity(0.32)
+            }
+            return TerminalColors.green.opacity(isHovered ? 0.34 : 0.28)
+        }
         if isExpanded {
             if session.needsQuestionResponse {
                 return TerminalColors.blue.opacity(0.28)

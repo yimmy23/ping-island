@@ -1285,8 +1285,24 @@ private struct SettingsPanelContentView: View {
 
             SettingsSectionCard(title: "说明") {
                 SettingsInfoLine(
+                    title: "默认键位",
+                    subtitle: "默认使用 Option + J 打开活跃会话，Option + L 展开会话列表。"
+                ) {
+                    EmptyView()
+                }
+                SettingsLineDivider()
+
+                SettingsInfoLine(
                     title: "录制规则",
-                    subtitle: "在录制状态下直接按新组合键即可。建议使用包含 Option + Command 的组合，尽量避开常见系统快捷键。"
+                    subtitle: "在录制状态下直接按新组合键即可。建议优先使用包含 Option 的组合，尽量避开常见系统快捷键。"
+                ) {
+                    EmptyView()
+                }
+                SettingsLineDivider()
+
+                SettingsInfoLine(
+                    title: "列表键盘操作",
+                    subtitle: "呼出会话列表后，可用 ↑ / ↓ 选中会话，按 Enter 打开对应窗口。"
                 ) {
                     EmptyView()
                 }
