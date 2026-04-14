@@ -154,10 +154,48 @@ struct HookInstaller {
     private static let qoderWorkMigrationDefaultsKey = "HookInstaller.preferredTargets.qoderwork-default.v1"
     private static let installedVersionDefaultsKey = "HookInstaller.installedVersion.v1"
     private static let firstLaunchDefaultsKey = "HookInstaller.isFirstLaunch.v1"
+    private static let versionMetadataDefaultsKey = "HookInstaller.versionMetadata.v1"
     private static let supportDirectoryName = ".ping-island"
     private static let bridgeLauncherName = "ping-island-bridge"
     private static let bridgeBinaryName = "PingIslandBridge"
     private static let legacyBridgeBinaryName = "IslandBridge"
+
+    private struct VersionMetadata: Codable {
+        let version: String
+        let build: String
+        let installedAt: String
+        let previousVersion: String
+
+        var dictionaryValue: [String: Any] {
+            [
+                "version": version,
+                "build": build,
+                "installedAt": installedAt,
+                "previousVersion": previousVersion
+            ]
+        }
+    }
+
+    private static func decodeValue<T: Decodable>(_ type: T.Type, from defaults: UserDefaults, key: String) -> T? {
+        guard let data = defaults.data(forKey: key) else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(type, from: data)
+    }
+
+    private static func persistValue<T: Encodable>(_ value: T?, defaults: UserDefaults, key: String) {
+        guard let value else {
+            defaults.removeObject(forKey: key)
+            return
+        }
+
+        guard let data = try? JSONEncoder().encode(value) else {
+            return
+        }
+
+        defaults.set(data, forKey: key)
+    }
 
     private static var defaultPreferredTargets: Set<String> {
         Set(
@@ -211,20 +249,44 @@ struct HookInstaller {
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let currentBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
 
-        let versionMetadata: [String: Any] = [
-            "version": currentVersion,
-            "build": currentBuild,
-            "installedAt": ISO8601DateFormatter().string(from: Date()),
-            "previousVersion": defaults.string(forKey: installedVersionDefaultsKey) ?? ""
-        ]
+        let versionMetadata = VersionMetadata(
+            version: currentVersion,
+            build: currentBuild,
+            installedAt: ISO8601DateFormatter().string(from: Date()),
+            previousVersion: defaults.string(forKey: installedVersionDefaultsKey) ?? ""
+        )
 
         defaults.set(currentVersion, forKey: installedVersionDefaultsKey)
-        defaults.set(versionMetadata, forKey: "HookInstaller.versionMetadata.v1")
+        persistValue(versionMetadata, defaults: defaults, key: versionMetadataDefaultsKey)
     }
 
     /// Get the installed version metadata
     static func getVersionMetadata() -> [String: Any]? {
-        return UserDefaults.standard.dictionary(forKey: "HookInstaller.versionMetadata.v1")
+        let defaults = UserDefaults.standard
+
+        if let metadata = decodeValue(VersionMetadata.self, from: defaults, key: versionMetadataDefaultsKey) {
+            return metadata.dictionaryValue
+        }
+
+        guard let legacyMetadata = defaults.dictionary(forKey: versionMetadataDefaultsKey) else {
+            return nil
+        }
+
+        guard let version = legacyMetadata["version"] as? String,
+              let build = legacyMetadata["build"] as? String,
+              let installedAt = legacyMetadata["installedAt"] as? String,
+              let previousVersion = legacyMetadata["previousVersion"] as? String else {
+            return legacyMetadata
+        }
+
+        let metadata = VersionMetadata(
+            version: version,
+            build: build,
+            installedAt: installedAt,
+            previousVersion: previousVersion
+        )
+        persistValue(metadata, defaults: defaults, key: versionMetadataDefaultsKey)
+        return metadata.dictionaryValue
     }
 
     /// Check if this is a fresh install (never installed before)
@@ -382,7 +444,7 @@ struct HookInstaller {
     }
 
     private static func preferredTargets() -> Set<String> {
-        guard let values = UserDefaults.standard.array(forKey: preferredTargetsDefaultsKey) as? [String] else {
+        guard let values = UserDefaults.standard.stringArray(forKey: preferredTargetsDefaultsKey) else {
             return defaultPreferredTargets
         }
 
@@ -1606,6 +1668,12 @@ struct HookInstaller {
             if direct:
                 return direct
 
+            # Hermes and other runtimes may pass user input under different keys.
+            for key in ("prompt", "input", "query", "text", "content"):
+                candidate = _stable_text(kwargs.get(key))
+                if candidate:
+                    return candidate
+
             messages = kwargs.get("messages")
             if isinstance(messages, list):
                 for entry in reversed(messages):
@@ -1733,8 +1801,6 @@ struct HookInstaller {
                 return None
 
             prompt = _stable_text(user_message) or _extract_user_message(kwargs)
-            if not prompt:
-                return None
 
             _emit_session_start(
                 resolved_id,
@@ -1742,12 +1808,17 @@ struct HookInstaller {
                 model=kwargs.get("model"),
                 **kwargs,
             )
-            _state_for(resolved_id)["last_user"] = prompt
+
+            if prompt:
+                _state_for(resolved_id)["last_user"] = prompt
+
+            # Always emit UserPromptSubmit so Island tracks the session turn,
+            # even when the user message cannot be extracted.
             _emit(
                 _bridge_payload(
                     resolved_id,
                     hook_event_name="UserPromptSubmit",
-                    prompt=prompt,
+                    prompt=prompt or _state_for(resolved_id).get("last_user"),
                     cwd=_resolve_cwd(kwargs),
                 )
             )

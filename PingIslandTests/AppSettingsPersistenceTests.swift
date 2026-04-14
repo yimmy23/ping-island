@@ -1,0 +1,71 @@
+import AppKit
+import XCTest
+@testable import Ping_Island
+
+@MainActor
+final class AppSettingsPersistenceTests: XCTestCase {
+    private func makeDefaults(testName: String = #function) -> UserDefaults {
+        let suiteName = "PingIslandTests.AppSettingsPersistence.\(testName)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
+    }
+
+    func testShortcutLegacyDictionaryMigratesToDataStorage() {
+        let defaults = makeDefaults()
+        let key = "openActiveSessionShortcut"
+        let modifiers: NSEvent.ModifierFlags = [.control, .option]
+        let expected = GlobalShortcut(
+            keyCode: 42,
+            modifierFlags: modifiers
+        )
+
+        defaults.set(
+            [
+                "keyCode": 42,
+                "modifierFlags": Int(modifiers.rawValue)
+            ],
+            forKey: key
+        )
+
+        let store = AppSettingsStore(defaults: defaults)
+
+        XCTAssertEqual(store.shortcut(for: .openActiveSession), expected)
+        XCTAssertNotNil(defaults.data(forKey: key))
+        XCTAssertNil(defaults.dictionary(forKey: key))
+    }
+
+    func testMascotOverridesLegacyDictionaryMigratesToDataStorage() {
+        let defaults = makeDefaults()
+        let key = "mascotOverrides"
+
+        defaults.set(
+            [
+                MascotClient.codex.rawValue: MascotKind.qoder.rawValue
+            ],
+            forKey: key
+        )
+
+        let store = AppSettingsStore(defaults: defaults)
+
+        XCTAssertEqual(store.mascotOverride(for: .codex), .qoder)
+        XCTAssertNotNil(defaults.data(forKey: key))
+        XCTAssertNil(defaults.dictionary(forKey: key))
+    }
+
+    func testShortcutWritesTypedDataForFreshValues() {
+        let defaults = makeDefaults()
+        let key = "openSessionListShortcut"
+        let store = AppSettingsStore(defaults: defaults)
+        let shortcut = GlobalShortcut(
+            keyCode: 44,
+            modifierFlags: [.command, .shift]
+        )
+
+        store.setShortcut(shortcut, for: .openSessionList)
+
+        XCTAssertEqual(AppSettingsStore(defaults: defaults).shortcut(for: .openSessionList), shortcut)
+        XCTAssertNotNil(defaults.data(forKey: key))
+        XCTAssertNil(defaults.dictionary(forKey: key))
+    }
+}

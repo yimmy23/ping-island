@@ -181,7 +181,7 @@ enum NotchPetStyle: String, CaseIterable, Identifiable {
 final class AppSettingsStore: ObservableObject {
     static let shared = AppSettingsStore()
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     private var isBootstrapping = true
 
     // MARK: - Keys
@@ -463,7 +463,7 @@ final class AppSettingsStore: ObservableObject {
                 return
             }
             guard !isBootstrapping else { return }
-            defaults.set(mascotOverrides, forKey: Keys.mascotOverrides)
+            Self.persistValue(mascotOverrides, defaults: defaults, key: Keys.mascotOverrides)
         }
     }
 
@@ -561,6 +561,57 @@ final class AppSettingsStore: ObservableObject {
         return date > now
     }
 
+    private static func decodeValue<T: Decodable>(
+        _ type: T.Type,
+        from defaults: UserDefaults,
+        key: String
+    ) -> T? {
+        guard let data = defaults.data(forKey: key) else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(type, from: data)
+    }
+
+    private static func persistValue<T: Encodable>(
+        _ value: T?,
+        defaults: UserDefaults,
+        key: String
+    ) {
+        guard let value else {
+            defaults.removeObject(forKey: key)
+            return
+        }
+
+        guard let data = try? JSONEncoder().encode(value) else {
+            return
+        }
+
+        defaults.set(data, forKey: key)
+    }
+
+    private static func boolValue(
+        from defaults: UserDefaults,
+        key: String,
+        exists: Bool,
+        default defaultValue: Bool
+    ) -> Bool {
+        exists ? defaults.bool(forKey: key) : defaultValue
+    }
+
+    private static func doubleValue(
+        from defaults: UserDefaults,
+        key: String,
+        exists: Bool,
+        default defaultValue: Double
+    ) -> Double {
+        exists ? defaults.double(forKey: key) : defaultValue
+    }
+
+    private func containsPersistedValue(forKey key: String) -> Bool {
+        defaults.dictionaryRepresentation()[key] != nil
+    }
+
     private static func sanitizedMascotOverrides(_ rawOverrides: [String: String]) -> [String: String] {
         rawOverrides.reduce(into: [:]) { result, entry in
             guard let client = MascotClient(rawValue: entry.key),
@@ -578,6 +629,10 @@ final class AppSettingsStore: ObservableObject {
     }
 
     private static func shortcut(from defaults: UserDefaults, key: String) -> GlobalShortcut? {
+        if let shortcut = decodeValue(GlobalShortcut.self, from: defaults, key: key) {
+            return sanitizedShortcut(shortcut)
+        }
+
         guard let rawValue = defaults.dictionary(forKey: key) as? [String: Int] else {
             return nil
         }
@@ -587,10 +642,13 @@ final class AppSettingsStore: ObservableObject {
             return nil
         }
 
-        return GlobalShortcut(
+        let shortcut = GlobalShortcut(
             keyCode: UInt16(keyCode),
             modifierFlags: NSEvent.ModifierFlags(rawValue: UInt(modifiers))
         )
+
+        persistShortcut(shortcut, defaults: defaults, key: key)
+        return shortcut
     }
 
     private static func resolvedShortcut(
@@ -600,7 +658,8 @@ final class AppSettingsStore: ObservableObject {
     ) -> GlobalShortcut? {
         let persistedShortcut = shortcut(from: defaults, key: key)
 
-        if persistedShortcut == action.legacyDefaultShortcut {
+        if let persistedShortcut,
+           action.legacyDefaultShortcuts.contains(persistedShortcut) {
             return action.defaultShortcut
         }
 
@@ -608,25 +667,27 @@ final class AppSettingsStore: ObservableObject {
     }
 
     private static func persistShortcut(_ shortcut: GlobalShortcut?, defaults: UserDefaults, key: String) {
-        guard let shortcut else {
-            defaults.removeObject(forKey: key)
-            return
+        persistValue(shortcut, defaults: defaults, key: key)
+    }
+
+    private static func mascotOverrides(from defaults: UserDefaults, key: String) -> [String: String] {
+        if let overrides = decodeValue([String: String].self, from: defaults, key: key) {
+            return overrides
         }
 
-        defaults.set(
-            [
-                "keyCode": Int(shortcut.keyCode),
-                "modifierFlags": Int(shortcut.modifierFlags.rawValue)
-            ],
-            forKey: key
-        )
+        let legacyOverrides = defaults.dictionary(forKey: key) as? [String: String] ?? [:]
+        if !legacyOverrides.isEmpty {
+            persistValue(legacyOverrides, defaults: defaults, key: key)
+        }
+
+        return legacyOverrides
     }
 
     private func applyIsland8BitStartSoundMigrationIfNeeded(for mode: SoundThemeMode) {
         guard mode == .island8Bit else { return }
-        guard defaults.object(forKey: Keys.island8BitStartSoundMigrated) == nil else { return }
+        guard !containsPersistedValue(forKey: Keys.island8BitStartSoundMigrated) else { return }
 
-        if defaults.object(forKey: Keys.processingStartSoundEnabled) != nil,
+        if containsPersistedValue(forKey: Keys.processingStartSoundEnabled),
            processingStartSoundEnabled == false {
             processingStartSoundEnabled = true
         }
@@ -634,7 +695,9 @@ final class AppSettingsStore: ObservableObject {
         defaults.set(true, forKey: Keys.island8BitStartSoundMigrated)
     }
 
-    private init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let persistedKeys = Set(defaults.dictionaryRepresentation().keys)
         let appLanguageRaw = defaults.string(forKey: Keys.appLanguage)
         let legacyNotificationSound = NotificationSound(
             rawValue: defaults.string(forKey: Keys.notificationSound) ?? ""
@@ -644,11 +707,12 @@ final class AppSettingsStore: ObservableObject {
         let resolvedSoundThemeMode = SoundThemeMode(
             rawValue: soundThemeModeRaw ?? ""
         ) ?? .island8Bit
-        let temporarilyMuteNotificationsUntilTimestamp =
-            defaults.object(forKey: Keys.temporarilyMuteNotificationsUntil) as? Double
+        let temporarilyMuteNotificationsUntilTimestamp = persistedKeys.contains(Keys.temporarilyMuteNotificationsUntil)
+            ? defaults.double(forKey: Keys.temporarilyMuteNotificationsUntil)
+            : nil
         let notchPetStyleRaw = defaults.string(forKey: Keys.notchPetStyle)
         let notchDisplayModeRaw = defaults.string(forKey: Keys.notchDisplayMode)
-        let mascotOverrideRaw = defaults.dictionary(forKey: Keys.mascotOverrides) as? [String: String] ?? [:]
+        let mascotOverrideRaw = Self.mascotOverrides(from: defaults, key: Keys.mascotOverrides)
         let openActiveSessionShortcut = Self.resolvedShortcut(
             from: defaults,
             key: Keys.openActiveSessionShortcut,
@@ -669,8 +733,18 @@ final class AppSettingsStore: ObservableObject {
 
         _appLanguage = Published(initialValue: AppLanguage(rawValue: appLanguageRaw ?? "") ?? .system)
         _notificationSound = Published(initialValue: legacyNotificationSound)
-        _soundEnabled = Published(initialValue: defaults.object(forKey: Keys.soundEnabled) as? Bool ?? true)
-        _soundVolume = Published(initialValue: defaults.object(forKey: Keys.soundVolume) as? Double ?? 0.9)
+        _soundEnabled = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.soundEnabled,
+            exists: persistedKeys.contains(Keys.soundEnabled),
+            default: true
+        ))
+        _soundVolume = Published(initialValue: Self.doubleValue(
+            from: defaults,
+            key: Keys.soundVolume,
+            exists: persistedKeys.contains(Keys.soundVolume),
+            default: 0.9
+        ))
         _temporarilyMuteNotificationsUntil = Published(initialValue: activeTemporaryMute)
         _processingStartSound = Published(initialValue: NotificationSound(
             rawValue: defaults.string(forKey: Keys.processingStartSound) ?? ""
@@ -687,23 +761,93 @@ final class AppSettingsStore: ObservableObject {
         _resourceLimitSound = Published(initialValue: NotificationSound(
             rawValue: defaults.string(forKey: Keys.resourceLimitSound) ?? ""
         ) ?? .morse)
-        _processingStartSoundEnabled = Published(initialValue: defaults.object(forKey: Keys.processingStartSoundEnabled) as? Bool ?? true)
-        _attentionRequiredSoundEnabled = Published(initialValue: defaults.object(forKey: Keys.attentionRequiredSoundEnabled) as? Bool ?? true)
-        _taskCompletedSoundEnabled = Published(initialValue: defaults.object(forKey: Keys.taskCompletedSoundEnabled) as? Bool ?? true)
-        _taskErrorSoundEnabled = Published(initialValue: defaults.object(forKey: Keys.taskErrorSoundEnabled) as? Bool ?? true)
-        _resourceLimitSoundEnabled = Published(initialValue: defaults.object(forKey: Keys.resourceLimitSoundEnabled) as? Bool ?? true)
+        _processingStartSoundEnabled = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.processingStartSoundEnabled,
+            exists: persistedKeys.contains(Keys.processingStartSoundEnabled),
+            default: true
+        ))
+        _attentionRequiredSoundEnabled = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.attentionRequiredSoundEnabled,
+            exists: persistedKeys.contains(Keys.attentionRequiredSoundEnabled),
+            default: true
+        ))
+        _taskCompletedSoundEnabled = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.taskCompletedSoundEnabled,
+            exists: persistedKeys.contains(Keys.taskCompletedSoundEnabled),
+            default: true
+        ))
+        _taskErrorSoundEnabled = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.taskErrorSoundEnabled,
+            exists: persistedKeys.contains(Keys.taskErrorSoundEnabled),
+            default: true
+        ))
+        _resourceLimitSoundEnabled = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.resourceLimitSoundEnabled,
+            exists: persistedKeys.contains(Keys.resourceLimitSoundEnabled),
+            default: true
+        ))
         _soundThemeMode = Published(initialValue: resolvedSoundThemeMode)
         _selectedSoundPackPath = Published(initialValue: defaults.string(forKey: Keys.selectedSoundPackPath) ?? "")
-        _hideInFullscreen = Published(initialValue: defaults.object(forKey: Keys.hideInFullscreen) as? Bool ?? true)
-        _autoHideWhenIdle = Published(initialValue: defaults.object(forKey: Keys.autoHideWhenIdle) as? Bool ?? false)
-        _autoCollapseOnLeave = Published(initialValue: defaults.object(forKey: Keys.autoCollapseOnLeave) as? Bool ?? true)
-        _smartSuppression = Published(initialValue: defaults.object(forKey: Keys.smartSuppression) as? Bool ?? true)
-        _autoOpenCompletionPanel = Published(initialValue: defaults.object(forKey: Keys.autoOpenCompletionPanel) as? Bool ?? true)
-        _showAgentDetail = Published(initialValue: defaults.object(forKey: Keys.showAgentDetail) as? Bool ?? true)
-        _showUsage = Published(initialValue: defaults.object(forKey: Keys.showUsage) as? Bool ?? false)
+        _hideInFullscreen = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.hideInFullscreen,
+            exists: persistedKeys.contains(Keys.hideInFullscreen),
+            default: true
+        ))
+        _autoHideWhenIdle = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.autoHideWhenIdle,
+            exists: persistedKeys.contains(Keys.autoHideWhenIdle),
+            default: false
+        ))
+        _autoCollapseOnLeave = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.autoCollapseOnLeave,
+            exists: persistedKeys.contains(Keys.autoCollapseOnLeave),
+            default: true
+        ))
+        _smartSuppression = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.smartSuppression,
+            exists: persistedKeys.contains(Keys.smartSuppression),
+            default: true
+        ))
+        _autoOpenCompletionPanel = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.autoOpenCompletionPanel,
+            exists: persistedKeys.contains(Keys.autoOpenCompletionPanel),
+            default: true
+        ))
+        _showAgentDetail = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.showAgentDetail,
+            exists: persistedKeys.contains(Keys.showAgentDetail),
+            default: true
+        ))
+        _showUsage = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.showUsage,
+            exists: persistedKeys.contains(Keys.showUsage),
+            default: false
+        ))
         _usageValueMode = Published(initialValue: UsageValueMode(rawValue: usageValueModeRaw ?? "") ?? .used)
-        _contentFontSize = Published(initialValue: defaults.object(forKey: Keys.contentFontSize) as? Double ?? 13)
-        _maxPanelHeight = Published(initialValue: defaults.object(forKey: Keys.maxPanelHeight) as? Double ?? 580)
+        _contentFontSize = Published(initialValue: Self.doubleValue(
+            from: defaults,
+            key: Keys.contentFontSize,
+            exists: persistedKeys.contains(Keys.contentFontSize),
+            default: 13
+        ))
+        _maxPanelHeight = Published(initialValue: Self.doubleValue(
+            from: defaults,
+            key: Keys.maxPanelHeight,
+            exists: persistedKeys.contains(Keys.maxPanelHeight),
+            default: 580
+        ))
         _notchPetStyle = Published(initialValue: NotchPetStyle(rawValue: notchPetStyleRaw ?? "") ?? .cat)
         _notchDisplayMode = Published(initialValue: NotchDisplayMode(rawValue: notchDisplayModeRaw ?? "") ?? .compact)
         _mascotOverrides = Published(initialValue: Self.sanitizedMascotOverrides(mascotOverrideRaw))
@@ -716,7 +860,7 @@ final class AppSettingsStore: ObservableObject {
         if activeTemporaryMute == nil {
             defaults.removeObject(forKey: Keys.temporarilyMuteNotificationsUntil)
         }
-        if defaults.object(forKey: Keys.processingStartSoundEnabled) == nil {
+        if !persistedKeys.contains(Keys.processingStartSoundEnabled) {
             defaults.set(true, forKey: Keys.processingStartSoundEnabled)
         }
         applyIsland8BitStartSoundMigrationIfNeeded(for: resolvedSoundThemeMode)
