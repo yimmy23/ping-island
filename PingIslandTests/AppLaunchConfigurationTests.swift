@@ -4,7 +4,7 @@ import XCTest
 
 final class AppLaunchConfigurationTests: XCTestCase {
     func testDefaultLaunchConfigurationMatchesProductionBehavior() {
-        let configuration = AppLaunchConfiguration(environment: [:])
+        let configuration = AppLaunchConfiguration(environment: [:], isDebuggerAttached: false)
 
         XCTAssertFalse(configuration.isUITesting)
         XCTAssertFalse(configuration.isRunningTests)
@@ -18,7 +18,8 @@ final class AppLaunchConfigurationTests: XCTestCase {
 
     func testUITestLaunchConfigurationDisablesSideEffectsAndShowsSettings() {
         let configuration = AppLaunchConfiguration(
-            environment: ["PING_ISLAND_UI_TEST_MODE": "1"]
+            environment: ["PING_ISLAND_UI_TEST_MODE": "1"],
+            isDebuggerAttached: false
         )
 
         XCTAssertTrue(configuration.isUITesting)
@@ -33,7 +34,8 @@ final class AppLaunchConfigurationTests: XCTestCase {
 
     func testXCTestLaunchConfigurationDisablesStartupSideEffects() {
         let configuration = AppLaunchConfiguration(
-            environment: ["XCTestConfigurationFilePath": "/tmp/test.xctestconfiguration"]
+            environment: ["XCTestConfigurationFilePath": "/tmp/test.xctestconfiguration"],
+            isDebuggerAttached: false
         )
 
         XCTAssertFalse(configuration.isUITesting)
@@ -41,6 +43,19 @@ final class AppLaunchConfigurationTests: XCTestCase {
         XCTAssertFalse(configuration.shouldInstallIntegrations)
         XCTAssertFalse(configuration.shouldCreateNotchWindow)
         XCTAssertFalse(configuration.shouldObserveScreens)
+        XCTAssertFalse(configuration.shouldEnforceSingleInstance)
+        XCTAssertFalse(configuration.shouldPresentSettingsWindowOnLaunch)
+        XCTAssertEqual(configuration.activationPolicy, .accessory)
+    }
+
+    func testDebuggerLaunchDisablesSingleInstanceEnforcement() {
+        let configuration = AppLaunchConfiguration(environment: [:], isDebuggerAttached: true)
+
+        XCTAssertFalse(configuration.isUITesting)
+        XCTAssertFalse(configuration.isRunningTests)
+        XCTAssertTrue(configuration.shouldInstallIntegrations)
+        XCTAssertTrue(configuration.shouldCreateNotchWindow)
+        XCTAssertTrue(configuration.shouldObserveScreens)
         XCTAssertFalse(configuration.shouldEnforceSingleInstance)
         XCTAssertFalse(configuration.shouldPresentSettingsWindowOnLaunch)
         XCTAssertEqual(configuration.activationPolicy, .accessory)

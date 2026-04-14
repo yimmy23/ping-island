@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 
 struct AppLaunchConfiguration: Equatable {
@@ -11,7 +12,10 @@ struct AppLaunchConfiguration: Equatable {
     let shouldPresentSettingsWindowOnLaunch: Bool
     let activationPolicy: NSApplication.ActivationPolicy
 
-    init(environment: [String: String] = Foundation.ProcessInfo.processInfo.environment) {
+    init(
+        environment: [String: String] = Foundation.ProcessInfo.processInfo.environment,
+        isDebuggerAttached: Bool = Self.detectDebuggerAttached()
+    ) {
         let isUITesting = environment["PING_ISLAND_UI_TEST_MODE"] == "1"
         let isRunningUnderXCTest = environment["XCTestConfigurationFilePath"] != nil
         let shouldShowSettings = environment["PING_ISLAND_SHOW_SETTINGS_ON_LAUNCH"] == "1"
@@ -22,8 +26,21 @@ struct AppLaunchConfiguration: Equatable {
         self.shouldInstallIntegrations = !isRunningTests
         self.shouldCreateNotchWindow = !isRunningTests
         self.shouldObserveScreens = !isRunningTests
-        self.shouldEnforceSingleInstance = !isRunningTests
+        self.shouldEnforceSingleInstance = !isRunningTests && !isDebuggerAttached
         self.shouldPresentSettingsWindowOnLaunch = isUITesting || shouldShowSettings
         self.activationPolicy = isUITesting ? .regular : .accessory
+    }
+
+    private static func detectDebuggerAttached() -> Bool {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+
+        let result = sysctl(&name, u_int(name.count), &info, &size, nil, 0)
+        guard result == 0 else {
+            return false
+        }
+
+        return (info.kp_proc.p_flag & P_TRACED) != 0
     }
 }
