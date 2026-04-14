@@ -862,7 +862,7 @@ func qwenCodePermissionRequestQuestionMapsToQuestionIntervention() throws {
 
     #expect(envelope.eventType == "PermissionRequest")
     #expect(envelope.status?.kind == .waitingForInput)
-    #expect(envelope.expectsResponse == false)
+    #expect(envelope.expectsResponse == true)
     #expect(envelope.intervention?.kind == .question)
 }
 

@@ -735,6 +735,25 @@ final class SessionStateTests: XCTestCase {
         XCTAssertNil(session.terminalSourceBadgeLabel)
     }
 
+    func testQwenCodeInteractionLabelPrefersTerminalHost() {
+        let session = SessionState(
+            sessionId: "qwen-ghostty-interaction",
+            cwd: "/tmp/project",
+            clientInfo: SessionClientInfo(
+                kind: .custom,
+                profileID: "qwen-code",
+                name: "Qwen Code",
+                originator: "Ghostty",
+                terminalBundleIdentifier: "com.mitchellh.ghostty",
+                terminalProgram: "ghostty"
+            )
+        )
+
+        XCTAssertEqual(session.clientDisplayName, "Qwen Code")
+        XCTAssertEqual(session.interactionDisplayName, "Ghostty")
+        XCTAssertEqual(session.terminalSourceBadgeLabel, "Ghostty")
+    }
+
     func testCodexAppMessageBadgeUsesProviderName() {
         let appSession = SessionState(
             sessionId: "codex-app-session",
@@ -1125,6 +1144,24 @@ final class SessionStateTests: XCTestCase {
                     bundleIdentifier: "com.qoder.work",
                     launchURL: "qoder-work://file/tmp/project"
                 )
+            )
+        )
+    }
+
+    func testClientFallbackActivationKeepsTerminalWindowsScoped() {
+        XCTAssertFalse(
+            SessionLauncher.shouldActivateAllWindowsForClientFallback(
+                bundleIdentifier: "com.googlecode.iterm2"
+            )
+        )
+        XCTAssertFalse(
+            SessionLauncher.shouldActivateAllWindowsForClientFallback(
+                bundleIdentifier: "com.openai.codex.helper"
+            )
+        )
+        XCTAssertTrue(
+            SessionLauncher.shouldActivateAllWindowsForClientFallback(
+                bundleIdentifier: "com.apple.finder"
             )
         )
     }

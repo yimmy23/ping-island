@@ -124,6 +124,10 @@ actor SessionLauncher {
         guard !session.clientInfo.suppressesActivationNavigation else {
             return false
         }
+        if await activate(session) {
+            return true
+        }
+
         let candidateBundleIdentifiers = clientApplicationBundleIdentifiers(for: session)
         let resolvedLaunchURL = session.clientInfo.launchURL
             ?? session.clientInfo.bundleIdentifier.flatMap {
@@ -135,7 +139,7 @@ actor SessionLauncher {
             }
 
         for bundleIdentifier in candidateBundleIdentifiers {
-            if await activateApplication(bundleIdentifier: bundleIdentifier) {
+            if await activateClientFallbackApplication(bundleIdentifier: bundleIdentifier) {
                 return true
             }
         }
@@ -143,7 +147,7 @@ actor SessionLauncher {
         if let resolvedLaunchURL,
            await activateURL(resolvedLaunchURL) {
             for bundleIdentifier in candidateBundleIdentifiers {
-                _ = await activateApplication(bundleIdentifier: bundleIdentifier)
+                _ = await activateClientFallbackApplication(bundleIdentifier: bundleIdentifier)
             }
             return true
         }
@@ -789,6 +793,13 @@ actor SessionLauncher {
         }
     }
 
+    private func activateClientFallbackApplication(bundleIdentifier: String) async -> Bool {
+        await activateApplication(
+            bundleIdentifier: bundleIdentifier,
+            activateAllWindows: Self.shouldActivateAllWindowsForClientFallback(bundleIdentifier: bundleIdentifier)
+        )
+    }
+
     @MainActor
     private func activateRunningApplication(_ app: NSRunningApplication, activateAllWindows: Bool = true) -> Bool {
         if app.isHidden {
@@ -956,6 +967,17 @@ actor SessionLauncher {
         return Self.orderedUniqueBundleIdentifiers(
             candidates.map(TerminalAppRegistry.normalizedHostBundleIdentifier(for:))
         )
+    }
+
+    nonisolated static func shouldActivateAllWindowsForClientFallback(bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier = bundleIdentifier?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !bundleIdentifier.isEmpty else {
+            return true
+        }
+
+        let normalizedBundleIdentifier = TerminalAppRegistry.normalizedHostBundleIdentifier(for: bundleIdentifier)
+        return !TerminalAppRegistry.isTerminalBundle(normalizedBundleIdentifier)
     }
 
     static func routeIDEWorkspaceWindow(

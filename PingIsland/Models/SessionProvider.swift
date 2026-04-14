@@ -230,6 +230,11 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
             return interactionOriginDisplayName
         }
 
+        if isQwenCodeClient,
+           let terminalSourceDisplayName {
+            return terminalSourceDisplayName
+        }
+
         // Codex CLI follow-up actions reopen the owning terminal surface rather than
         // a separate client app, so label those actions with the terminal host.
         if provider == .codex,
