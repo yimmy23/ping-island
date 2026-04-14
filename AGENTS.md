@@ -32,7 +32,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - Terminal and focus control: `PingIsland/Services/Tmux/`, `PingIsland/Services/Window/`, `PingIsland/Utilities/TerminalVisibilityDetector.swift`
   - Terminal focus flows currently cover iTerm2, Ghostty, Terminal.app, tmux, and IDE-hosted terminals
 - Remote SSH forwarding and remote-host management: `PingIsland/Services/Remote/`
-  - Remote hosts can bootstrap a bridge on the SSH target, rewrite remote hooks, and attach a bidirectional forwarding channel back into PingIsland
+  - Remote hosts can bootstrap a bridge on the SSH target, rewrite remote hooks, install managed plugin-directory integrations such as Hermes under the remote home directory, and attach a bidirectional forwarding channel back into PingIsland
 - Provider/client routing: bridge envelopes are normalized in `PingIsland/Services/Hooks/HookSocketServer.swift`, stored on `SessionState`, and launched via `PingIsland/Services/Window/SessionLauncher.swift`
 - Client profile registry: installable hook clients and runtime client branding / recognition are centralized in `PingIsland/Models/ClientProfile.swift`
 - VS Code-compatible IDE focus extension install / URI launch: `PingIsland/Services/Window/IDEExtensionInstaller.swift`, `PingIsland/Services/Window/TerminalSessionFocuser.swift`
@@ -49,6 +49,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - `PingIsland/Services`: ingestion, socket handling, state management, tmux, windows, updates
 - `PingIsland/Services/Runtime`: isolated native Claude/Codex runtime work. This path should coexist with the current implementation behind feature flags until parity is proven.
 - `PingIsland/Services/Remote`: remote endpoint persistence, SSH bootstrap / attach, and remote hook forwarding
+  - Remote bootstrap currently covers JSON hook configs, managed hook directories, and managed plugin directories (for example remote Hermes installs under `~/.hermes/plugins/ping_island`)
 - `PingIsland/Services/Update`: Sparkle updater bridge, appcast/release-notes loading, update state publishing
 - `PingIsland/Services/Window/IDEExtensionInstaller.swift`: installs the VS Code-compatible terminal-focus extension used by Cursor / VS Code / CodeBuddy / Qoder style IDE hosts (`QoderWork` is hook-only, not an IDE extension host)
 - `PingIsland/UI`: SwiftUI views, reusable components, AppKit-backed window controllers

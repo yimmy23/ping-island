@@ -33,6 +33,7 @@ final class RemoteHookConfigurationTests: XCTestCase {
         XCTAssertEqual(profileIDs, [
             "claude-hooks",
             "codex-hooks",
+            "hermes-hooks",
             "qwen-code-hooks",
             "openclaw-hooks",
             "qoder-hooks",
@@ -48,12 +49,32 @@ final class RemoteHookConfigurationTests: XCTestCase {
 
         XCTAssertTrue(directories.contains("/root/.claude"))
         XCTAssertTrue(directories.contains("/root/.codex"))
+        XCTAssertTrue(directories.contains("/root/.hermes/plugins"))
         XCTAssertTrue(directories.contains("/root/.qwen"))
         XCTAssertTrue(directories.contains("/root/.openclaw"))
         XCTAssertTrue(directories.contains("/root/.openclaw/hooks"))
         XCTAssertTrue(directories.contains("/root/.openclaw/hooks/ping-island-openclaw"))
         XCTAssertTrue(directories.contains("/root/.qoder"))
         XCTAssertTrue(directories.contains("/root/.qoderwork"))
+    }
+
+    func testHermesRemoteManagedHookDirectoryPathUsesPluginDirectory() throws {
+        let profile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "hermes-hooks"))
+        let directories = RemoteConnectorManager.remoteManagedHookDirectoryPaths(
+            for: profile,
+            homeDirectory: "/root"
+        )
+
+        XCTAssertEqual(directories, ["/root/.hermes/plugins"])
+    }
+
+    func testHermesManagedPluginDirectoryFilesContainPluginManifestAndModule() throws {
+        let profile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "hermes-hooks"))
+        let files = HookInstaller.managedPluginDirectoryFiles(for: profile)
+
+        XCTAssertEqual(Set(files.keys), ["plugin.yaml", "__init__.py"])
+        XCTAssertTrue(files["plugin.yaml"]?.contains("name: ping-island") == true)
+        XCTAssertTrue(files["__init__.py"]?.contains("ctx.register_hook(\"pre_llm_call\"") == true)
     }
 
     func testRemoteConfigurationPathResolvesRelativeHomePaths() {

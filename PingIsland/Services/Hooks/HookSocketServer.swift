@@ -142,14 +142,14 @@ struct HookEvent: Sendable {
         let normalizedTool = tool?
             .lowercased()
             .replacingOccurrences(of: "_", with: "")
-        if clientInfo.isQwenCodeClient && normalizedTool == "askuserquestion" {
-            return false
-        }
         return (event == "PermissionRequest" && status == "waiting_for_approval")
+            || (event == "Notification" && status == "waiting_for_approval"
+                && clientInfo.isQwenCodeClient && notificationType == "permission_prompt")
             || (
                 event == "PreToolUse"
                     && normalizedTool == "askuserquestion"
                     && toolInput?["questions"] != nil
+                    && !isAnsweredAskUserQuestionEvent
             )
     }
 }
@@ -442,7 +442,11 @@ private extension BridgeEnvelope {
             toolInput: toolInput,
             toolUseId: metadata["tool_use_id"],
             notificationType: metadata["notification_type"],
-            message: metadata["message"] ?? preview
+            message: HookSocketServer.resolvedBridgeMessage(
+                eventType: eventType,
+                metadata: metadata,
+                preview: preview
+            )
         )
     }
 
@@ -704,6 +708,7 @@ private extension BridgeEnvelope {
             return trimmed.isEmpty ? nil : trimmed
         }.first
     }
+
 }
 
 private extension BridgeProvider {
@@ -825,6 +830,34 @@ class HookSocketServer {
     private var codexAuxiliaryHookFilter = CodexAuxiliaryHookFilter()
 
     private init() {}
+
+    static func resolvedBridgeMessage(
+        eventType: String,
+        metadata: [String: String],
+        preview: String?
+    ) -> String? {
+        func firstNonEmpty(_ values: String?...) -> String? {
+            values.compactMap { value -> String? in
+                guard let value else { return nil }
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }.first
+        }
+
+        if eventType == "Stop" || eventType == "SessionEnd" {
+            return firstNonEmpty(
+                metadata["last_assistant_message"],
+                metadata["message"],
+                preview
+            )
+        }
+
+        return firstNonEmpty(
+            metadata["message"],
+            metadata["last_assistant_message"],
+            preview
+        )
+    }
 
     func start(onEvent: @escaping HookEventHandler, onPermissionFailure: PermissionFailureHandler? = nil) {
         queue.async { [weak self] in
@@ -1178,6 +1211,12 @@ class HookSocketServer {
         let expectsResponse = envelope.expectsResponse || envelope.hookEvent.expectsResponse
         var event = envelope.hookEvent
         logger.debug("Received bridge envelope provider=\(envelope.provider.rawValue, privacy: .public) event=\(envelope.eventType, privacy: .public) session=\(event.sessionId.prefix(8), privacy: .public)")
+        if event.clientInfo.isQwenCodeClient {
+            let lastAssistant = envelope.metadata["last_assistant_message"] ?? ""
+            logger.info(
+                "Qwen bridge envelope event=\(envelope.eventType, privacy: .public) session=\(event.sessionId, privacy: .public) status=\(event.status, privacy: .public) notification=\((event.notificationType ?? "").prefix(40), privacy: .public) message=\((event.message ?? "").prefix(120), privacy: .public) preview=\((envelope.preview ?? "").prefix(120), privacy: .public) lastAssistant=\(lastAssistant.prefix(120), privacy: .public)"
+            )
+        }
         if event.clientInfo.isHermesClient {
             logger.info(
                 "Hermes bridge envelope event=\(envelope.eventType, privacy: .public) session=\(event.sessionId, privacy: .public) status=\(event.status, privacy: .public) message=\((event.message ?? "").prefix(120), privacy: .public)"

@@ -862,8 +862,81 @@ func qwenCodePermissionRequestQuestionMapsToQuestionIntervention() throws {
 
     #expect(envelope.eventType == "PermissionRequest")
     #expect(envelope.status?.kind == .waitingForInput)
-    #expect(envelope.expectsResponse == false)
+    #expect(envelope.expectsResponse == true)
     #expect(envelope.intervention?.kind == .question)
+}
+
+@Test
+func qwenCodeNotificationPermissionPromptCreatesApprovalIntervention() throws {
+    let payload = """
+    {
+      "hook_event_name": "Notification",
+      "session_id": "qwen-code-notif-approval",
+      "notification_type": "permission_prompt",
+      "message": "Qwen Code wants to run Bash: ls"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qwen-code",
+            "--client-name", "Qwen Code",
+            "--thread-source", "qwen-code-hooks"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "Notification")
+    #expect(envelope.status?.kind == .waitingForApproval)
+    #expect(envelope.expectsResponse == true)
+    #expect(envelope.intervention?.kind == .approval)
+    #expect(envelope.intervention?.message.contains("Bash") == true)
+}
+
+@Test
+func qwenCodeAnsweredPreToolUseDoesNotCreateAnotherIntervention() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "qwen-code-answered",
+      "tool_name": "AskUserQuestion",
+      "tool_input": {
+        "questions": [
+          {
+            "header": "编程语言",
+            "question": "你最喜欢哪种编程语言？",
+            "options": [{"label": "Python"}]
+          }
+        ],
+        "answers": {
+          "0": "Python"
+        }
+      },
+      "status": "waiting_for_input"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qwen-code",
+            "--client-name", "Qwen Code",
+            "--thread-source", "qwen-code-hooks"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "PreToolUse")
+    #expect(envelope.status?.kind == .runningTool)
+    #expect(envelope.expectsResponse == false)
+    #expect(envelope.intervention == nil)
 }
 
 @Test

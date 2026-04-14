@@ -99,6 +99,9 @@
 "管理 ~/.claude/settings.json，使用统一 PingIslandBridge hooks 入口" = "Manage ~/.claude/settings.json using the unified PingIslandBridge hooks entrypoint";
 "管理 ~/.codex/hooks.json" = "Manage ~/.codex/hooks.json";
 "管理 ~/.gemini/settings.json，按 Gemini CLI 官方 hooks 协议接入 Island" = "Manage ~/.gemini/settings.json using Gemini CLI's official hooks protocol for Island";
+"管理 ~/.hermes/plugins/ping_island，按 Hermes 官方 plugin hooks 协议接入 Island" = "Manage ~/.hermes/plugins/ping_island using Hermes' official plugin hooks protocol for Island";
+"管理 ~/.qwen/settings.json，按 Qwen Code 官方 hooks 协议接入 Island" = "Manage ~/.qwen/settings.json using Qwen Code's official hooks protocol for Island";
+"管理 ~/.openclaw/hooks/ping-island-openclaw，并自动启用内部 hook" = "Manage ~/.openclaw/hooks/ping-island-openclaw and automatically enable the internal hook";
 "管理 ~/.codebuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island" = "Manage ~/.codebuddy/settings.json using the CodeBuddy Hooks protocol for Island";
 "管理 ~/.workbuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island" = "Manage ~/.workbuddy/settings.json using the CodeBuddy Hooks protocol for Island";
 "管理 ~/Library/Application Support/Cursor/User/settings.json，按 Claude Hooks 协议接入 Island" = "Manage ~/Library/Application Support/Cursor/User/settings.json using the Claude Hooks protocol for Island";
@@ -110,6 +113,8 @@
 "安装 Ping Island，支持会话跳转与终端精准聚焦" = "Install Ping Island to enable session jump-back and precise terminal focus";
 "这会重新写入 %@ 的 Island hooks 配置，并保留其他非 Island hooks。" = "This rewrites %@'s Island hooks configuration while preserving non-Island hooks.";
 "这会重新生成 %@ 的 Island 插件文件，并覆盖旧的 Island 托管版本。" = "This regenerates %@'s Island plugin file and replaces the older Island-managed version.";
+"这会重新生成 %@ 的 Island 插件目录，并覆盖旧的 Island 托管版本。" = "This regenerates %@'s Island plugin directory and replaces the older Island-managed version.";
+"这会重新生成 %@ 的 Island hook 目录，并刷新 OpenClaw 的启用状态。" = "This regenerates %@'s Island hook directory and refreshes OpenClaw's enabled state.";
 "已授权，可进行窗口聚焦与前台检测" = "Authorized for window focusing and foreground detection";
 "未授权，部分自动聚焦能力不可用" = "Not authorized. Some auto-focus features are unavailable";
 "已开启" = "Enabled";

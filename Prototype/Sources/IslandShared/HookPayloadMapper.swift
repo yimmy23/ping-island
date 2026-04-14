@@ -255,10 +255,16 @@ public enum HookPayloadMapper {
         intervention: InterventionRequest?
     ) -> SessionStatus? {
         if let text = payload["status"] as? String {
+            if hasAnsweredQuestionPayload(payload) {
+                return answeredQuestionStatus(eventType: eventType)
+            }
             return mapStatusString(text)
         }
         if isGeminiHookClient(clientKind) {
             return geminiStatus(eventType: eventType, payload: payload)
+        }
+        if hasAnsweredQuestionPayload(payload) {
+            return answeredQuestionStatus(eventType: eventType)
         }
         if let intervention {
             switch intervention.kind {
@@ -312,9 +318,7 @@ public enum HookPayloadMapper {
             return false
         }
 
-        if clientKind == "qwen-code",
-           questionToolNames.contains(normalizedToolName(from: payload) ?? ""),
-           questionPayloads(from: payload) != nil {
+        if hasAnsweredQuestionPayload(payload) {
             return false
         }
 
@@ -565,6 +569,10 @@ public enum HookPayloadMapper {
             return nil
         }
 
+        if hasAnsweredQuestionPayload(payload) {
+            return nil
+        }
+
         if clientKind == "qoderwork",
            eventType == "PostToolUse",
            questionToolNames.contains(normalizedToolName(from: payload) ?? ""),
@@ -641,6 +649,29 @@ public enum HookPayloadMapper {
                 message: message,
                 options: [
                     InterventionOption(id: "approve", title: "Allow Once"),
+                    InterventionOption(id: "deny", title: "Deny")
+                ],
+                rawContext: flattenMetadata(payload: payload)
+            )
+        }
+
+        // Qwen Code Notification + permission_prompt: upgrade to actionable approval
+        if clientKind == "qwen-code",
+           eventType == "Notification",
+           (payload["notification_type"] as? String)?
+               .trimmingCharacters(in: .whitespacesAndNewlines)
+               .lowercased() == "permission_prompt" {
+            let message = (payload["message"] as? String)
+                ?? (payload["title"] as? String)
+                ?? "Qwen Code is waiting for permission."
+            return InterventionRequest(
+                sessionID: sessionKey,
+                kind: .approval,
+                title: "\(provider.displayName) needs approval",
+                message: message,
+                options: [
+                    InterventionOption(id: "approve", title: "Allow Once"),
+                    InterventionOption(id: "approveForSession", title: "Allow for Session"),
                     InterventionOption(id: "deny", title: "Deny")
                 ],
                 rawContext: flattenMetadata(payload: payload)
@@ -1009,6 +1040,37 @@ public enum HookPayloadMapper {
         return nil
     }
 
+    private static func hasAnsweredQuestionPayload(_ payload: [String: Any]) -> Bool {
+        guard questionToolNames.contains(normalizedToolName(from: payload) ?? "") else {
+            return false
+        }
+
+        let answersCandidate =
+            (payload["tool_input"] as? [String: Any])?["answers"]
+            ?? payload["answers"]
+
+        guard let answersCandidate else { return false }
+
+        if let answers = answersCandidate as? [String: Any] {
+            return !answers.isEmpty
+        }
+        if let answers = answersCandidate as? [String: String] {
+            return !answers.isEmpty
+        }
+        return false
+    }
+
+    private static func answeredQuestionStatus(eventType: String) -> SessionStatus {
+        switch eventType {
+        case "PreToolUse":
+            return SessionStatus(kind: .runningTool)
+        case "PostToolUse":
+            return SessionStatus(kind: .active)
+        default:
+            return SessionStatus(kind: .active)
+        }
+    }
+
     private static func normalizedToolName(from payload: [String: Any]) -> String? {
         guard let toolName = payload["tool_name"] as? String else { return nil }
         return toolName
@@ -1050,6 +1112,10 @@ public enum HookPayloadMapper {
         payload: [String: Any],
         clientKind: String?
     ) -> Bool {
+        if hasAnsweredQuestionPayload(payload) {
+            return false
+        }
+
         if clientKind == "qoderwork" || clientKind == "qwen-code" {
             return isQoderWorkPreToolQuestionEvent(eventType: eventType, payload: payload)
                 || isQoderWorkPermissionQuestionEvent(eventType: eventType, payload: payload)

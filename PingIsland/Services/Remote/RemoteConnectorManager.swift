@@ -607,7 +607,24 @@ final class RemoteConnectorManager: ObservableObject {
                         password: password
                     )
                 }
-            case .pluginFile, .pluginDirectory:
+            case .pluginDirectory:
+                let remoteDirectoryPath = Self.remoteConfigurationPath(
+                    relativePath: profile.configurationRelativePaths[0],
+                    homeDirectory: probe.homeDirectory
+                )
+                let remoteFiles = HookInstaller.managedPluginDirectoryFiles(for: profile)
+                logger.debug(
+                    "Remote bootstrap preparing plugin directory endpoint=\(endpoint.id.uuidString, privacy: .public) profile=\(profile.id, privacy: .public) remotePath=\(remoteDirectoryPath, privacy: .public) fileCount=\(remoteFiles.count, privacy: .public)"
+                )
+                for (name, content) in remoteFiles {
+                    try await RemoteSSHCommandRunner.writeRemoteFile(
+                        target: endpoint.sshTarget,
+                        remotePath: "\(remoteDirectoryPath)/\(name)",
+                        contents: Data(content.utf8),
+                        password: password
+                    )
+                }
+            case .pluginFile:
                 continue
             }
         }
@@ -889,6 +906,7 @@ final class RemoteConnectorManager: ObservableObject {
         let supportedProfileIDs: Set<String> = [
             "claude-hooks",
             "codex-hooks",
+            "hermes-hooks",
             "qwen-code-hooks",
             "openclaw-hooks",
             "qoder-hooks",

@@ -403,6 +403,10 @@ struct HookInstaller {
             }
             setInternalHookEnabled(true, for: profile)
         }
+
+        if profile.id == "qwen-code-hooks" {
+            applyQwenAskUserQuestionCompatibilityPatchIfNeeded()
+        }
     }
 
     private static func uninstall(_ profile: ManagedHookClientProfile, persistPreference: Bool) {
@@ -658,12 +662,7 @@ struct HookInstaller {
     }
 
     private static func installBridgeBinaryIfNeeded(in binDirectory: URL) {
-        let bundledBridgeURL = Bundle.main.executableURL?
-            .deletingLastPathComponent()
-            .appendingPathComponent(bridgeBinaryName)
-
-        guard let bundledBridgeURL,
-              FileManager.default.isReadableFile(atPath: bundledBridgeURL.path) else {
+        guard let bundledBridgeURL = preferredBridgeBinaryURL() else {
             return
         }
 
@@ -683,6 +682,120 @@ struct HookInstaller {
             [.posixPermissions: 0o755],
             ofItemAtPath: destinationURL.path
         )
+    }
+
+    private static func preferredBridgeBinaryURL() -> URL? {
+        let candidates = [
+            Bundle.main.executableURL?
+                .deletingLastPathComponent()
+                .appendingPathComponent(bridgeBinaryName),
+            URL(fileURLWithPath: "/Users/wudanwu/Island/Prototype/.build/debug/\(bridgeBinaryName)")
+        ]
+        .compactMap { $0 }
+        .filter { FileManager.default.isReadableFile(atPath: $0.path) }
+
+        guard !candidates.isEmpty else {
+            return nil
+        }
+
+        return candidates.max { lhs, rhs in
+            let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            return lhsDate < rhsDate
+        }
+    }
+
+    private static func applyQwenAskUserQuestionCompatibilityPatchIfNeeded() {
+        guard let cliURL = qwenCLIEntryPointURL(),
+              let source = try? String(contentsOf: cliURL, encoding: .utf8),
+              let patched = patchedQwenCLISourceIfNeeded(source),
+              patched != source else {
+            return
+        }
+
+        try? patched.write(to: cliURL, atomically: true, encoding: .utf8)
+    }
+
+    private static func qwenCLIEntryPointURL() -> URL? {
+        let process = Process()
+        let stdout = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["which", "qwen"]
+        process.standardOutput = stdout
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            let data = stdout.fileHandleForReading.readDataToEndOfFile()
+            guard let path = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                !path.isEmpty else {
+                return nil
+            }
+            return URL(fileURLWithPath: path).resolvingSymlinksInPath()
+        } catch {
+            return nil
+        }
+    }
+
+    static func patchedQwenCLISourceIfNeeded(_ source: String) -> String? {
+        let marker = #"const hookAnswerPayload = confirmationDetails.type === "ask_user_question""#
+        if source.contains(marker) {
+            return source
+        }
+
+        let replacements = [
+            (
+                """
+                      if (hookResult.updatedInput && typeof reqInfo.args === "object") {
+                        this.setArgsInternal(reqInfo.callId, hookResult.updatedInput);
+                      }
+                      await confirmationDetails.onConfirm(ToolConfirmationOutcome.ProceedOnce);
+                """,
+                """
+                      if (hookResult.updatedInput && typeof reqInfo.args === "object") {
+                        this.setArgsInternal(reqInfo.callId, hookResult.updatedInput);
+                      }
+                      const hookAnswerPayload = confirmationDetails.type === "ask_user_question" && hookResult.updatedInput && typeof hookResult.updatedInput === "object" && "answers" in hookResult.updatedInput ? { answers: hookResult.updatedInput.answers } : void 0;
+                      await confirmationDetails.onConfirm(ToolConfirmationOutcome.ProceedOnce, hookAnswerPayload);
+                """
+            ),
+            (
+                """
+                if (hookResult.updatedInput) {
+                  args2 = hookResult.updatedInput;
+                  invocation.params = hookResult.updatedInput;
+                }
+                await confirmationDetails.onConfirm(
+                  ToolConfirmationOutcome.ProceedOnce
+                );
+                """,
+                """
+                if (hookResult.updatedInput) {
+                  args2 = hookResult.updatedInput;
+                  invocation.params = hookResult.updatedInput;
+                }
+                const hookAnswerPayload = confirmationDetails.type === "ask_user_question" && hookResult.updatedInput && typeof hookResult.updatedInput === "object" && "answers" in hookResult.updatedInput ? { answers: hookResult.updatedInput.answers } : void 0;
+                await confirmationDetails.onConfirm(
+                  ToolConfirmationOutcome.ProceedOnce,
+                  hookAnswerPayload
+                );
+                """
+            )
+        ]
+
+        var patched = source
+        var didChange = false
+        for (needle, replacement) in replacements {
+            if patched.contains(needle) {
+                patched = patched.replacingOccurrences(of: needle, with: replacement)
+                didChange = true
+            }
+        }
+
+        return didChange ? patched : nil
     }
 
     private static func normalizedHookEntries(
@@ -1674,9 +1787,11 @@ struct HookInstaller {
                 if candidate:
                     return candidate
 
-            messages = kwargs.get("messages")
-            if isinstance(messages, list):
-                for entry in reversed(messages):
+            history = kwargs.get("messages")
+            if not isinstance(history, list):
+                history = kwargs.get("conversation_history")
+            if isinstance(history, list):
+                for entry in reversed(history):
                     if not isinstance(entry, dict):
                         continue
                     role = _stable_text(entry.get("role"))
@@ -1770,7 +1885,7 @@ struct HookInstaller {
             threading.Thread(target=_spawn_bridge, args=(payload,), daemon=True).start()
 
 
-        def _emit_session_start(session_id, platform=None, model=None, **kwargs):
+        def _emit_session_start(session_id, platform=None, model=None, message=None, cwd=None):
             state = _state_for(session_id)
             if state.get("did_emit_start"):
                 return
@@ -1781,8 +1896,8 @@ struct HookInstaller {
                     hook_event_name="SessionStart",
                     platform=_stable_text(platform),
                     model=_stable_text(model),
-                    message=_extract_user_message(kwargs),
-                    cwd=_resolve_cwd(kwargs),
+                    message=_stable_text(message),
+                    cwd=cwd,
                 )
             )
             state["did_emit_start"] = True
@@ -1792,7 +1907,13 @@ struct HookInstaller {
             resolved_id = _resolve_session_id(session_id, **kwargs)
             if not resolved_id:
                 return
-            _emit_session_start(resolved_id, platform=platform, model=model, **kwargs)
+            _emit_session_start(
+                resolved_id,
+                platform=platform,
+                model=model,
+                message=_extract_user_message(kwargs),
+                cwd=_resolve_cwd(kwargs),
+            )
 
 
         def _on_pre_llm_call(session_id=None, user_message=None, **kwargs):
@@ -1801,27 +1922,35 @@ struct HookInstaller {
                 return None
 
             prompt = _stable_text(user_message) or _extract_user_message(kwargs)
+            cwd = _resolve_cwd(kwargs)
 
-            _emit_session_start(
-                resolved_id,
-                platform=kwargs.get("platform"),
-                model=kwargs.get("model"),
-                **kwargs,
-            )
+            try:
+                _emit_session_start(
+                    resolved_id,
+                    platform=kwargs.get("platform"),
+                    model=kwargs.get("model"),
+                    message=prompt,
+                    cwd=cwd,
+                )
+            except Exception:
+                pass
 
             if prompt:
                 _state_for(resolved_id)["last_user"] = prompt
 
             # Always emit UserPromptSubmit so Island tracks the session turn,
             # even when the user message cannot be extracted.
-            _emit(
-                _bridge_payload(
-                    resolved_id,
-                    hook_event_name="UserPromptSubmit",
-                    prompt=prompt or _state_for(resolved_id).get("last_user"),
-                    cwd=_resolve_cwd(kwargs),
+            try:
+                _emit(
+                    _bridge_payload(
+                        resolved_id,
+                        hook_event_name="UserPromptSubmit",
+                        prompt=prompt or _state_for(resolved_id).get("last_user"),
+                        cwd=cwd,
+                    )
                 )
-            )
+            except Exception:
+                pass
             return None
 
 
@@ -1921,7 +2050,13 @@ struct HookInstaller {
             resolved_id = _resolve_session_id(session_id, kwargs.get("task_id"), **kwargs)
             if not resolved_id:
                 return
-            _emit_session_start(resolved_id, platform=platform, model=model, **kwargs)
+            _emit_session_start(
+                resolved_id,
+                platform=platform,
+                model=model,
+                message=_extract_user_message(kwargs),
+                cwd=_resolve_cwd(kwargs),
+            )
 
 
         def register(ctx):
@@ -2291,20 +2426,7 @@ struct HookInstaller {
     // MARK: - JSON Utilities
 
     nonisolated static func remoteBridgeBinaryURL() -> URL? {
-        let bundledBridgeURL = Bundle.main.executableURL?
-            .deletingLastPathComponent()
-            .appendingPathComponent(bridgeBinaryName)
-        if let bundledBridgeURL,
-           FileManager.default.isReadableFile(atPath: bundledBridgeURL.path) {
-            return bundledBridgeURL
-        }
-
-        let fallbackURL = URL(fileURLWithPath: "/Users/wudanwu/Island/Prototype/.build/debug/\(bridgeBinaryName)")
-        if FileManager.default.isReadableFile(atPath: fallbackURL.path) {
-            return fallbackURL
-        }
-
-        return nil
+        preferredBridgeBinaryURL()
     }
 
     nonisolated static func managedBridgeCommand(

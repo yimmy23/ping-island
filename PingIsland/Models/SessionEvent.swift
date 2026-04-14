@@ -190,7 +190,6 @@ extension HookEvent {
 
     private nonisolated var isExternalClientQuestionEvent: Bool {
         (clientInfo.profileID == "qoderwork"
-            || clientInfo.isQwenCodeClient
             || clientInfo.bundleIdentifier == "com.qoder.work"
             || clientInfo.profileID == "workbuddy"
             || clientInfo.bundleIdentifier == "com.workbuddy.workbuddy")
@@ -216,8 +215,6 @@ extension HookEvent {
         let prefix: String
         if clientInfo.profileID == "workbuddy" || clientInfo.bundleIdentifier == "com.workbuddy.workbuddy" {
             prefix = "workbuddy-question"
-        } else if clientInfo.isQwenCodeClient {
-            prefix = "qwen-question"
         } else {
             prefix = "qoderwork-question"
         }
@@ -225,8 +222,18 @@ extension HookEvent {
     }
 
     nonisolated var isAskUserQuestionRequest: Bool {
+        if isAnsweredAskUserQuestionEvent {
+            return false
+        }
+
         if isExternalClientQuestionEvent {
             return event == "PreToolUse" || event == "PermissionRequest"
+        }
+
+        if clientInfo.isQwenCodeClient {
+            return (event == "PreToolUse" || event == "PermissionRequest")
+                && Self.questionToolNames.contains(normalizedToolNameForIntervention ?? "")
+                && !(questionPayloads?.isEmpty ?? true)
         }
 
         return event == "PreToolUse"
@@ -243,6 +250,26 @@ extension HookEvent {
             return nil
         }
         return normalizedQuestions
+    }
+
+    private nonisolated var hasQuestionAnswerPayload: Bool {
+        guard let rawAnswers = toolInput?["answers"]?.value else {
+            return false
+        }
+
+        switch normalizedJSONValue(rawAnswers) {
+        case let answers as [String: Any]:
+            return !answers.isEmpty
+        case let answers as [String: String]:
+            return !answers.isEmpty
+        default:
+            return false
+        }
+    }
+
+    nonisolated var isAnsweredAskUserQuestionEvent: Bool {
+        Self.questionToolNames.contains(normalizedToolNameForIntervention ?? "")
+            && hasQuestionAnswerPayload
     }
 
     nonisolated var toolInputJSONObject: [String: Any]? {
@@ -347,18 +374,26 @@ extension HookEvent {
             return .compacting
         }
 
+        if isAnsweredAskUserQuestionEvent {
+            return .processing
+        }
+
         if isAskUserQuestionRequest {
             return .waitingForInput
         }
 
         // Permission request creates waitingForApproval state
-        if expectsResponse, let tool = tool {
-            return .waitingForApproval(PermissionContext(
-                toolUseId: toolUseId ?? "",
-                toolName: tool,
-                toolInput: toolInput,
-                receivedAt: Date()
-            ))
+        if expectsResponse {
+            let resolvedToolName = tool
+                ?? (event == "Notification" && notificationType == "permission_prompt" ? "Permission" : nil)
+            if let resolvedToolName {
+                return .waitingForApproval(PermissionContext(
+                    toolUseId: toolUseId ?? "",
+                    toolName: resolvedToolName,
+                    toolInput: toolInput,
+                    receivedAt: Date()
+                ))
+            }
         }
 
         if event == "Notification" && notificationType == "idle_prompt" {
@@ -397,6 +432,10 @@ extension HookEvent {
                 return false
             }
         }
+        // Hermes sessions use Claude provider but don't produce Claude JSONL files.
+        // Syncing would pick up unrelated Claude session data and overwrite the
+        // correct hook message in the UI.
+        guard !clientInfo.isHermesClient else { return false }
         guard provider == .claude else { return false }
 
         switch event {

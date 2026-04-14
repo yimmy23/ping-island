@@ -267,6 +267,16 @@ actor SessionStore {
             return
         }
         var session = sessions[sessionId] ?? createSession(from: event)
+
+        // Persist the session before await points so concurrent events (via actor
+        // reentrancy) find it instead of creating a duplicate.  This avoids the
+        // race where a Stop event runs during a Notification's await, ends its own
+        // fresh copy, and then the Notification resumes against an already-ended
+        // session.
+        if sessions[sessionId] == nil {
+            sessions[sessionId] = session
+        }
+
         let tree = (event.pid != nil || event.tty != nil) ? ProcessTreeBuilder.shared.buildTree() : [:]
 
         session.provider = event.provider
@@ -300,10 +310,30 @@ actor SessionStore {
                 sessionId: sessionId
             )
         }
+
+        // After the await points another event may have mutated the persisted
+        // copy (actor reentrancy).  Merge the enriched client info into the
+        // latest snapshot so we don't silently discard phase / chatItem changes
+        // made by the concurrent event.
+        if let latest = sessions[sessionId], latest.lastActivity > session.lastActivity {
+            session = latest
+            // Re-apply enrichment
+            session.clientInfo = session.clientInfo.merged(with: event.clientInfo)
+            session.clientInfo = normalizedClientInfo(session.clientInfo, provider: event.provider, sessionId: sessionId)
+        }
+
         let previousLastActivity = session.lastActivity
         session.lastActivity = Date()
         if let hookMessage = Self.normalizedHookMessage(event.message) {
-            session.latestHookMessage = hookMessage
+            if shouldCaptureHookMessage(hookMessage, for: event, session: session) {
+                session.latestHookMessage = hookMessage
+            }
+        }
+
+        // For hook-only clients without JSONL (e.g. Hermes), build chat history
+        // directly from hook events so users can see conversation content.
+        if session.clientInfo.isHermesClient {
+            appendHermesHookChatItem(event: event, session: &session)
         }
 
         let shouldPreserveEndedStopForAnsweredQuestion =
@@ -315,6 +345,11 @@ actor SessionStore {
         if event.status == "ended", !shouldPreserveEndedStopForAnsweredQuestion {
             markSessionEnded(&session)
             sessions[sessionId] = session
+            if session.clientInfo.isQwenCodeClient {
+                Self.logger.info(
+                    "Qwen session ended session=\(sessionId, privacy: .public) phase=\(session.phase.description, privacy: .public) notification=\((event.notificationType ?? "").prefix(40), privacy: .public) latestHook=\((session.latestHookMessage ?? "").prefix(120), privacy: .public) conversationLast=\((session.conversationInfo.lastMessage ?? "").prefix(120), privacy: .public)"
+                )
+            }
             if session.clientInfo.isHermesClient {
                 Self.logger.info(
                     "Hermes session ended session=\(sessionId, privacy: .public) phase=\(session.phase.description, privacy: .public) message=\((session.latestHookMessage ?? "").prefix(120), privacy: .public)"
@@ -331,6 +366,11 @@ actor SessionStore {
             ? .waitingForInput
             : event.determinePhase()
         let intervention = event.intervention
+        let shouldPreserveQwenQuestionIntervention = shouldPreserveQwenQuestionIntervention(
+            for: event,
+            newPhase: newPhase,
+            currentIntervention: session.intervention
+        )
         let preservedPendingApproval = preservedPendingApprovalContext(
             for: event,
             session: session,
@@ -359,6 +399,10 @@ actor SessionStore {
             event: event
         ) {
             session.phase = resumedPhase
+        } else if shouldPreserveExistingQwenApprovalPhase(event: event, session: session, newPhase: newPhase) {
+            Self.logger.debug(
+                "Preserving existing Qwen approval phase over notification for \(sessionId.prefix(8), privacy: .public)"
+            )
         } else if session.phase.canTransition(to: newPhase) {
             session.phase = newPhase
         } else {
@@ -373,6 +417,11 @@ actor SessionStore {
                     current: session.intervention,
                     proposed: intervention
                 )
+            } else if shouldPreserveExistingQwenIntervention(
+                for: event,
+                currentIntervention: session.intervention
+            ) {
+                // Notification-derived approval should not override existing intervention
             } else {
                 session.intervention = intervention
             }
@@ -380,6 +429,8 @@ actor SessionStore {
             if intervention.kind == .question {
                 session.phase = .waitingForInput
             }
+        } else if shouldPreserveQwenQuestionIntervention {
+            session.phase = .waitingForInput
         } else if shouldClearIntervention(for: event, newPhase: newPhase, currentIntervention: session.intervention) {
             session.intervention = nil
         }
@@ -401,6 +452,11 @@ actor SessionStore {
         }
 
         sessions[sessionId] = session
+        if session.clientInfo.isQwenCodeClient {
+            Self.logger.info(
+                "Qwen session updated session=\(sessionId, privacy: .public) event=\(event.event, privacy: .public) status=\(event.status, privacy: .public) notification=\((event.notificationType ?? "").prefix(40), privacy: .public) phase=\(session.phase.description, privacy: .public) latestHook=\((session.latestHookMessage ?? "").prefix(120), privacy: .public) conversationLast=\((session.conversationInfo.lastMessage ?? "").prefix(120), privacy: .public)"
+            )
+        }
         if session.clientInfo.isHermesClient {
             Self.logger.info(
                 "Hermes session updated session=\(sessionId, privacy: .public) event=\(event.event, privacy: .public) phase=\(session.phase.description, privacy: .public) message=\((session.latestHookMessage ?? "").prefix(120), privacy: .public)"
@@ -458,6 +514,91 @@ actor SessionStore {
 
     private func processToolTracking(event: HookEvent, session: inout SessionState) {
         processToolTracking(event: event, session: &session, preservingPendingApproval: false)
+    }
+
+    private func shouldCaptureHookMessage(
+        _ hookMessage: String,
+        for event: HookEvent,
+        session: SessionState
+    ) -> Bool {
+        guard event.clientInfo.isQwenCodeClient else { return true }
+
+        // PermissionRequest messages: always skip to preserve earlier assistant messages
+        if event.event == "PermissionRequest" {
+            Self.logger.info(
+                "Skipping Qwen PermissionRequest hook message session=\(event.sessionId, privacy: .public) incoming=\(hookMessage.prefix(120), privacy: .public) existing=\((session.latestHookMessage ?? "").prefix(120), privacy: .public)"
+            )
+            return false
+        }
+
+        // Notification permission_prompt: allow when creating a new approval state,
+        // skip when there is already an active approval (PermissionRequest arrived first).
+        if event.notificationType == "permission_prompt" {
+            if session.phase.isWaitingForApproval {
+                Self.logger.info(
+                    "Skipping Qwen permission_prompt hook message (already in approval) session=\(event.sessionId, privacy: .public) incoming=\(hookMessage.prefix(120), privacy: .public)"
+                )
+                return false
+            }
+            return true
+        }
+
+        return true
+    }
+
+    /// Build chat history items from Hermes hook events so the conversation is
+    /// visible in the session detail view even without a JSONL file.
+    private func appendHermesHookChatItem(event: HookEvent, session: inout SessionState) {
+        switch event.event {
+        case "UserPromptSubmit":
+            guard let message = Self.normalizedHookMessage(event.message), !message.isEmpty else { return }
+            let id = "hermes-user-\(session.chatItems.count)-\(Int(Date().timeIntervalSince1970 * 1000))"
+            session.chatItems.append(ChatHistoryItem(
+                id: id,
+                type: .user(message),
+                timestamp: Date()
+            ))
+            // Capture as first user message for session display title.
+            if session.conversationInfo.firstUserMessage == nil {
+                session.conversationInfo = ConversationInfo(
+                    summary: session.conversationInfo.summary,
+                    lastMessage: session.conversationInfo.lastMessage,
+                    lastMessageRole: session.conversationInfo.lastMessageRole,
+                    lastToolName: session.conversationInfo.lastToolName,
+                    firstUserMessage: message,
+                    lastUserMessageDate: Date()
+                )
+            }
+            Self.logger.debug(
+                "Hermes chat item appended type=user session=\(event.sessionId.prefix(8), privacy: .public) length=\(message.count)"
+            )
+
+        case "Notification":
+            guard event.notificationType == "assistant_message" else { return }
+            guard let message = Self.normalizedHookMessage(event.message), !message.isEmpty else { return }
+            let id = "hermes-assistant-\(session.chatItems.count)-\(Int(Date().timeIntervalSince1970 * 1000))"
+            session.chatItems.append(ChatHistoryItem(
+                id: id,
+                type: .assistant(message),
+                timestamp: Date()
+            ))
+            // Keep conversationInfo.lastMessage in sync so the UI
+            // can show the latest assistant reply everywhere.
+            session.conversationInfo = ConversationInfo(
+                summary: session.conversationInfo.summary,
+                lastMessage: message,
+                lastMessageRole: "assistant",
+                lastToolName: session.conversationInfo.lastToolName,
+                firstUserMessage: session.conversationInfo.firstUserMessage,
+                lastUserMessageDate: session.conversationInfo.lastUserMessageDate
+            )
+            Self.logger.debug(
+                "Hermes chat item appended type=assistant session=\(event.sessionId.prefix(8), privacy: .public) length=\(message.count)"
+            )
+
+        default:
+            break  // Tool events are handled by processToolTracking.
+        }
     }
 
     private func processToolTracking(
@@ -1352,6 +1493,61 @@ actor SessionStore {
         return newPhase != .waitingForInput
     }
 
+    private func shouldPreserveQwenQuestionIntervention(
+        for event: HookEvent,
+        newPhase: SessionPhase,
+        currentIntervention: SessionIntervention?
+    ) -> Bool {
+        guard event.clientInfo.isQwenCodeClient,
+              event.event == "Notification",
+              event.notificationType == "permission_prompt",
+              currentIntervention?.kind == .question,
+              newPhase != .waitingForInput else {
+            return false
+        }
+
+        Self.logger.info(
+            "Preserving Qwen question intervention session=\(event.sessionId, privacy: .public) event=\(event.event, privacy: .public) notification=\((event.notificationType ?? "").prefix(40), privacy: .public)"
+        )
+        return true
+    }
+
+    /// Prevent a Notification-derived approval from overriding an existing
+    /// intervention (question or real PermissionRequest approval).
+    private func shouldPreserveExistingQwenIntervention(
+        for event: HookEvent,
+        currentIntervention: SessionIntervention?
+    ) -> Bool {
+        guard event.clientInfo.isQwenCodeClient,
+              event.event == "Notification",
+              event.notificationType == "permission_prompt",
+              currentIntervention != nil else {
+            return false
+        }
+
+        Self.logger.info(
+            "Preserving existing Qwen intervention over notification approval session=\(event.sessionId, privacy: .public)"
+        )
+        return true
+    }
+
+    /// Prevent a Notification-derived waitingForApproval from overwriting an
+    /// existing waitingForApproval that came from a real PermissionRequest.
+    private func shouldPreserveExistingQwenApprovalPhase(
+        event: HookEvent,
+        session: SessionState,
+        newPhase: SessionPhase
+    ) -> Bool {
+        guard event.clientInfo.isQwenCodeClient,
+              event.event == "Notification",
+              event.notificationType == "permission_prompt",
+              session.phase.isWaitingForApproval,
+              newPhase.isWaitingForApproval else {
+            return false
+        }
+        return true
+    }
+
     // MARK: - Interrupt Processing
 
     private func processInterrupt(sessionId: String) async {
@@ -1449,7 +1645,7 @@ actor SessionStore {
             return
         }
 
-        if session.provider == .claude, !session.cwd.isEmpty {
+        if session.provider == .claude, !session.cwd.isEmpty, !session.clientInfo.isHermesClient {
             scheduleFileSync(sessionId: session.sessionId, cwd: session.cwd)
         }
     }

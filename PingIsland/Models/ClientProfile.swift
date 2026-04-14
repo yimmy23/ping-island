@@ -488,7 +488,7 @@ enum ClientProfileRegistry {
         ),
         ManagedHookClientProfile(
             id: "hermes-hooks",
-            title: "Hermes Agent",
+            title: "Hermes",
             subtitle: "管理 ~/.hermes/plugins/ping_island，按 Hermes 官方 plugin hooks 协议接入 Island",
             installationKind: .pluginDirectory,
             alwaysVisibleInSettings: true,
