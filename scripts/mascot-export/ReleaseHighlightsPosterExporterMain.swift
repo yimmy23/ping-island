@@ -141,6 +141,7 @@ private enum PosterVariant: String {
     case smoothUpdates = "smooth-updates"
     case v010Chinese = "v0.1.0-cn"
     case v011CodeBuddyWorkBuddyChinese = "v0.1.1-codebuddy-workbuddy-cn"
+    case v020Chinese = "v0.2.0-cn"
 
     init(rawValue: String) throws {
         guard let value = PosterVariant(rawValue: rawValue) else {
@@ -183,7 +184,7 @@ private enum PosterExportError: LocalizedError {
               --workbuddy-icon <path>    WorkBuddy product icon path
               --notch-preview <path>     Notch preview image path
               --question-preview <path>  Question preview image path
-              --variant <name>           remote-workflows | smooth-updates | v0.1.0-cn | v0.1.1-codebuddy-workbuddy-cn
+              --variant <name>           remote-workflows | smooth-updates | v0.1.0-cn | v0.1.1-codebuddy-workbuddy-cn | v0.2.0-cn
             """
         }
     }
@@ -202,6 +203,8 @@ private struct ReleaseHighlightsPosterView: View {
             V010ChinesePoster(options: options)
         case .v011CodeBuddyWorkBuddyChinese:
             V011CodeBuddyWorkBuddyChinesePoster(options: options)
+        case .v020Chinese:
+            V020ChinesePoster(options: options)
         }
     }
 }
@@ -504,6 +507,83 @@ private struct V011CodeBuddyWorkBuddyChinesePoster: View {
                     "follow-up 状态修正",
                     "一键打开客户端",
                     "历史增量回填",
+                ])
+            }
+            .padding(.horizontal, 106)
+            .padding(.vertical, 88)
+        }
+    }
+}
+
+private struct V020ChinesePoster: View {
+    let options: PosterOptions
+
+    private let featureRows = [
+        "新增全局快捷键，可一键打开当前活跃会话或完整会话列表",
+        "正式支持 SSH 远程监控，可引导远程 PingIslandBridge 并把事件回流到本机 Island",
+        "Hermes Agent 走官方 plugin hooks 接入，CLI 事件不再卡在 gateway 旁路",
+        "Qwen Code 正式接入 `~/.qwen/settings.json`，通知、追问和会话状态都能稳定进入 Island",
+    ]
+
+    var body: some View {
+        ZStack {
+            SharedPosterBackground(
+                topGlow: Color(red: 0.18, green: 0.82, blue: 0.74),
+                bottomGlow: Color(red: 0.22, green: 0.53, blue: 0.98)
+            )
+
+            VStack(spacing: 44) {
+                PosterHeader(
+                    iconURL: options.iconURL,
+                    eyebrow: "PING ISLAND VERSION 0.2.0",
+                    title: "0.2.0 版本宣传海报",
+                    subtitle: "这一版把跨终端工作流真正做成正式能力：本地快捷打开、远程 SSH 回流、Hermes 官方 plugin hooks，以及 Qwen Code 官方 hooks 全部进入同一套 Island 体验。"
+                )
+
+                HStack(alignment: .top, spacing: 34) {
+                    VStack(spacing: 28) {
+                        BigFeatureCard(
+                            title: "本次重点",
+                            bullets: featureRows,
+                            accent: Color(red: 0.18, green: 0.82, blue: 0.74),
+                            minHeight: 760,
+                            bulletFontSize: 40
+                        )
+
+                        HStack(spacing: 22) {
+                            V020PositionCard()
+                            V020KeywordsCard()
+                        }
+                    }
+
+                    VStack(spacing: 28) {
+                        PreviewCard(
+                            title: "统一回到 Island",
+                            caption: "无论是本地会话、远程 SSH 终端，还是 Hermes / Qwen 这类新接入客户端，审批、追问、通知和完成提示现在都能在同一个界面里看清楚。",
+                            imageURL: options.notchPreviewURL,
+                            accent: Color(red: 0.24, green: 0.63, blue: 0.98)
+                        )
+
+                        MascotStripCard(
+                            title: "0.2.0 的新组合",
+                            subtitle: "Claude Code、Codex、Hermes Agent 与 Qwen Code 在这版一起进入更完整的跨终端监控节奏。",
+                            mascots: [
+                                (.claude, .working),
+                                (.codex, .working),
+                                (.hermes, .warning),
+                                (.qwen, .working),
+                            ],
+                            accent: Color(red: 0.18, green: 0.82, blue: 0.74)
+                        )
+                    }
+                    .frame(width: 920)
+                }
+
+                PosterFooter(tags: [
+                    "Global shortcuts",
+                    "SSH 远程回流",
+                    "Hermes plugin hooks",
+                    "Qwen 官方 hooks",
                 ])
             }
             .padding(.horizontal, 106)
@@ -840,6 +920,53 @@ private struct MonitoringKeywordsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             CardLabel(text: "关键词", accent: Color(red: 0.12, green: 0.78, blue: 0.62))
+
+            Text("这一版的核心变化")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
+
+            FlowTagCloud(tags: tags)
+        }
+        .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+        .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct V020PositionCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            CardLabel(text: "版本定位", accent: Color(red: 0.22, green: 0.53, blue: 0.98))
+
+            Text("0.2.0 是一次跨终端工作流升级。")
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("它不只是多接入两个客户端，而是把本地与远程、快捷打开与会话回流、官方 hooks 与正式产品路径重新整理成一套更完整的使用节奏。")
+                .font(.system(size: 26, weight: .medium, design: .rounded))
+                .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.28))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+        .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct V020KeywordsCard: View {
+    private let tags = [
+        "快捷键",
+        "SSH 回流",
+        "Hermes",
+        "Qwen Code",
+        "plugin hooks",
+        "official hooks",
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            CardLabel(text: "关键词", accent: Color(red: 0.18, green: 0.82, blue: 0.74))
 
             Text("这一版的核心变化")
                 .font(.system(size: 32, weight: .bold, design: .rounded))

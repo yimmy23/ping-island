@@ -28,3 +28,8 @@ xcrun swiftc \
   --variant smooth-updates \
   --output-name ping-island-0.0.5-to-0.0.9-smooth-updates.png \
   "$@"
+
+"${EXECUTABLE_PATH}" \
+  --variant v0.2.0-cn \
+  --output-name ping-island-0.2.0-update-log-cn.png \
+  "$@"
