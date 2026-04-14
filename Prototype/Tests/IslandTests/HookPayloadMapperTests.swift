@@ -1087,11 +1087,39 @@ func hermesUserPromptSubmitMapsFromPluginHookPayload() throws {
 }
 
 @Test
-func hermesSessionEndUsesLastAssistantMessageAsPreview() throws {
+func hermesStopUsesLastAssistantMessageAsPreview() throws {
+    let payload = """
+    {
+      "hook_event_name": "Stop",
+      "session_id": "hermes-2",
+      "last_assistant_message": "Done. I inspected the tool calls and wrote the follow-up notes."
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "hermes-agent",
+            "--client-name", "Hermes Agent",
+            "--thread-source", "hermes-plugin"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "Stop")
+    #expect(envelope.status?.kind == .completed)
+    #expect(envelope.preview == "Done. I inspected the tool calls and wrote the follow-up notes.")
+}
+
+@Test
+func hermesSessionFinalizeUsesSessionEndPreview() throws {
     let payload = """
     {
       "hook_event_name": "SessionEnd",
-      "session_id": "hermes-2",
+      "session_id": "hermes-3",
       "last_assistant_message": "Done. I inspected the tool calls and wrote the follow-up notes."
     }
     """.data(using: .utf8)!

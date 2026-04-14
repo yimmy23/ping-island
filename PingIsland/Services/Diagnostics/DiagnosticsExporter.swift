@@ -226,11 +226,14 @@ actor DiagnosticsExporter {
             (FocusDiagnosticsStore.diagnosticsFileURL, "logs/focus-debug.log"),
             (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".claude/settings.json"), "configs/claude-settings.json"),
             (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".codebuddy/settings.json"), "configs/codebuddy-settings.json"),
+            (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".qwen/settings.json"), "configs/qwen-settings.json"),
             (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".qoder/settings.json"), "configs/qoder-settings.json"),
             (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".qoderwork/settings.json"), "configs/qoderwork-settings.json"),
             (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".codex/hooks.json"), "configs/codex-hooks.json"),
             (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".codex/config.toml"), "configs/codex-config.toml"),
             (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".codex/session_index.jsonl"), "configs/codex-session-index.jsonl"),
+            (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".hermes/plugins/ping_island/plugin.yaml"), "configs/hermes-plugin/plugin.yaml"),
+            (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".hermes/plugins/ping_island/__init__.py"), "configs/hermes-plugin/__init__.py"),
         ]
 
         for item in copiedFiles {
@@ -239,6 +242,16 @@ actor DiagnosticsExporter {
             } catch {
                 warnings.append("Failed to copy \(item.source.lastPathComponent): \(error.localizedDescription)")
             }
+        }
+
+        do {
+            try copyDirectoryContentsIfPresent(
+                from: preferredClaudeHookDebugDirectory(),
+                toRelativeDirectory: "debug/claude-hooks",
+                under: exportRoot
+            )
+        } catch {
+            warnings.append("Failed to copy Claude-compatible hook debug logs: \(error.localizedDescription)")
         }
 
         do {
@@ -269,6 +282,16 @@ actor DiagnosticsExporter {
             )
         } catch {
             warnings.append("Failed to copy Qoder hook debug logs: \(error.localizedDescription)")
+        }
+
+        do {
+            try copyDirectoryContentsIfPresent(
+                from: preferredHermesHookDebugDirectory(),
+                toRelativeDirectory: "debug/hermes-hooks",
+                under: exportRoot
+            )
+        } catch {
+            warnings.append("Failed to copy Hermes hook debug logs: \(error.localizedDescription)")
         }
 
         do {
@@ -470,12 +493,20 @@ actor DiagnosticsExporter {
         fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".ping-island-debug/codex-hooks", isDirectory: true)
     }
 
+    private func preferredClaudeHookDebugDirectory() -> URL {
+        fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".ping-island-debug/claude-hooks", isDirectory: true)
+    }
+
     private func preferredCodeBuddyHookDebugDirectory() -> URL {
         fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".ping-island-debug/codebuddy-hooks", isDirectory: true)
     }
 
     private func preferredQoderHookDebugDirectory() -> URL {
         fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".ping-island-debug/qoder-hooks", isDirectory: true)
+    }
+
+    private func preferredHermesHookDebugDirectory() -> URL {
+        fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".ping-island-debug/hermes-hooks", isDirectory: true)
     }
 
     private func writeCommandOutput(

@@ -1124,6 +1124,11 @@ class HookSocketServer {
         let expectsResponse = envelope.expectsResponse || envelope.hookEvent.expectsResponse
         var event = envelope.hookEvent
         logger.debug("Received bridge envelope provider=\(envelope.provider.rawValue, privacy: .public) event=\(envelope.eventType, privacy: .public) session=\(event.sessionId.prefix(8), privacy: .public)")
+        if event.clientInfo.isHermesClient {
+            logger.info(
+                "Hermes bridge envelope event=\(envelope.eventType, privacy: .public) session=\(event.sessionId, privacy: .public) status=\(event.status, privacy: .public) message=\((event.message ?? "").prefix(120), privacy: .public)"
+            )
+        }
 
         if event.event == "PreToolUse" && event.toolUseId == nil {
             let syntheticToolUseId = "bridge-\(envelope.id.uuidString)"

@@ -315,6 +315,11 @@ actor SessionStore {
         if event.status == "ended", !shouldPreserveEndedStopForAnsweredQuestion {
             markSessionEnded(&session)
             sessions[sessionId] = session
+            if session.clientInfo.isHermesClient {
+                Self.logger.info(
+                    "Hermes session ended session=\(sessionId, privacy: .public) phase=\(session.phase.description, privacy: .public) message=\((session.latestHookMessage ?? "").prefix(120), privacy: .public)"
+                )
+            }
             publishState()
             cancelPendingCodexPlaceholderPrune(sessionId: sessionId)
             cancelPendingQoderConversationPoll(sessionId: sessionId)
@@ -396,6 +401,11 @@ actor SessionStore {
         }
 
         sessions[sessionId] = session
+        if session.clientInfo.isHermesClient {
+            Self.logger.info(
+                "Hermes session updated session=\(sessionId, privacy: .public) event=\(event.event, privacy: .public) phase=\(session.phase.description, privacy: .public) message=\((session.latestHookMessage ?? "").prefix(120), privacy: .public)"
+            )
+        }
         publishState()
         updateCodexPlaceholderPrune(for: session)
         updateQoderConversationPoll(for: session, event: event)

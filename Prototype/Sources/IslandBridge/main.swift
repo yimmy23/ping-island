@@ -42,10 +42,28 @@ struct IslandBridgeMain {
                     stdinData: stdinData
                 )
 
-                let response = try sendEnvelopeIfPossible(
-                    envelope: envelope,
-                    socketPath: environment["ISLAND_SOCKET_PATH"] ?? "/tmp/island.sock"
-                )
+                let socketPath = environment["ISLAND_SOCKET_PATH"] ?? "/tmp/island.sock"
+                let response: BridgeResponse?
+                do {
+                    response = try sendEnvelopeIfPossible(
+                        envelope: envelope,
+                        socketPath: socketPath
+                    )
+                    try? BridgeDebugLogger.logDeliveryIfNeeded(
+                        envelope: envelope,
+                        environment: environment,
+                        socketPath: socketPath,
+                        outcome: "delivered"
+                    )
+                } catch BridgeError.connectionFailed {
+                    try? BridgeDebugLogger.logDeliveryIfNeeded(
+                        envelope: envelope,
+                        environment: environment,
+                        socketPath: socketPath,
+                        outcome: "connection_failed"
+                    )
+                    throw BridgeError.connectionFailed
+                }
 
                 if let response, response.decision != nil {
                     let payload = HookPayloadMapper.stdoutPayload(
@@ -356,7 +374,9 @@ private enum BridgeDebugLogger {
             environment: filteredEnvironment(environment),
             metadata: envelope.metadata,
             stdinRaw: String(data: stdinData, encoding: .utf8),
-            envelopeJSON: BridgeCodec.jsonString(for: envelope)
+            envelopeJSON: BridgeCodec.jsonString(for: envelope),
+            socketPath: nil,
+            deliveryOutcome: nil
         )
 
         let fileURL = directory.appendingPathComponent(dayStamp(for: record.timestamp) + ".jsonl")
@@ -384,6 +404,8 @@ private enum BridgeDebugLogger {
         switch clientKind {
         case "codebuddy":
             return "codebuddy-hooks"
+        case "hermes", "hermes-agent", "hermes_agent", "hermes agent":
+            return "hermes-hooks"
         case "openclaw":
             return "openclaw-hooks"
         case "qoder", "qoderwork":
@@ -421,10 +443,63 @@ private enum BridgeDebugLogger {
 
     private static func filteredEnvironment(_ environment: [String: String]) -> [String: String] {
         environment.reduce(into: [:]) { partial, pair in
-            if interestingEnvironmentKeys.contains(pair.key) || pair.key.hasPrefix("CODEBUDDY_") || pair.key.hasPrefix("CODEX_") {
+            if interestingEnvironmentKeys.contains(pair.key)
+                || pair.key.hasPrefix("CODEBUDDY_")
+                || pair.key.hasPrefix("CODEX_")
+                || pair.key.hasPrefix("ISLAND_")
+                || pair.key.hasPrefix("PING_ISLAND_") {
                 partial[pair.key] = pair.value
             }
         }
+    }
+
+    static func logDeliveryIfNeeded(
+        envelope: BridgeEnvelope,
+        environment: [String: String],
+        socketPath: String,
+        outcome: String
+    ) throws {
+        guard let target = debugTarget(for: envelope) else { return }
+
+        let fileManager = FileManager.default
+        let directory = debugDirectory(for: target, environment: environment)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let record = BridgeDebugRecord(
+            id: UUID(),
+            timestamp: Date(),
+            provider: envelope.provider.rawValue,
+            clientKind: envelope.metadata["client_kind"],
+            eventType: envelope.eventType,
+            sessionKey: envelope.sessionKey,
+            expectsResponse: envelope.expectsResponse,
+            statusKind: envelope.status?.kind.rawValue,
+            title: envelope.title,
+            preview: envelope.preview,
+            arguments: [],
+            environment: filteredEnvironment(environment),
+            metadata: envelope.metadata,
+            stdinRaw: nil,
+            envelopeJSON: BridgeCodec.jsonString(for: envelope),
+            socketPath: socketPath,
+            deliveryOutcome: outcome
+        )
+
+        let fileURL = directory.appendingPathComponent(dayStamp(for: record.timestamp) + ".jsonl")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(record)
+
+        if !fileManager.fileExists(atPath: fileURL.path) {
+            fileManager.createFile(atPath: fileURL.path, contents: nil)
+        }
+
+        let handle = try FileHandle(forWritingTo: fileURL)
+        defer { handle.closeFile() }
+        handle.seekToEndOfFile()
+        handle.write(data)
+        handle.write(Data("\n".utf8))
     }
 
     private static func dayStamp(for date: Date) -> String {
@@ -453,6 +528,8 @@ private struct BridgeDebugRecord: Codable, Sendable {
     let metadata: [String: String]
     let stdinRaw: String?
     let envelopeJSON: String?
+    let socketPath: String?
+    let deliveryOutcome: String?
 }
 
 private enum BridgeError: Error {

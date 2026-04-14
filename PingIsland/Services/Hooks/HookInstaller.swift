@@ -1483,8 +1483,15 @@ struct HookInstaller {
         name: ping-island
         version: 1.0.0
         description: Forward Hermes Agent plugin hooks to Ping Island
-        provides:
-          hooks: true
+        provides_hooks:
+          - on_session_start
+          - pre_llm_call
+          - pre_tool_call
+          - post_tool_call
+          - post_llm_call
+          - on_session_end
+          - on_session_finalize
+          - on_session_reset
         """
 
         let initPy = """
@@ -1501,7 +1508,7 @@ struct HookInstaller {
         import subprocess
         import threading
 
-        BRIDGE_ARGS = \(argsJSON)
+        BRIDGE_ARGS = json.loads(r'''\(argsJSON)''')
         ENV_KEYS = [
             "TERM_PROGRAM",
             "ITERM_SESSION_ID",
@@ -1566,6 +1573,7 @@ struct HookInstaller {
                     "cwd": None,
                     "last_user": None,
                     "last_assistant": None,
+                    "did_emit_start": False,
                 }
             return _SESSION_STATE[session_id]
 
@@ -1694,13 +1702,14 @@ struct HookInstaller {
             threading.Thread(target=_spawn_bridge, args=(payload,), daemon=True).start()
 
 
-        def _on_session_start(session_id=None, platform=None, model=None, **kwargs):
-            resolved_id = _resolve_session_id(session_id, **kwargs)
-            if not resolved_id:
+        def _emit_session_start(session_id, platform=None, model=None, **kwargs):
+            state = _state_for(session_id)
+            if state.get("did_emit_start"):
                 return
+
             _emit(
                 _bridge_payload(
-                    resolved_id,
+                    session_id,
                     hook_event_name="SessionStart",
                     platform=_stable_text(platform),
                     model=_stable_text(model),
@@ -1708,6 +1717,14 @@ struct HookInstaller {
                     cwd=_resolve_cwd(kwargs),
                 )
             )
+            state["did_emit_start"] = True
+
+
+        def _on_session_start(session_id=None, platform=None, model=None, **kwargs):
+            resolved_id = _resolve_session_id(session_id, **kwargs)
+            if not resolved_id:
+                return
+            _emit_session_start(resolved_id, platform=platform, model=model, **kwargs)
 
 
         def _on_pre_llm_call(session_id=None, user_message=None, **kwargs):
@@ -1779,10 +1796,9 @@ struct HookInstaller {
 
             state = _state_for(resolved_id)
             assistant = state.get("last_assistant") or _extract_assistant_message(kwargs)
-            event_name = "SessionEnd" if completed else "Stop"
             payload = _bridge_payload(
                 resolved_id,
-                hook_event_name=event_name,
+                hook_event_name="Stop",
                 last_assistant_message=assistant,
                 platform=_stable_text(platform),
                 model=_stable_text(model),
@@ -1792,8 +1808,32 @@ struct HookInstaller {
             )
             _emit(payload)
 
-            if completed or interrupted:
-                _SESSION_STATE.pop(resolved_id, None)
+        def _on_session_finalize(session_id=None, platform=None, model=None, **kwargs):
+            resolved_id = _resolve_session_id(session_id, kwargs.get("task_id"), **kwargs)
+            if not resolved_id:
+                return
+
+            state = _state_for(resolved_id)
+            assistant = state.get("last_assistant") or _extract_assistant_message(kwargs)
+            payload = _bridge_payload(
+                resolved_id,
+                hook_event_name="SessionEnd",
+                last_assistant_message=assistant,
+                platform=_stable_text(platform),
+                model=_stable_text(model),
+                completed=True,
+                interrupted=False,
+                cwd=_resolve_cwd(kwargs),
+            )
+            _emit(payload)
+            _SESSION_STATE.pop(resolved_id, None)
+
+
+        def _on_session_reset(session_id=None, platform=None, model=None, **kwargs):
+            resolved_id = _resolve_session_id(session_id, kwargs.get("task_id"), **kwargs)
+            if not resolved_id:
+                return
+            _emit_session_start(resolved_id, platform=platform, model=model, **kwargs)
 
 
         def register(ctx):
@@ -1803,6 +1843,8 @@ struct HookInstaller {
             ctx.register_hook("post_tool_call", _on_post_tool_call)
             ctx.register_hook("post_llm_call", _on_post_llm_call)
             ctx.register_hook("on_session_end", _on_session_end)
+            ctx.register_hook("on_session_finalize", _on_session_finalize)
+            ctx.register_hook("on_session_reset", _on_session_reset)
         """
 
         return [
