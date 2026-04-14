@@ -107,11 +107,17 @@ Ping Island 另外还提供 VS Code 兼容的聚焦扩展，可用于 VS Code、
 
 Hermes Agent 现在通过生成 `~/.hermes/plugins/ping_island/` 目录来接入。因为 Hermes 的 `~/.hermes/hooks/` 只在 gateway 生效，不会在 CLI 里触发，所以 Ping Island 走的是官方 `ctx.register_hook()` 插件机制，专门观察用户输入、工具调用、回复完成和会话结束。
 
+<p align="center">
+  <img src="docs/images/ping-island-hermes-poster.png" width="960" alt="Ping Island Hermes Agent 能力海报">
+</p>
+
 Qwen Code 现在按一等公民客户端处理，直接管理 `~/.qwen/settings.json`，并配套默认宠物“薄荷围巾卡皮巴拉”。这个形象保留了 Qwen 的青绿色识别，但整体更稳、更耐看，也更适合长对话和连续追问场景。
 
 OpenClaw 当前通过 `~/.openclaw/hooks/` 下的托管 internal hook 目录接入，同时会从 `~/.openclaw/agents/main/sessions/` 读取本地 session transcript 以回填完整对话过程。
 
 SSH 远程支持是 Ping Island 的正式能力，而不是额外脚本。它可以把桥接程序引导到远程 macOS / Linux 主机上，重写远程 Claude 兼容 hooks 和 Qwen Code hooks、安装受支持的 OpenClaw internal hooks，让事件先进入桥接层，再通过双向转发回到你本机的菜单栏 UI。因此即使会话跑在远程 SSH 终端里，审批、追问、通知和一键跳回也仍然能落在同一个 Island 界面里。
+
+README 里的 Hermes 能力海报由 `./scripts/render-hermes-poster.sh` 生成，对应产物在 `docs/images/ping-island-hermes-poster.png`。
 
 <a id="installation"></a>
 ## 安装
