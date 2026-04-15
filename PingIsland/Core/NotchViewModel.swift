@@ -54,7 +54,7 @@ class NotchViewModel: ObservableObject {
     let spacing: CGFloat = 12
     let hasPhysicalNotch: Bool
 
-    private static let defaultClosedHeight: CGFloat = 32
+    private static let defaultClosedHeight = ScreenNotchMetrics.fallbackClosedHeight
     private static let defaultClosedWidth: CGFloat = 266
     @Published private(set) var closedWidth: CGFloat
 
@@ -64,7 +64,7 @@ class NotchViewModel: ObservableObject {
     var closedHeight: CGFloat {
         usesPhysicalNotchClosedPresentation
             ? deviceNotchRect.height
-            : Self.defaultClosedHeight
+            : detectedClosedHeight
     }
     var usesPhysicalNotchClosedPresentation: Bool {
         hasPhysicalNotch && isFullscreenPhysicalNotchCompactActive
@@ -82,6 +82,12 @@ class NotchViewModel: ObservableObject {
             width: closedSize.width,
             height: closedSize.height
         )
+    }
+
+    private var detectedClosedHeight: CGFloat {
+        guard hasPhysicalNotch else { return Self.defaultClosedHeight }
+        let systemHeight = ceil(deviceNotchRect.height)
+        return systemHeight > 0 ? systemHeight : Self.defaultClosedHeight
     }
 
     /// Dynamic opened size based on content type
