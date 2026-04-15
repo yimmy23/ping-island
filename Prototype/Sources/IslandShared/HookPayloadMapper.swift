@@ -118,10 +118,18 @@ public enum HookPayloadMapper {
                 // allow/deny decision.
                 if eventType.contains("Question")
                     || eventType == "UserInputRequest"
-                    || eventType == "UserPromptSubmit"
-                    || (clientKind == "qwen-code" && eventType == "PreToolUse") {
+                    || eventType == "UserPromptSubmit" {
                     return """
                     {"hookSpecificOutput":{"hookEventName":"\(eventType)","permissionDecision":"allow","updatedInput":\(payloadJson)}}
+                    """
+                }
+
+                // Qwen Code answers flow through PreToolUse.  The CLI reads
+                // updatedInput from the nested decision.updatedInput path for
+                // PreToolUse hooks (not the flat permissionDecision path).
+                if clientKind == "qwen-code" && eventType == "PreToolUse" {
+                    return """
+                    {"hookSpecificOutput":{"hookEventName":"PreToolUse","decision":{"behavior":"allow","updatedInput":\(payloadJson)}}}
                     """
                 }
 
