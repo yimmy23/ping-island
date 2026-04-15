@@ -42,6 +42,7 @@ releases/*
 !releases/notes/
 releases/notes/*
 !releases/notes/0.2.0.md
+!releases/notes/0.2.1.md
 
 # Xcode backup
 *.xcodeproj.backup/
