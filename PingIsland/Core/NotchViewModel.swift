@@ -54,7 +54,7 @@ class NotchViewModel: ObservableObject {
     let spacing: CGFloat = 12
     let hasPhysicalNotch: Bool
 
-    private static let defaultClosedHeight: CGFloat = 32
+    private static let defaultClosedHeight = ScreenNotchMetrics.fallbackClosedHeight
     private static let defaultClosedWidth: CGFloat = 266
     @Published private(set) var closedWidth: CGFloat
 
@@ -64,7 +64,7 @@ class NotchViewModel: ObservableObject {
     var closedHeight: CGFloat {
         usesPhysicalNotchClosedPresentation
             ? deviceNotchRect.height
-            : Self.defaultClosedHeight
+            : detectedClosedHeight
     }
     var usesPhysicalNotchClosedPresentation: Bool {
         hasPhysicalNotch && isFullscreenPhysicalNotchCompactActive
@@ -82,6 +82,29 @@ class NotchViewModel: ObservableObject {
             width: closedSize.width,
             height: closedSize.height
         )
+    }
+
+    private var detectedClosedHeight: CGFloat {
+        guard hasPhysicalNotch else { return Self.defaultClosedHeight }
+        let systemHeight = ceil(deviceNotchRect.height)
+        return systemHeight > 0 ? systemHeight : Self.defaultClosedHeight
+    }
+
+    private var detectedClosedWidth: CGFloat {
+        Self.detectedClosedWidth(
+            deviceNotchRect: deviceNotchRect,
+            hasPhysicalNotch: hasPhysicalNotch
+        )
+    }
+
+    private static func detectedClosedWidth(
+        deviceNotchRect: CGRect,
+        hasPhysicalNotch: Bool
+    ) -> CGFloat {
+        guard hasPhysicalNotch else { return defaultClosedWidth }
+        let systemWidth = ceil(deviceNotchRect.width)
+        guard systemWidth > 0 else { return defaultClosedWidth }
+        return max(defaultClosedWidth, systemWidth)
     }
 
     /// Dynamic opened size based on content type
@@ -159,7 +182,10 @@ class NotchViewModel: ObservableObject {
             windowHeight: windowHeight
         )
         self.hasPhysicalNotch = hasPhysicalNotch
-        self.closedWidth = Self.defaultClosedWidth
+        self.closedWidth = Self.detectedClosedWidth(
+            deviceNotchRect: deviceNotchRect,
+            hasPhysicalNotch: hasPhysicalNotch
+        )
         self.events = enableEventMonitoring ? EventMonitors.shared : nil
         self.fullscreenActivityProvider = fullscreenActivityProvider
         if enableEventMonitoring {
@@ -484,7 +510,7 @@ class NotchViewModel: ObservableObject {
     }
 
     func setManualAttentionActive(_ isActive: Bool) {
-        let targetWidth = Self.defaultClosedWidth
+        let targetWidth = detectedClosedWidth
         guard closedWidth != targetWidth else { return }
         closedWidth = targetWidth
     }
