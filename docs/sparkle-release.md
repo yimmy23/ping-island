@@ -12,7 +12,9 @@ The repo ships `.github/workflows/release-packages.yml` for GitHub-hosted releas
   - Keep the `.zip` available for update/distribution workflows that still expect it.
 - It applies the repo-tracked DMG installer layout and generated branded background during packaging, so local and CI builds share the same installer presentation without depending on a checked-in static poster image.
   - Signed release packaging now fails if Finder styling does not persist into the DMG, so GitHub Actions cannot silently publish a plain installer without the background.
-- It creates or updates the matching GitHub Release for a `v*` tag and leaves it in draft by default so you can review it before publishing.
+- It creates or updates the matching GitHub Release for a `v*` tag.
+  - Tag-triggered runs publish the Release automatically so Sparkle clients can discover the new `latest/download/appcast.xml` immediately.
+  - Manual `workflow_dispatch` runs still expose the `draft` toggle when you intentionally want a reviewable draft first.
 - When Sparkle secrets are configured, it also signs and uploads `appcast.xml` plus the versioned Markdown release notes asset that the app uses for in-app update history.
 - It is safe to rerun after a partially failed release upload; the workflow reuses the existing tag release, re-uploads assets with `--clobber`, and then updates the final draft / prerelease state.
 
@@ -62,12 +64,13 @@ base64 -i developer-id-application.p12 | pbcopy
 2. Make sure the app version matches the release tag.
    - Also bump `CURRENT_PROJECT_VERSION` / `CFBundleVersion` for every release. Sparkle relies on the monotonically increasing build version (`sparkle:version`) when deciding whether an update is newer.
 3. Push a tag like `v0.0.1`, or open the workflow manually with the same tag name.
-4. Publish the GitHub Release manually after reviewing the generated draft, or uncheck the `draft` input when you intentionally want the manual workflow run to publish immediately.
+4. If you trigger the workflow from a pushed `v*` tag, the Release will publish automatically at the end of the run.
+5. If you trigger the workflow manually, publish the GitHub Release after reviewing the generated draft, or uncheck the `draft` input when you want that manual run to publish immediately.
 
 Important: `https://github.com/<owner>/<repo>/releases/latest/download/appcast.xml` only resolves for the latest published release. If the newest release is still a draft, or the published release was created without the `appcast.xml` asset, Sparkle clients will receive a 404 and update checks will fail.
 
-The workflow will upload the signed `.dmg`, `.zip`, and Linux bridge binary to the matching GitHub Release draft and add a short note that the artifacts were signed and notarized in CI.
-When Sparkle secrets are present, the same draft Release will also include:
+The workflow will upload the signed `.dmg`, `.zip`, and Linux bridge binary to the matching GitHub Release and add a short note that the artifacts were signed and notarized in CI.
+When Sparkle secrets are present, the same Release will also include:
 
 - `appcast.xml`
 - `PingIsland-<version>.md`
