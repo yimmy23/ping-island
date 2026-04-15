@@ -1,4 +1,7 @@
 import SwiftUI
+import os
+
+private let formLogger = Logger(subsystem: "com.wudanwu.pingisland", category: "SessionQuestionForm")
 
 struct SessionQuestionForm: View {
     let intervention: SessionIntervention
@@ -232,12 +235,14 @@ struct SessionQuestionForm: View {
     }
 
     private func submissionPayload() -> [String: [String]] {
-        displayQuestions.reduce(into: [String: [String]]()) { partial, question in
+        let payload = displayQuestions.reduce(into: [String: [String]]()) { partial, question in
             let resolved = finalAnswers(for: question)
             if !resolved.isEmpty {
                 partial[question.id] = resolved
             }
         }
+        formLogger.info("[QwenDebug] submissionPayload: questionsCount=\(displayQuestions.count) questionIDs=\(displayQuestions.map(\.id).joined(separator: ","), privacy: .public) payload=\(String(describing: payload).prefix(500), privacy: .public)")
+        return payload
     }
 
     private func normalizedAnswers(from value: String) -> [String] {

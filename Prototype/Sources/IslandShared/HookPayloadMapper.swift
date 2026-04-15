@@ -111,7 +111,15 @@ public enum HookPayloadMapper {
                     return "{}"
                 }
 
-                if eventType.contains("Question") || eventType == "UserInputRequest" || eventType == "UserPromptSubmit" {
+                // Qwen Code sends AskUserQuestion as PermissionRequest, so
+                // the eventType is "PermissionRequest" rather than a Question
+                // event.  Use the flat permissionDecision format so the CLI
+                // reads the updatedInput instead of treating it as a plain
+                // allow/deny decision.
+                if eventType.contains("Question")
+                    || eventType == "UserInputRequest"
+                    || eventType == "UserPromptSubmit"
+                    || (clientKind == "qwen-code" && eventType == "PreToolUse") {
                     return """
                     {"hookSpecificOutput":{"hookEventName":"\(eventType)","permissionDecision":"allow","updatedInput":\(payloadJson)}}
                     """

@@ -959,7 +959,17 @@ class HookSocketServer {
     func respondToIntervention(toolUseId: String, decision: String, updatedInput: [String: Any]? = nil, reason: String? = nil) {
         queue.async { [weak self] in
             let encodedInput = updatedInput?.mapValues { AnyCodable($0) }
+            logger.info("[QwenDebug] respondToIntervention: toolUseId=\(toolUseId.prefix(20), privacy: .public) decision=\(decision, privacy: .public) updatedInputKeys=\(updatedInput?.keys.joined(separator: ",") ?? "nil", privacy: .public) answersValue=\(String(describing: updatedInput?["answers"]).prefix(300), privacy: .public)")
             self?.sendHookResponse(toolUseId: toolUseId, decision: decision, reason: reason, updatedInput: encodedInput)
+        }
+    }
+
+    /// Drain all remaining pending permissions for a session by sending an approve
+    /// response. Used after answering a question intervention so that companion
+    /// Notification bridge sockets (e.g. Qwen Code permission_prompt) are released.
+    func drainRemainingPermissions(sessionId: String, decision: String = "approve") {
+        queue.async { [weak self] in
+            self?.sendAllPendingResponses(sessionId: sessionId, decision: decision)
         }
     }
 
@@ -1342,13 +1352,20 @@ class HookSocketServer {
                 reason: reason,
                 updatedInput: updatedInput
             )
+            let bridgeDec = bridgeDecision(for: decision, updatedInput: updatedInput)
             let response = BridgeResponse(
                 requestID: pending.requestId,
-                decision: bridgeDecision(for: decision, updatedInput: updatedInput),
+                decision: bridgeDec,
                 reason: reason,
                 updatedInput: updatedInput,
                 errorMessage: nil
             )
+            if let data = try? JSONEncoder().encode(response),
+               let jsonStr = String(data: data, encoding: .utf8) {
+                logger.info("[QwenDebug] sendHookResponse: encoded BridgeResponse JSON=\(jsonStr.prefix(800), privacy: .public)")
+            } else {
+                logger.error("[QwenDebug] sendHookResponse: failed to encode BridgeResponse")
+            }
             guard let data = try? JSONEncoder().encode(response) else {
                 close(pending.clientSocket)
                 permissionFailureHandler?(pending.sessionId, pending.toolUseId)
@@ -1381,6 +1398,26 @@ class HookSocketServer {
         }
         permissionsLock.unlock()
         sendHookResponse(toolUseId: pending.toolUseId, decision: decision, reason: reason, updatedInput: nil)
+    }
+
+    /// Send a response to ALL remaining pending permissions for a session.
+    private func sendAllPendingResponses(sessionId: String, decision: String) {
+        permissionsLock.lock()
+        let matching = pendingPermissions.filter { _, pendings in
+            pendings.contains { $0.sessionId == sessionId }
+        }
+        let toolUseIds = matching.keys.map { $0 }
+        permissionsLock.unlock()
+
+        guard !toolUseIds.isEmpty else {
+            logger.debug("[QwenDebug] drainRemainingPermissions: no remaining pending for session=\(sessionId.prefix(8), privacy: .public)")
+            return
+        }
+
+        logger.info("[QwenDebug] drainRemainingPermissions: session=\(sessionId.prefix(8), privacy: .public) draining \(toolUseIds.count) remaining pending(s)")
+        for toolUseId in toolUseIds {
+            sendHookResponse(toolUseId: toolUseId, decision: decision, reason: nil, updatedInput: nil)
+        }
     }
 
     private func writeBridgeResponse(
@@ -1422,14 +1459,19 @@ class HookSocketServer {
 
     private static func answerDecisionPayload(from updatedInput: [String: AnyCodable]?) -> [String: String] {
         guard let rawAnswers = updatedInput?["answers"]?.value else {
+            logger.warning("[QwenDebug] answerDecisionPayload: no 'answers' key in updatedInput, keys=\(updatedInput?.keys.joined(separator: ",") ?? "nil", privacy: .public)")
             return [:]
         }
 
+        logger.info("[QwenDebug] answerDecisionPayload: rawAnswers type=\(type(of: rawAnswers), privacy: .public) value=\(String(describing: rawAnswers).prefix(300), privacy: .public)")
+
         if let answers = rawAnswers as? [String: String] {
+            logger.info("[QwenDebug] answerDecisionPayload: direct [String:String] match, count=\(answers.count)")
             return answers
         }
 
         guard let answers = rawAnswers as? [String: Any] else {
+            logger.warning("[QwenDebug] answerDecisionPayload: failed to cast to [String:Any]")
             return [:]
         }
 

@@ -320,7 +320,7 @@ actor CodexAppServerMonitor {
                     "clientInfo": [
                         "name": "Island",
                         "title": "Island",
-                        "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+                        "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
                     ],
                     "capabilities": [
                         "experimentalApi": true

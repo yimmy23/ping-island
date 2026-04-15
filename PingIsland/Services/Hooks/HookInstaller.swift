@@ -741,8 +741,12 @@ struct HookInstaller {
     }
 
     static func patchedQwenCLISourceIfNeeded(_ source: String) -> String? {
-        let marker = #"const hookAnswerPayload = confirmationDetails.type === "ask_user_question""#
-        if source.contains(marker) {
+        let requiredMarkers = [
+            #"const hookAnswerPayload = confirmationDetails.type === "ask_user_question""#,
+            #"const controlAnswerPayload = toolCall.confirmationDetails.type === "ask_user_question""#,
+            #"const seededAnswers = params?.answers;"#
+        ]
+        if requiredMarkers.allSatisfy(source.contains) {
             return source
         }
 
@@ -762,6 +766,27 @@ struct HookInstaller {
                 $1  ToolConfirmationOutcome.ProceedOnce,
                 $1  hookAnswerPayload
                 $1);
+                """
+            ),
+            (
+                #"(\s+const updatedInput = payload\["updatedInput"\];\s+if \(updatedInput && typeof updatedInput === "object"\) \{\s+toolCall\.request\.args = updatedInput;\s+\}\s+)await toolCall\.confirmationDetails\.onConfirm\(\s+ToolConfirmationOutcome\.ProceedOnce\s+\);"#,
+                """
+                $1const controlAnswerPayload = toolCall.confirmationDetails.type === "ask_user_question" && updatedInput && typeof updatedInput === "object" && "answers" in updatedInput ? { answers: updatedInput.answers } : void 0;
+                $1await toolCall.confirmationDetails.onConfirm(
+                $1  ToolConfirmationOutcome.ProceedOnce,
+                $1  controlAnswerPayload
+                $1);
+                """
+            ),
+            (
+                #"(\s+constructor\(_config, params\) \{\s+super\(params\);\s+this\._config = _config;\s+\})"#,
+                """
+                $1
+                      const seededAnswers = params?.answers;
+                      if (seededAnswers && typeof seededAnswers === "object" && !Array.isArray(seededAnswers)) {
+                        this.userAnswers = seededAnswers;
+                        this.wasAnswered = Object.keys(seededAnswers).length > 0;
+                      }
                 """
             )
         ]

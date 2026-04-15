@@ -369,6 +369,12 @@ class SessionMonitor: ObservableObject {
                     decision: "answer",
                     updatedInput: updatedInput
                 )
+                // Qwen Code sends a companion Notification permission_prompt
+                // bridge alongside the PermissionRequest.  Drain it so the
+                // CLI is not left waiting on an unreplied socket.
+                if session.clientInfo.isQwenCodeClient {
+                    HookSocketServer.shared.drainRemainingPermissions(sessionId: sessionId)
+                }
             }
 
             await SessionStore.shared.process(

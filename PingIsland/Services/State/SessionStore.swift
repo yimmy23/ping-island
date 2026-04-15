@@ -52,6 +52,11 @@ actor SessionStore {
     private var pendingOpenClawConversationPolls: [String: (id: UUID, task: Task<Void, Never>)] = [:]
     private var codexSessionAliases: [String: String] = [:]
 
+    /// Session IDs that recently had a question intervention resolved.
+    /// Used to suppress late Qwen Code Notification permission_prompt events
+    /// that arrive after the answer has already been sent.
+    private var recentlyResolvedQuestionSessions = Set<String>()
+
     /// Sync debounce interval (100ms)
     private let syncDebounceNs: UInt64 = 100_000_000
     private let codexHookPlaceholderPruneDelayNs: UInt64 = 10_000_000_000
@@ -263,6 +268,23 @@ actor SessionStore {
         if shouldIgnoreClaudeAskUserQuestionPermissionRequest(event) {
             Self.logger.notice(
                 "Ignoring duplicate Claude AskUserQuestion permission session=\(sessionId, privacy: .public)"
+            )
+            return
+        }
+        if shouldSkipLateQwenNotificationPermissionPrompt(event, sessionId: sessionId) {
+            Self.logger.info(
+                "Skipping late Qwen Notification permission_prompt (question already resolved) session=\(sessionId, privacy: .public)"
+            )
+            HookSocketServer.shared.drainRemainingPermissions(sessionId: sessionId)
+            return
+        }
+        // When a Qwen Code Notification permission_prompt arrives while the
+        // session still has a pending .question intervention, skip the entire
+        // event so it cannot alter phase / tool tracking / publishState and
+        // appear as a second question card in the UI.
+        if shouldSkipQwenNotificationWhileQuestionPending(event, sessionId: sessionId) {
+            Self.logger.info(
+                "Skipping Qwen Notification permission_prompt (question still pending) session=\(sessionId, privacy: .public)"
             )
             return
         }
@@ -1018,6 +1040,11 @@ actor SessionStore {
             )
             session.phase = .waitingForInput
         } else {
+            // Track recently resolved question for late-Notification suppression
+            if session.intervention?.kind == .question,
+               session.clientInfo.isQwenCodeClient {
+                recentlyResolvedQuestionSessions.insert(sessionId)
+            }
             session.intervention = nil
             if session.phase.canTransition(to: nextPhase) || session.phase == nextPhase {
                 session.phase = nextPhase
@@ -1543,6 +1570,41 @@ actor SessionStore {
               event.notificationType == "permission_prompt",
               session.phase.isWaitingForApproval,
               newPhase.isWaitingForApproval else {
+            return false
+        }
+        return true
+    }
+
+    /// Detect a late Qwen Code Notification permission_prompt that arrives
+    /// after the question intervention has already been resolved.  These
+    /// should be silently drained rather than creating a fresh approval state
+    /// that the CLI would interpret as an empty allow.
+    private func shouldSkipLateQwenNotificationPermissionPrompt(
+        _ event: HookEvent,
+        sessionId: String
+    ) -> Bool {
+        guard event.clientInfo.isQwenCodeClient,
+              event.event == "Notification",
+              event.notificationType == "permission_prompt",
+              recentlyResolvedQuestionSessions.remove(sessionId) != nil else {
+            return false
+        }
+        return true
+    }
+
+    /// Skip a Qwen Code Notification permission_prompt when the session still
+    /// has a pending `.question` intervention.  The Notification is a companion
+    /// event and must not go through the normal event pipeline (which would
+    /// trigger `publishState` and potentially flash a second card in the UI).
+    private func shouldSkipQwenNotificationWhileQuestionPending(
+        _ event: HookEvent,
+        sessionId: String
+    ) -> Bool {
+        guard event.clientInfo.isQwenCodeClient,
+              event.event == "Notification",
+              event.notificationType == "permission_prompt",
+              let session = sessions[sessionId],
+              session.intervention?.kind == .question else {
             return false
         }
         return true

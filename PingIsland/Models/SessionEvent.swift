@@ -231,7 +231,11 @@ extension HookEvent {
         }
 
         if clientInfo.isQwenCodeClient {
-            return (event == "PreToolUse" || event == "PermissionRequest")
+            // Qwen Code captures ask_user_question answers during the initial
+            // PermissionRequest confirmation path. Surface that event so the
+            // returned updatedInput can seed the tool with indexed answers
+            // before the later PreToolUse hook arrives.
+            return event == "PermissionRequest"
                 && Self.questionToolNames.contains(normalizedToolNameForIntervention ?? "")
                 && !(questionPayloads?.isEmpty ?? true)
         }
