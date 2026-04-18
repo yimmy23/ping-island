@@ -280,150 +280,153 @@ struct NotchView: View {
     // MARK: - Body
 
     var body: some View {
+        bodyContent
+            .offset(y: viewModel.closedPresentationOffsetY)
+            .opacity(isVisible ? 1 : 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .preferredColorScheme(.dark)
+            .onAppear {
+                sessionMonitor.startMonitoring()
+                isVisible = !viewModel.shouldHideClosedPresentation
+                viewModel.setManualAttentionActive(hasManualAttentionIndicator)
+                refreshLastVisibleMascotClient(from: sessionMonitor.instances)
+                handleProcessingChange()
+                handleApprovalSessionsChange(sessionMonitor.instances)
+                primeCompletionNotificationTracking(sessionMonitor.instances)
+            }
+            .onChange(of: viewModel.status) { oldStatus, newStatus in
+                handleStatusChange(from: oldStatus, to: newStatus)
+            }
+            .onChange(of: settings.autoOpenCompletionPanel) { _, isEnabled in
+                if !isEnabled {
+                    removeCompletionNotifications(
+                        matching: { $0 == .completed || $0 == .ended },
+                        keepPanelOpen: true
+                    )
+                } else {
+                    maybePresentNextCompletionNotification()
+                }
+            }
+            .onChange(of: settings.autoOpenCompactedNotificationPanel) { _, isEnabled in
+                if !isEnabled {
+                    removeCompletionNotifications(
+                        matching: { $0 == .compacted },
+                        keepPanelOpen: true
+                    )
+                } else {
+                    maybePresentNextCompletionNotification()
+                }
+            }
+            .onChange(of: settings.temporarilyMuteNotificationsUntil) { _, mutedUntil in
+                guard AppSettings.isNotificationMuteActive(until: mutedUntil) else { return }
+                clearCompletionNotifications(keepPanelOpen: true)
+                if viewModel.openReason == .notification {
+                    viewModel.exitChat()
+                }
+            }
+            .onChange(of: viewModel.contentType.id) { _, _ in
+                maybePresentNextCompletionNotification()
+            }
+            .onChange(of: sessionMonitor.pendingInstances) { _, sessions in
+                handlePendingSessionsChange(sessions)
+            }
+            .onChange(of: sessionMonitor.instances) { _, instances in
+                viewModel.setManualAttentionActive(
+                    instances.contains { $0.needsApprovalResponse || $0.intervention != nil }
+                )
+                refreshLastVisibleMascotClient(from: instances)
+                handleProcessingChange()
+                handleSessionSoundTransitions(instances)
+                handleApprovalSessionsChange(instances)
+                handleQuestionInterventionChange(instances)
+                handleWaitingForInputChange(instances)
+                handleCompletionNotificationChange(instances)
+            }
+            .onChange(of: viewModel.isFullscreenEdgeRevealActive) { _, isActive in
+                if isActive && viewModel.status != .opened {
+                    isVisible = false
+                } else {
+                    handleProcessingChange()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .pingIslandOpenActiveSessionShortcut)) { _ in
+                handleOpenActiveSessionShortcut()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .pingIslandOpenSessionListShortcut)) { _ in
+                handleOpenSessionListShortcut()
+            }
+            .onPreferenceChange(OpenedPanelContentHeightPreferenceKey.self) { height in
+                guard viewModel.status == .opened else {
+                    viewModel.updateOpenedMeasuredHeight(nil)
+                    return
+                }
+
+                if case .instances = viewModel.contentType {
+                    let effectiveHeight = activeCompletionNotification == nil
+                        ? height
+                        : max(height, SessionCompletionNotificationView.minimumContentHeight)
+                    let measuredHeight = height > 0
+                        ? closedNotchSize.height + effectiveHeight + 12
+                        : nil
+                    viewModel.updateOpenedMeasuredHeight(measuredHeight)
+                } else {
+                    viewModel.updateOpenedMeasuredHeight(nil)
+                }
+            }
+    }
+
+    private var bodyContent: some View {
         ZStack(alignment: .top) {
             // Outer container does NOT receive hits - only the notch content does
             VStack(spacing: 0) {
-                notchLayout
-                    .frame(
-                        maxWidth: viewModel.status == .opened ? notchSize.width : nil,
-                        alignment: .top
-                    )
-                    .padding(
-                        .horizontal,
-                        viewModel.status == .opened
-                            ? cornerRadiusInsets.opened.top
-                            : cornerRadiusInsets.closed.bottom
-                    )
-                    .padding([.horizontal, .bottom], viewModel.status == .opened ? 12 : 0)
-                    .background(.black)
-                    .clipShape(currentNotchShape)
-                    .overlay(alignment: .top) {
-                        Rectangle()
-                            .fill(.black)
-                            .frame(height: 1)
-                            .padding(.horizontal, topCornerRadius)
-                    }
-                    .shadow(
-                        color: (viewModel.status == .opened || isHovering) ? .black.opacity(0.7) : .clear,
-                        radius: 6
-                    )
-                    .frame(
-                        maxWidth: viewModel.status == .opened ? notchSize.width : nil,
-                        maxHeight: viewModel.status == .opened ? notchSize.height : nil,
-                        alignment: .top
-                    )
-                    .animation(viewModel.status == .opened ? openAnimation : closeAnimation, value: viewModel.status)
-                    .animation(openAnimation, value: notchSize) // Animate container size changes between content types
-                    .animation(.smooth, value: activityCoordinator.expandingActivity)
-                    .animation(.smooth, value: hasPendingPermission)
-                    .animation(.smooth, value: hasHumanIntervention)
-                    .animation(.smooth, value: hasCompletedReadyState)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isBouncing)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
-                            isHovering = hovering
-                        }
-                    }
-                    .onTapGesture {
-                        if viewModel.status != .opened {
-                            viewModel.notchOpen(reason: .click)
-                        }
-                    }
+                styledNotchLayout
             }
         }
-        .offset(y: viewModel.closedPresentationOffsetY)
-        .opacity(isVisible ? 1 : 0)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .preferredColorScheme(.dark)
-        .onAppear {
-            sessionMonitor.startMonitoring()
-            isVisible = !viewModel.shouldHideClosedPresentation
-            viewModel.setManualAttentionActive(hasManualAttentionIndicator)
-            refreshLastVisibleMascotClient(from: sessionMonitor.instances)
-            handleProcessingChange()
-            handleApprovalSessionsChange(sessionMonitor.instances)
-            primeCompletionNotificationTracking(sessionMonitor.instances)
-        }
-        .onChange(of: viewModel.status) { oldStatus, newStatus in
-            handleStatusChange(from: oldStatus, to: newStatus)
-        }
-        .onChange(of: settings.autoOpenCompletionPanel) { _, isEnabled in
-            if !isEnabled {
-                removeCompletionNotifications(
-                    matching: { $0 == .completed || $0 == .ended },
-                    keepPanelOpen: true
-                )
-            } else {
-                maybePresentNextCompletionNotification()
-            }
-        }
-        .onChange(of: settings.autoOpenCompactedNotificationPanel) { _, isEnabled in
-            if !isEnabled {
-                removeCompletionNotifications(
-                    matching: { $0 == .compacted },
-                    keepPanelOpen: true
-                )
-            } else {
-                maybePresentNextCompletionNotification()
-            }
-        }
-        .onChange(of: settings.temporarilyMuteNotificationsUntil) { _, mutedUntil in
-            guard AppSettings.isNotificationMuteActive(until: mutedUntil) else { return }
-            clearCompletionNotifications(keepPanelOpen: true)
-            if viewModel.openReason == .notification {
-                viewModel.exitChat()
-            }
-        }
-        .onChange(of: viewModel.contentType.id) { _, _ in
-            maybePresentNextCompletionNotification()
-        }
-        .onChange(of: sessionMonitor.pendingInstances) { _, sessions in
-            handlePendingSessionsChange(sessions)
-        }
-        .onChange(of: sessionMonitor.instances) { _, instances in
-            viewModel.setManualAttentionActive(
-                instances.contains { $0.needsApprovalResponse || $0.intervention != nil }
-            )
-            refreshLastVisibleMascotClient(from: instances)
-            handleProcessingChange()
-            handleSessionSoundTransitions(instances)
-            handleApprovalSessionsChange(instances)
-            handleQuestionInterventionChange(instances)
-            handleWaitingForInputChange(instances)
-            handleCompletionNotificationChange(instances)
-        }
-        .onChange(of: viewModel.isFullscreenEdgeRevealActive) { _, isActive in
-            if isActive && viewModel.status != .opened {
-                isVisible = false
-            } else {
-                handleProcessingChange()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .pingIslandOpenActiveSessionShortcut)) { _ in
-            handleOpenActiveSessionShortcut()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .pingIslandOpenSessionListShortcut)) { _ in
-            handleOpenSessionListShortcut()
-        }
-        .onPreferenceChange(OpenedPanelContentHeightPreferenceKey.self) { height in
-            guard viewModel.status == .opened else {
-                viewModel.updateOpenedMeasuredHeight(nil)
-                return
-            }
+    }
 
-            if case .instances = viewModel.contentType {
-                let effectiveHeight = activeCompletionNotification == nil
-                    ? height
-                    : max(height, SessionCompletionNotificationView.minimumContentHeight)
-                let measuredHeight = height > 0
-                    ? closedNotchSize.height + effectiveHeight + 12
-                    : nil
-                viewModel.updateOpenedMeasuredHeight(measuredHeight)
-            } else {
-                viewModel.updateOpenedMeasuredHeight(nil)
+    private var styledNotchLayout: some View {
+        let isOpened = viewModel.status == .opened
+        let horizontalInset = isOpened
+            ? cornerRadiusInsets.opened.top
+            : cornerRadiusInsets.closed.bottom
+        let shadowColor = (isOpened || isHovering) ? Color.black.opacity(0.7) : .clear
+
+        return notchLayout
+            .frame(maxWidth: isOpened ? notchSize.width : nil, alignment: .top)
+            .padding(.horizontal, horizontalInset)
+            .padding([.horizontal, .bottom], isOpened ? 12 : 0)
+            .background(.black)
+            .clipShape(currentNotchShape)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(.black)
+                    .frame(height: 1)
+                    .padding(.horizontal, topCornerRadius)
             }
-        }
+            .shadow(color: shadowColor, radius: 6)
+            .frame(
+                maxWidth: isOpened ? notchSize.width : nil,
+                maxHeight: isOpened ? notchSize.height : nil,
+                alignment: .top
+            )
+            .animation(isOpened ? openAnimation : closeAnimation, value: viewModel.status)
+            .animation(openAnimation, value: notchSize)
+            .animation(.smooth, value: activityCoordinator.expandingActivity)
+            .animation(.smooth, value: hasPendingPermission)
+            .animation(.smooth, value: hasHumanIntervention)
+            .animation(.smooth, value: hasCompletedReadyState)
+            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isBouncing)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
+                    isHovering = hovering
+                }
+            }
+            .onTapGesture {
+                if !isOpened {
+                    viewModel.notchOpen(reason: .click)
+                }
+            }
     }
 
     // MARK: - Notch Layout
