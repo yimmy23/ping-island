@@ -68,4 +68,16 @@ final class AppSettingsPersistenceTests: XCTestCase {
         XCTAssertNotNil(defaults.data(forKey: key))
         XCTAssertNil(defaults.dictionary(forKey: key))
     }
+
+    func testAutoOpenCompactedNotificationPanelPersists() {
+        let defaults = makeDefaults()
+        let store = AppSettingsStore(defaults: defaults)
+
+        XCTAssertTrue(store.autoOpenCompactedNotificationPanel)
+
+        store.autoOpenCompactedNotificationPanel = false
+
+        XCTAssertFalse(AppSettingsStore(defaults: defaults).autoOpenCompactedNotificationPanel)
+        XCTAssertEqual(defaults.object(forKey: "autoOpenCompactedNotificationPanel") as? Bool, false)
+    }
 }

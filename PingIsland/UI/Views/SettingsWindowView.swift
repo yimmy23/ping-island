@@ -1164,6 +1164,13 @@ private struct SettingsPanelContentView: View {
                 SettingsLineDivider()
 
                 SettingsToggleLine(
+                    title: "上下文压缩时自动展开提醒",
+                    subtitle: "上下文压缩后自动弹出提示；关闭后只保留刘海状态提示和提示音",
+                    isOn: $settings.autoOpenCompactedNotificationPanel
+                )
+                SettingsLineDivider()
+
+                SettingsToggleLine(
                     title: "鼠标离开时自动收起",
                     subtitle: "hover 展开的预览面板会在鼠标离开后自动关闭",
                     isOn: $settings.autoCollapseOnLeave

@@ -350,7 +350,22 @@ struct NotchView: View {
         }
         .onChange(of: settings.autoOpenCompletionPanel) { _, isEnabled in
             if !isEnabled {
-                clearCompletionNotifications(keepPanelOpen: true)
+                removeCompletionNotifications(
+                    matching: { $0 == .completed || $0 == .ended },
+                    keepPanelOpen: true
+                )
+            } else {
+                maybePresentNextCompletionNotification()
+            }
+        }
+        .onChange(of: settings.autoOpenCompactedNotificationPanel) { _, isEnabled in
+            if !isEnabled {
+                removeCompletionNotifications(
+                    matching: { $0 == .compacted },
+                    keepPanelOpen: true
+                )
+            } else {
+                maybePresentNextCompletionNotification()
             }
         }
         .onChange(of: settings.temporarilyMuteNotificationsUntil) { _, mutedUntil in
@@ -874,26 +889,13 @@ struct NotchView: View {
             return
         }
 
-        // Completion should stay as a lightweight status cue in the closed notch
-        // instead of auto-opening a read-only notification panel that steals focus.
-        guard settings.autoOpenCompletionPanel else {
-            if activeCompletionNotification != nil || !completionNotificationQueue.isEmpty {
-                clearCompletionNotifications(keepPanelOpen: true)
-            }
-
-            previousCompletionNotificationPhases = Dictionary(
-                uniqueKeysWithValues: instances.map { ($0.stableId, $0.phase) }
-            )
-            return
-        }
-
         let currentPhases = Dictionary(
             uniqueKeysWithValues: instances.map { ($0.stableId, $0.phase) }
         )
 
-        // Completion popups are one-shot ambient notifications. If the notch is already
-        // expanded for some other reason, drop new completion popups instead of queueing
-        // them to appear later on top of the normal expanded UI.
+        // Ambient popups are one-shot notifications. If the notch is already expanded for
+        // some other reason, drop new ones instead of queueing them to appear later on
+        // top of the normal expanded UI.
         if viewModel.status == .opened && activeCompletionNotification == nil {
             previousCompletionNotificationPhases = currentPhases
             completionNotificationQueue.removeAll()
@@ -903,6 +905,10 @@ struct NotchView: View {
         let newNotifications = instances
             .compactMap { session -> SessionCompletionNotification? in
                 let previousPhase = previousCompletionNotificationPhases[session.stableId]
+
+                if shouldQueueCompactedNotification(for: session, previousPhase: previousPhase) {
+                    return SessionCompletionNotification(session: session, kind: .compacted)
+                }
 
                 if shouldQueueCompletedNotification(for: session, previousPhase: previousPhase) {
                     return SessionCompletionNotification(session: session, kind: .completed)
@@ -928,6 +934,7 @@ struct NotchView: View {
         for session: SessionState,
         previousPhase: SessionPhase?
     ) -> Bool {
+        guard settings.autoOpenCompletionPanel else { return false }
         guard SessionCompletionStateEvaluator.isCompletedReadySession(session) else { return false }
         guard previousPhase != .waitingForInput else { return false }
         return true
@@ -937,9 +944,20 @@ struct NotchView: View {
         for session: SessionState,
         previousPhase: SessionPhase?
     ) -> Bool {
+        guard settings.autoOpenCompletionPanel else { return false }
         guard session.phase == .ended else { return false }
         guard previousPhase != .ended else { return false }
         guard previousPhase != .waitingForInput else { return false }
+        return true
+    }
+
+    private func shouldQueueCompactedNotification(
+        for session: SessionState,
+        previousPhase: SessionPhase?
+    ) -> Bool {
+        guard settings.autoOpenCompactedNotificationPanel else { return false }
+        guard previousPhase == .compacting else { return false }
+        guard session.phase != .compacting else { return false }
         return true
     }
 
@@ -982,7 +1000,6 @@ struct NotchView: View {
     }
 
     private func maybePresentNextCompletionNotification() {
-        guard settings.autoOpenCompletionPanel else { return }
         guard !areReminderNotificationsSuppressed else { return }
         guard activeCompletionNotification == nil else { return }
         guard !completionNotificationQueue.isEmpty else { return }
@@ -1018,8 +1035,18 @@ struct NotchView: View {
     }
 
     private func clearCompletionNotifications(keepPanelOpen: Bool) {
-        completionNotificationQueue.removeAll()
-        dismissActiveCompletionNotification(closePanel: !keepPanelOpen, advanceQueue: false)
+        removeCompletionNotifications(matching: { _ in true }, keepPanelOpen: keepPanelOpen)
+    }
+
+    private func removeCompletionNotifications(
+        matching shouldRemove: (SessionCompletionNotification.Kind) -> Bool,
+        keepPanelOpen: Bool
+    ) {
+        completionNotificationQueue.removeAll { shouldRemove($0.kind) }
+
+        if let activeCompletionNotification, shouldRemove(activeCompletionNotification.kind) {
+            dismissActiveCompletionNotification(closePanel: !keepPanelOpen, advanceQueue: true)
+        }
     }
 
     private func handleCompletionNotificationHover(_ isHovering: Bool) {

@@ -183,7 +183,6 @@ final class AppSettingsStore: ObservableObject {
 
     private let defaults: UserDefaults
     private var isBootstrapping = true
-
     // MARK: - Keys
 
     private enum Keys {
@@ -210,6 +209,7 @@ final class AppSettingsStore: ObservableObject {
         static let autoCollapseOnLeave = "autoCollapseOnLeave"
         static let smartSuppression = "smartSuppression"
         static let autoOpenCompletionPanel = "autoOpenCompletionPanel"
+        static let autoOpenCompactedNotificationPanel = "autoOpenCompactedNotificationPanel"
         static let showAgentDetail = "showAgentDetail"
         static let showUsage = "showUsage"
         static let usageValueMode = "usageValueMode"
@@ -393,6 +393,13 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(autoOpenCompletionPanel, forKey: Keys.autoOpenCompletionPanel)
+        }
+    }
+
+    @Published var autoOpenCompactedNotificationPanel: Bool {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(autoOpenCompactedNotificationPanel, forKey: Keys.autoOpenCompactedNotificationPanel)
         }
     }
 
@@ -823,6 +830,12 @@ final class AppSettingsStore: ObservableObject {
             exists: persistedKeys.contains(Keys.autoOpenCompletionPanel),
             default: true
         ))
+        _autoOpenCompactedNotificationPanel = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.autoOpenCompactedNotificationPanel,
+            exists: persistedKeys.contains(Keys.autoOpenCompactedNotificationPanel),
+            default: true
+        ))
         _showAgentDetail = Published(initialValue: Self.boolValue(
             from: defaults,
             key: Keys.showAgentDetail,
@@ -934,6 +947,11 @@ enum AppSettings {
     static var autoOpenCompletionPanel: Bool {
         get { shared.autoOpenCompletionPanel }
         set { shared.autoOpenCompletionPanel = newValue }
+    }
+
+    static var autoOpenCompactedNotificationPanel: Bool {
+        get { shared.autoOpenCompactedNotificationPanel }
+        set { shared.autoOpenCompactedNotificationPanel = newValue }
     }
 
     static func muteReminderNotifications(for duration: TimeInterval, now: Date = Date()) {

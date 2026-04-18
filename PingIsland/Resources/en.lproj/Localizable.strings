@@ -29,6 +29,8 @@
 "当前正在看终端时，不自动弹出通知面板" = "Do not auto-open the notification panel while you are already looking at the terminal";
 "完成时自动展开会话" = "Auto-open completed sessions";
 "消息完成后自动弹出结果面板；关闭后只保留刘海状态提示和提示音" = "Automatically open the result panel when a reply is finished. When off, keep only the notch status cue and sound.";
+"上下文压缩时自动展开提醒" = "Auto-open context compression alerts";
+"上下文压缩后自动弹出提示；关闭后只保留刘海状态提示和提示音" = "Automatically open an alert after context is compacted. When off, keep only the notch status cue and sound.";
 "鼠标离开时自动收起" = "Auto-collapse on mouse leave";
 "hover 展开的预览面板会在鼠标离开后自动关闭" = "Automatically close the hover preview panel when the mouse leaves";
 "应用" = "App";
@@ -242,6 +244,10 @@
 "等待批准 %@" = "Waiting for approval %@";
 "工作中..." = "Working...";
 "正在压缩上下文..." = "Compacting context...";
+"已压缩" = "Compressed";
+"结束" = "Ended";
+"会话已完成，点击查看完整结果。" = "Session completed. Click to view the full result.";
+"上下文已压缩" = "Context compressed";
 "等待你的下一条消息" = "Waiting for your next message";
 "会话已结束" = "Session ended";
 "Deny" = "Deny";

@@ -45,4 +45,34 @@ final class SessionCompletionPreviewBuilderTests: XCTestCase {
         XCTAssertEqual(SessionCompletionPreviewBuilder.latestUserText(for: session), "最初问题")
         XCTAssertEqual(SessionCompletionPreviewBuilder.latestAssistantText(for: session), "最终 结果")
     }
+
+    func testCompactedNotificationSuppressesAssistantPreview() {
+        let session = SessionState(
+            sessionId: "completion-preview-compacted",
+            cwd: "/tmp/project",
+            previewText: "压缩后的最新结果",
+            conversationInfo: ConversationInfo(
+                summary: "会话摘要",
+                lastMessage: "最终消息",
+                lastMessageRole: "assistant",
+                lastToolName: nil,
+                firstUserMessage: "初始问题",
+                lastUserMessageDate: nil
+            )
+        )
+
+        XCTAssertNil(
+            SessionCompletionPreviewBuilder.latestAssistantText(
+                for: session,
+                notificationKind: .compacted
+            )
+        )
+        XCTAssertEqual(
+            SessionCompletionPreviewBuilder.latestAssistantText(
+                for: session,
+                notificationKind: .completed
+            ),
+            "压缩后的最新结果"
+        )
+    }
 }

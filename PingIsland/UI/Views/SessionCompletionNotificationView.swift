@@ -12,13 +12,36 @@ struct SessionCompletionNotification: Equatable, Identifiable {
     enum Kind: String, Equatable {
         case completed
         case ended
+        case compacted
 
-        var statusLabel: String {
+        var statusLabelKey: String {
             switch self {
             case .completed:
                 return "完成"
             case .ended:
                 return "结束"
+            case .compacted:
+                return "已压缩"
+            }
+        }
+
+        var fallbackAssistantMessageKey: String {
+            switch self {
+            case .completed:
+                return "会话已完成，点击查看完整结果。"
+            case .ended:
+                return "会话已结束"
+            case .compacted:
+                return "上下文已压缩"
+            }
+        }
+
+        var usesAssistantPreview: Bool {
+            switch self {
+            case .completed, .ended:
+                return true
+            case .compacted:
+                return false
             }
         }
     }
@@ -74,6 +97,14 @@ enum SessionCompletionPreviewBuilder {
         }
 
         return sanitized(session.previewText) ?? sanitized(session.lastMessage)
+    }
+
+    static func latestAssistantText(
+        for session: SessionState,
+        notificationKind: SessionCompletionNotification.Kind
+    ) -> String? {
+        guard notificationKind.usesAssistantPreview else { return nil }
+        return latestAssistantText(for: session)
     }
 
     static func sanitized(_ text: String?) -> String? {
@@ -147,7 +178,10 @@ struct SessionCompletionNotificationView: View {
     }
 
     private var assistantText: String? {
-        SessionCompletionPreviewBuilder.latestAssistantText(for: session)
+        SessionCompletionPreviewBuilder.latestAssistantText(
+            for: session,
+            notificationKind: notification.kind
+        )
     }
 
     private var assistantContentHeight: CGFloat? {
@@ -170,7 +204,7 @@ struct SessionCompletionNotificationView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
         } else {
-            Text("会话已完成，点击查看完整结果。")
+            Text(appLocalized: notification.kind.fallbackAssistantMessageKey)
                 .font(.system(size: bodyFontSize, weight: .medium))
                 .foregroundColor(.white.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -210,7 +244,7 @@ struct SessionCompletionNotificationView: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("你：")
+                    Text(appLocalized: "你：")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white.opacity(0.48))
 
@@ -220,7 +254,7 @@ struct SessionCompletionNotificationView: View {
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Text(notification.kind.statusLabel)
+                    Text(AppLocalization.string(notification.kind.statusLabelKey))
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(.white.opacity(0.5))
                         .fixedSize()
