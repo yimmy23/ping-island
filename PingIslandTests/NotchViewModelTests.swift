@@ -174,6 +174,42 @@ final class NotchViewModelTests: XCTestCase {
         }
     }
 
+    func testPhysicalNotchFullscreenStateRespectsHideInFullscreenDisabled() async {
+        var isFullscreenActive = true
+        var hideInFullscreen = false
+
+        let viewModel = await MainActor.run {
+            NotchViewModel(
+                deviceNotchRect: CGRect(x: 0, y: 0, width: 220, height: 38),
+                screenRect: CGRect(x: 0, y: 0, width: 1512, height: 982),
+                windowHeight: 320,
+                hasPhysicalNotch: true,
+                enableEventMonitoring: false,
+                observeSystemEnvironment: false,
+                fullscreenActivityProvider: { _ in isFullscreenActive },
+                hideInFullscreenProvider: { hideInFullscreen }
+            )
+        }
+
+        await MainActor.run {
+            XCTAssertFalse(viewModel.isFullscreenPhysicalNotchCompactActive)
+
+            hideInFullscreen = true
+            viewModel.refreshFullscreenPresentationStateForTesting()
+            XCTAssertTrue(viewModel.isFullscreenPhysicalNotchCompactActive)
+
+            hideInFullscreen = false
+            viewModel.refreshFullscreenPresentationStateForTesting()
+            XCTAssertTrue(viewModel.isFullscreenPhysicalNotchCompactActive)
+        }
+
+        try? await Task.sleep(nanoseconds: 220_000_000)
+
+        await MainActor.run {
+            XCTAssertFalse(viewModel.isFullscreenPhysicalNotchCompactActive)
+        }
+    }
+
     func testToggleChatClosesWhenSameSessionIsAlreadyVisible() async {
         await MainActor.run {
             let viewModel = makeViewModel()

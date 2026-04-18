@@ -157,6 +157,7 @@ class NotchViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let events: EventMonitors?
     private let fullscreenActivityProvider: @MainActor (CGRect) -> Bool
+    private let hideInFullscreenProvider: @MainActor () -> Bool
     private var hoverTimer: DispatchWorkItem?
     // Keep hover previews feeling responsive without making incidental cursor
     // passes over the notch expand it too aggressively.
@@ -177,6 +178,7 @@ class NotchViewModel: ObservableObject {
         enableEventMonitoring: Bool = true,
         observeSystemEnvironment: Bool = true,
         fullscreenActivityProvider: @escaping @MainActor (CGRect) -> Bool = FullscreenAppDetector.isFullscreenAppActive,
+        hideInFullscreenProvider: @escaping @MainActor () -> Bool = { AppSettings.hideInFullscreen },
         fullscreenStateSettleDelay: TimeInterval = 0.18
     ) {
         self.geometry = NotchGeometry(
@@ -191,6 +193,7 @@ class NotchViewModel: ObservableObject {
         )
         self.events = enableEventMonitoring ? EventMonitors.shared : nil
         self.fullscreenActivityProvider = fullscreenActivityProvider
+        self.hideInFullscreenProvider = hideInFullscreenProvider
         self.fullscreenStateSettleDelay = fullscreenStateSettleDelay
         if enableEventMonitoring {
             setupEventHandlers()
@@ -231,10 +234,8 @@ class NotchViewModel: ObservableObject {
 
     private func refreshFullscreenPresentationState() {
         let isFullscreenActive = fullscreenActivityProvider(screenRect)
-        let shouldUseEdgeReveal = AppSettings.hideInFullscreen &&
-            !hasPhysicalNotch &&
-            isFullscreenActive
-        let shouldUsePhysicalNotchCompact = hasPhysicalNotch && isFullscreenActive
+        let shouldUseEdgeReveal = shouldUseFullscreenEdgeReveal(isFullscreenActive: isFullscreenActive)
+        let shouldUsePhysicalNotchCompact = shouldUsePhysicalNotchCompact(isFullscreenActive: isFullscreenActive)
 
         applyPhysicalNotchFullscreenState(shouldUsePhysicalNotchCompact)
 
@@ -272,7 +273,7 @@ class NotchViewModel: ObservableObject {
             guard let self else { return }
             self.fullscreenPhysicalNotchCollapseWorkItem = nil
             let isFullscreenActive = self.fullscreenActivityProvider(self.screenRect)
-            if self.hasPhysicalNotch && isFullscreenActive {
+            if self.shouldUsePhysicalNotchCompact(isFullscreenActive: isFullscreenActive) {
                 self.isFullscreenPhysicalNotchCompactActive = true
             } else {
                 self.isFullscreenPhysicalNotchCompactActive = false
@@ -280,6 +281,14 @@ class NotchViewModel: ObservableObject {
         }
         fullscreenPhysicalNotchCollapseWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + fullscreenStateSettleDelay, execute: workItem)
+    }
+
+    private func shouldUseFullscreenEdgeReveal(isFullscreenActive: Bool) -> Bool {
+        hideInFullscreenProvider() && !hasPhysicalNotch && isFullscreenActive
+    }
+
+    private func shouldUsePhysicalNotchCompact(isFullscreenActive: Bool) -> Bool {
+        hideInFullscreenProvider() && hasPhysicalNotch && isFullscreenActive
     }
 
     // MARK: - Event Handling
