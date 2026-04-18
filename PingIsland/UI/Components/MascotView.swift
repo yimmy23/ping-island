@@ -1120,10 +1120,11 @@ struct MascotView: View {
     ) {
         let space = PixelSpace(canvasSize, logicalWidth: 18, logicalHeight: 16, yOffset: 1)
         let motion = motionValues(for: mode, time: time)
-        let shell = Color(red: 0.98, green: 0.36, blue: 0.24)
-        let shellShadow = Color(red: 0.70, green: 0.18, blue: 0.15)
-        let belly = Color(red: 1.0, green: 0.70, blue: 0.56)
-        let highlight = Color(red: 1.0, green: 0.56, blue: 0.43)
+        let shell = Color(red: 1.0, green: 0.42, blue: 0.30)
+        let shellShadow = Color(red: 0.73, green: 0.20, blue: 0.16)
+        let belly = Color(red: 1.0, green: 0.76, blue: 0.62)
+        let highlight = Color(red: 1.0, green: 0.66, blue: 0.54)
+        let blush = Color(red: 1.0, green: 0.58, blue: 0.60)
         let dark = Color(red: 0.27, green: 0.07, blue: 0.07)
         let eye = Color.black
 
@@ -1201,7 +1202,7 @@ struct MascotView: View {
         )
 
         let bodyRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (5.0, 7.8, 2.4),
+            (4.8, 7.1, 3.8),
             (6.0, 6.2, 5.6),
             (7.0, 5.0, 8.0),
             (8.0, 4.2, 9.6),
@@ -1217,7 +1218,7 @@ struct MascotView: View {
 
         drawRows(
             [
-                (4.8, 8.0, 2.0), (5.8, 6.2, 0.9), (5.8, 10.9, 0.9),
+                (4.8, 7.8, 2.4), (5.8, 6.2, 0.9), (5.8, 10.9, 0.9),
                 (6.8, 5.0, 0.9), (6.8, 12.1, 0.9),
                 (7.8, 4.1, 0.9), (7.8, 13.0, 0.9),
                 (8.8, 4.1, 0.9), (8.8, 13.0, 0.9),
@@ -1227,7 +1228,7 @@ struct MascotView: View {
         )
         drawRows(
             [
-                (6.2, 7.5, 3.0),
+                (5.8, 7.0, 4.0),
                 (7.2, 6.4, 0.9), (7.2, 10.7, 0.9),
                 (8.2, 6.2, 0.8), (8.2, 11.0, 0.8)
             ],
@@ -1268,15 +1269,42 @@ struct MascotView: View {
 
         drawRects(
             [
-                (6.8, 6.6, 1.4, 1.7),
-                (9.8, 6.6, 1.4, 1.7)
+                (6.5, 6.5, 1.7, 1.9),
+                (9.8, 6.5, 1.7, 1.9)
             ],
             color: .white
         )
 
-        let eyeHeight: CGFloat = mode == .idle ? 0.6 : (mode == .warning ? 1.2 : blinkHeight(time: time, closedHeight: 0.2, openHeight: 1.2))
-        context.fill(Path(space.rect(7.2 + motion.shake, 7.2 + motion.vertical, 0.8, eyeHeight)), with: .color(eye))
-        context.fill(Path(space.rect(10.2 + motion.shake, 7.2 + motion.vertical, 0.8, eyeHeight)), with: .color(eye))
+        let eyeHeight: CGFloat = mode == .idle ? 0.7 : (mode == .warning ? 1.25 : blinkHeight(time: time, closedHeight: 0.24, openHeight: 1.25))
+        context.fill(Path(space.rect(6.9 + motion.shake, 7.0 + motion.vertical, 0.95, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(10.15 + motion.shake, 7.0 + motion.vertical, 0.95, eyeHeight)), with: .color(eye))
+        drawRects(
+            [
+                (7.15, 7.2, 0.3, 0.35),
+                (10.4, 7.2, 0.3, 0.35)
+            ],
+            color: .white.opacity(0.72)
+        )
+
+        drawRects(
+            [
+                (5.6, 8.8, 1.1, 0.6),
+                (11.3, 8.8, 1.1, 0.6)
+            ],
+            color: blush.opacity(0.7)
+        )
+
+        if mode == .idle {
+            context.fill(Path(space.rect(8.1 + motion.shake, 9.9 + motion.vertical, 1.8, 0.35)), with: .color(dark.opacity(0.42)))
+        } else {
+            drawRects(
+                [
+                    (8.0, 9.7, 0.9, 0.35),
+                    (8.9, 10.0, 0.9, 0.35)
+                ],
+                color: dark.opacity(0.58)
+            )
+        }
 
         drawRects(
             [
@@ -1289,10 +1317,10 @@ struct MascotView: View {
 
         drawRects(
             [
-                (6.0, 10.4, 0.8, 1.2), (5.1, 11.4, 1.6, 0.7),
-                (7.1, 10.9, 0.8, 1.1), (6.4, 11.8, 1.4, 0.7),
-                (11.2, 10.4, 0.8, 1.2), (11.3, 11.4, 1.6, 0.7),
-                (10.1, 10.9, 0.8, 1.1), (10.2, 11.8, 1.4, 0.7)
+                (6.2, 10.6, 0.7, 1.0), (5.4, 11.4, 1.3, 0.6),
+                (7.2, 11.0, 0.7, 0.9), (6.6, 11.7, 1.2, 0.6),
+                (11.1, 10.6, 0.7, 1.0), (11.3, 11.4, 1.3, 0.6),
+                (10.1, 11.0, 0.7, 0.9), (10.2, 11.7, 1.2, 0.6)
             ],
             color: dark
         )
