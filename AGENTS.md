@@ -127,6 +127,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - Respect existing uncommitted changes. Do not revert unrelated work.
 - Prefer narrow edits. This repo currently has active changes in UI and session-flow files.
 - Treat documentation upkeep as part of the change, not follow-up work.
+- When writing or updating tests, do not use the user's local filesystem paths as example values; prefer repo-relative, generic, or clearly synthetic paths instead.
 - Every major feature change or refactor must review and update `AGENTS.md` plus any affected adjacent docs, tests, scripts, or inline code comments that describe the old behavior.
 - Prefer code search over guesswork:
   - `rg "process\\(" PingIsland`
