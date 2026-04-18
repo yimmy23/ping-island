@@ -65,13 +65,13 @@ enum DiagnosticsCommandRunner {
                 state.appendStderr(data)
             }
 
-            func cleanupHandlers() {
+            @Sendable func cleanupHandlers() {
                 stdoutPipe.fileHandleForReading.readabilityHandler = nil
                 stderrPipe.fileHandleForReading.readabilityHandler = nil
                 process.terminationHandler = nil
             }
 
-            func complete(_ result: Result<DiagnosticsCommandResult, DiagnosticsCommandError>) {
+            @Sendable func complete(_ result: Result<DiagnosticsCommandResult, DiagnosticsCommandError>) {
                 cleanupHandlers()
                 state.resume(continuation: continuation, with: result)
             }
