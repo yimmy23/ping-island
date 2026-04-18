@@ -291,7 +291,7 @@ struct NotchView: View {
             .preferredColorScheme(.dark)
     }
 
-    private var instrumentedBody: some View {
+    private var lifecycleBody: some View {
         presentedBody
             .onAppear {
                 sessionMonitor.startMonitoring()
@@ -305,6 +305,10 @@ struct NotchView: View {
             .onChange(of: viewModel.status) { oldStatus, newStatus in
                 handleStatusChange(from: oldStatus, to: newStatus)
             }
+    }
+
+    private var settingsAwareBody: some View {
+        lifecycleBody
             .onChange(of: settings.autoOpenCompletionPanel) { _, isEnabled in
                 if !isEnabled {
                     removeCompletionNotifications(
@@ -332,6 +336,10 @@ struct NotchView: View {
                     viewModel.exitChat()
                 }
             }
+    }
+
+    private var instrumentedBody: some View {
+        settingsAwareBody
             .onChange(of: viewModel.contentType.id) { _, _ in
                 maybePresentNextCompletionNotification()
             }
