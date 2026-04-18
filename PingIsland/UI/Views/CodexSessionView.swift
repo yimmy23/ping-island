@@ -34,6 +34,14 @@ struct CodexSessionView: View {
             HStack(spacing: 8) {
                 providerBadge
 
+                if let subagentClientTypeBadgeText = session.subagentClientTypeBadgeText {
+                    contextBadge(subagentClientTypeBadgeText)
+                }
+
+                if let codexSubagentBadgeText = session.codexSubagentBadgeText {
+                    contextBadge(codexSubagentBadgeText)
+                }
+
                 if let terminalSourceBadgeLabel = session.terminalSourceBadgeLabel {
                     contextBadge(terminalSourceBadgeLabel)
                 }
@@ -47,6 +55,13 @@ struct CodexSessionView: View {
                 Text(summary)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(.white.opacity(0.45))
+                    .lineLimit(1)
+            }
+
+            if let subagentLabel = session.codexSubagentLabel {
+                Text(subagentLabel)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.55))
                     .lineLimit(1)
             }
 
@@ -218,7 +233,9 @@ struct CodexThreadInspectorView: View {
     @State private var loadError: String?
 
     private var primaryResultText: String? {
-        snapshot?.displayResultText ?? session.previewText ?? session.lastMessage
+        session.codexSubagentSummaryText(
+            for: snapshot?.displayResultText ?? session.previewText ?? session.lastMessage
+        )
     }
 
     private var recentItems: [ChatHistoryItem] {

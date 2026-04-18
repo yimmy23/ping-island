@@ -42,6 +42,13 @@ class SessionMonitor: ObservableObject {
             .store(in: &cancellables)
 
         InterruptWatcherManager.shared.delegate = self
+
+        AppSettings.shared.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshVisibleSessions()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Monitoring Lifecycle
@@ -467,7 +474,10 @@ class SessionMonitor: ObservableObject {
     }
 
     private func filteredVisibleSessions(from sessions: [SessionState]) -> [SessionState] {
-        let primaryVisibleSessions = sessions.filter { !$0.shouldHideFromPrimaryUI }
+        let visibilityMode = AppSettings.subagentVisibilityMode
+        let primaryVisibleSessions = sessions.filter {
+            !$0.shouldHideFromPrimaryUI && $0.shouldDisplaySubagent(in: visibilityMode)
+        }
         return primaryVisibleSessions.filter { candidate in
             !primaryVisibleSessions.contains { other in
                 candidate.shouldHideAsDuplicateCodexPlaceholder(comparedTo: other)

@@ -66,6 +66,38 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(withFirstUserMessage.displayTitle, "Fix the menu bar bug")
     }
 
+    func testHeuristicSubagentDisplayTitleUsesTitleOnlyPresentation() {
+        let session = SessionState(
+            sessionId: "qoder-heuristic-subagent",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(kind: .qoder, profileID: "qoder", name: "Qoder"),
+            heuristicSubagentDisplayTitle: "Agent · Read File README.md"
+        )
+
+        XCTAssertTrue(session.isHeuristicSubagentSession)
+        XCTAssertTrue(session.usesTitleOnlySubagentPresentation)
+        XCTAssertEqual(session.primarySubagentVisibilityLevel, 1)
+        XCTAssertEqual(session.titleOnlySubagentDisplayTitle, "Agent · Read File README.md")
+    }
+
+    func testQoderAgentPrefixedDisplayTitleUsesCodexStyleSubagentRendering() {
+        let session = SessionState(
+            sessionId: "qoder-agent-prefix",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(kind: .qoder, profileID: "qoder", name: "Qoder"),
+            sessionName: "Agent · 读取 README 文件"
+        )
+
+        XCTAssertTrue(session.isQoderAgentPrefixedSubagent)
+        XCTAssertTrue(session.usesTitleOnlySubagentPresentation)
+        XCTAssertTrue(session.shouldUseCodexSubagentCompactPresentation)
+        XCTAssertEqual(session.codexSubagentBadgeText, "SUBAGENT")
+        XCTAssertEqual(session.primarySubagentVisibilityLevel, 1)
+        XCTAssertEqual(session.titleOnlySubagentDisplayTitle, "Agent · 读取 README 文件")
+    }
+
     func testActiveQueueSortActivityDatePrefersLiveActivityOverOlderTranscriptUserTimestamp() {
         let now = Date()
         let session = SessionState(
@@ -238,6 +270,40 @@ final class SessionStateTests: XCTestCase {
         )
 
         XCTAssertEqual(session.scopedApprovalAction, .allowSession)
+    }
+
+    func testCodexDepthOneChildSessionIsRecognizedAsSubagent() {
+        let session = SessionState(
+            sessionId: "codex-subagent-depth-one",
+            cwd: "/tmp/project",
+            provider: .codex,
+            codexParentThreadId: "codex-parent",
+            codexSubagentDepth: 1,
+            codexSubagentNickname: "Avicenna",
+            codexSubagentRole: "analyst"
+        )
+
+        XCTAssertEqual(session.codexSubagentLevel, 1)
+        XCTAssertTrue(session.isCodexSubagent)
+        XCTAssertEqual(session.codexSubagentBadgeText, "SUBAGENT")
+        XCTAssertEqual(session.subagentClientTypeBadgeText, "Codex")
+        XCTAssertEqual(session.codexSubagentLabel, "Subagent · analyst · Avicenna")
+    }
+
+    func testCodexSubagentUsesCompactPrimaryPresentation() {
+        let session = SessionState(
+            sessionId: "codex-subagent-compact",
+            cwd: "/tmp/project",
+            provider: .codex,
+            codexParentThreadId: "codex-parent",
+            codexSubagentDepth: 1,
+            codexSubagentNickname: "Avicenna",
+            codexSubagentRole: "analyst",
+            lastActivity: Date()
+        )
+
+        XCTAssertTrue(session.shouldUseCodexSubagentCompactPresentation)
+        XCTAssertFalse(session.shouldUseMinimalCompactPresentation)
     }
 
     func testIdleSessionAutoArchivesFromPrimaryUIAfterThirtyMinutes() {
@@ -419,6 +485,143 @@ final class SessionStateTests: XCTestCase {
 
         XCTAssertFalse(firstRealSession.shouldHideAsDuplicateCodexPlaceholder(comparedTo: secondRealSession))
         XCTAssertFalse(secondRealSession.shouldHideAsDuplicateCodexPlaceholder(comparedTo: firstRealSession))
+    }
+
+    func testCodexDepthOneChildThreadUsesSubagentPresentation() {
+        let session = SessionState(
+            sessionId: "codex-subagent",
+            cwd: "/tmp/project",
+            provider: .codex,
+            codexParentThreadId: "codex-parent",
+            codexSubagentDepth: 1,
+            codexSubagentNickname: "Kierkegaard",
+            codexSubagentRole: "explorer"
+        )
+
+        XCTAssertEqual(session.codexSubagentLevel, 1)
+        XCTAssertTrue(session.isCodexSubagent)
+        XCTAssertEqual(session.codexSubagentBadgeText, "SUBAGENT")
+        XCTAssertEqual(session.codexSubagentLabel, "Subagent · explorer · Kierkegaard")
+        XCTAssertEqual(
+            session.codexSubagentSummaryText(for: "I checked the repo"),
+            "Subagent · explorer · Kierkegaard · I checked the repo"
+        )
+    }
+
+    func testCodexSubagentLabelIncludesRoleAndNickname() {
+        let session = SessionState(
+            sessionId: "codex-subagent",
+            cwd: "/tmp/project",
+            provider: .codex,
+            codexParentThreadId: "codex-parent",
+            codexSubagentDepth: 2,
+            codexSubagentNickname: "Kierkegaard",
+            codexSubagentRole: "explorer"
+        )
+
+        XCTAssertEqual(session.codexSubagentLevel, 2)
+        XCTAssertTrue(session.isCodexSubagent)
+        XCTAssertEqual(session.codexSubagentBadgeText, "SUBAGENT")
+        XCTAssertEqual(session.codexSubagentLabel, "Subagent · explorer · Kierkegaard")
+        XCTAssertEqual(session.codexSubagentListTitle, "Subagent · explorer · Kierkegaard")
+        XCTAssertEqual(
+            session.codexSubagentSummaryText(for: "I checked the repo"),
+            "Subagent · explorer · Kierkegaard · I checked the repo"
+        )
+    }
+
+    func testCodexCLISubagentKeepsCodexClientTypeBadge() {
+        let session = SessionState(
+            sessionId: "codex-cli-subagent",
+            cwd: "/tmp/project",
+            provider: .codex,
+            clientInfo: SessionClientInfo(
+                kind: .codexCLI,
+                profileID: "codex-cli",
+                name: "Codex CLI",
+                originator: "iTerm2",
+                terminalBundleIdentifier: "com.googlecode.iterm2",
+                terminalProgram: "iTerm.app"
+            ),
+            codexParentThreadId: "codex-parent",
+            codexSubagentDepth: 1
+        )
+
+        XCTAssertEqual(session.clientDisplayName, "iTerm2")
+        XCTAssertEqual(session.subagentClientTypeBadgeText, "Codex")
+    }
+
+    func testLinkedQoderChildUsesQoderClientTypeBadge() {
+        let session = SessionState(
+            sessionId: "qoder-linked-subagent",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "qoder",
+                name: "Qoder"
+            ),
+            linkedParentSessionId: "qoder-parent",
+            linkedSubagentDisplayTitle: "Agent · 读取README文件"
+        )
+
+        XCTAssertTrue(session.usesTitleOnlySubagentPresentation)
+        XCTAssertEqual(session.subagentClientTypeBadgeText, "Qoder")
+    }
+
+    func testSubagentVisibilityModeShowsAllChildrenWhenEnabled() {
+        let parent = SessionState(
+            sessionId: "codex-parent",
+            cwd: "/tmp/project",
+            provider: .codex
+        )
+        let parentAgent = SessionState(
+            sessionId: "codex-parent-agent",
+            cwd: "/tmp/project",
+            provider: .codex,
+            codexParentThreadId: "codex-parent",
+            codexSubagentDepth: 1,
+            codexSubagentNickname: "Kierkegaard",
+            codexSubagentRole: "explorer"
+        )
+        let firstLevelChild = SessionState(
+            sessionId: "codex-child-1",
+            cwd: "/tmp/project",
+            provider: .codex,
+            codexParentThreadId: "codex-parent-agent",
+            codexSubagentDepth: 2,
+            codexSubagentNickname: "Ampere",
+            codexSubagentRole: "explorer"
+        )
+        let nestedChild = SessionState(
+            sessionId: "codex-child-2",
+            cwd: "/tmp/project",
+            provider: .codex,
+            codexParentThreadId: "codex-child-1",
+            codexSubagentDepth: 3,
+            codexSubagentNickname: "Turing",
+            codexSubagentRole: "explorer"
+        )
+
+        XCTAssertTrue(parent.shouldDisplaySubagent(in: .hidden))
+        XCTAssertTrue(parentAgent.shouldDisplaySubagent(in: .hidden))
+        XCTAssertFalse(firstLevelChild.shouldDisplaySubagent(in: .hidden))
+        XCTAssertTrue(firstLevelChild.shouldDisplaySubagent(in: .visible))
+        XCTAssertTrue(nestedChild.shouldDisplaySubagent(in: .visible))
+    }
+
+    func testSubagentVisibilityModeAppliesToLinkedChildSessions() {
+        let qoderChild = SessionState(
+            sessionId: "qoder-child",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(kind: .qoder, profileID: "qoder", name: "Qoder"),
+            linkedParentSessionId: "qoder-parent",
+            linkedSubagentDisplayTitle: "Agent · 读取 README"
+        )
+
+        XCTAssertFalse(qoderChild.shouldDisplaySubagent(in: .hidden))
+        XCTAssertTrue(qoderChild.shouldDisplaySubagent(in: .visible))
     }
 
     func testOpenCodeChildPlaceholderHidesWhenRicherParentMatchesSameSurface() {
@@ -1385,9 +1588,9 @@ final class SessionStateTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: tempDirectory) }
 
         let wrappedUserMessage = """
-        <user_info> OS Version: darwin Shell: Zsh Workspace Folder: /Users/wudanwu/WorkBuddy/20260412230308 </user_info>
-        <artifact_directory_path> Artifact Directory Path: /Users/wudanwu/Library/Application Support/WorkBuddy/User/globalStorage/tencent-cloud.coding-copilot/brain/example </artifact_directory_path>
-        <project_context> <project_layout> /Users/wudanwu/WorkBuddy/20260412230308/ </project_layout> </project_context>
+        <user_info> OS Version: darwin Shell: Zsh Workspace Folder: /Users/ping-island/WorkBuddy/20260412230308 </user_info>
+        <artifact_directory_path> Artifact Directory Path: /Users/ping-island/Library/Application Support/WorkBuddy/User/globalStorage/tencent-cloud.coding-copilot/brain/example </artifact_directory_path>
+        <project_context> <project_layout> /Users/ping-island/WorkBuddy/20260412230308/ </project_layout> </project_context>
         <additional_data> current_time: Sunday, April 12, 2026，23:31 </additional_data>
         <system_reminder> <working_memory_reminder> reminder </working_memory_reminder> </system_reminder>
         <user_query> hi </user_query>

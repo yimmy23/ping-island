@@ -112,6 +112,42 @@ enum NotchDisplayMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum SubagentVisibilityMode: String, CaseIterable, Identifiable {
+    case hidden
+    case visible
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .hidden:
+            return "不显示"
+        case .visible:
+            return "显示"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .hidden:
+            return "主列表里隐藏所有子 Agent 消息项"
+        case .visible:
+            return "主列表里展示所有子 Agent 消息项"
+        }
+    }
+
+    init?(persistedValue: String) {
+        switch persistedValue {
+        case Self.hidden.rawValue:
+            self = .hidden
+        case Self.visible.rawValue, "firstLevelOnly", "all":
+            self = .visible
+        default:
+            return nil
+        }
+    }
+}
+
 enum NotchPetStyle: String, CaseIterable, Identifiable {
     case crab
     case slime
@@ -183,6 +219,8 @@ final class AppSettingsStore: ObservableObject {
 
     private let defaults: UserDefaults
     private var isBootstrapping = true
+    private var subagentVisibilityModeStorage: SubagentVisibilityMode
+
     // MARK: - Keys
 
     private enum Keys {
@@ -211,6 +249,8 @@ final class AppSettingsStore: ObservableObject {
         static let autoOpenCompletionPanel = "autoOpenCompletionPanel"
         static let autoOpenCompactedNotificationPanel = "autoOpenCompactedNotificationPanel"
         static let showAgentDetail = "showAgentDetail"
+        static let subagentVisibilityMode = "subagentVisibilityMode"
+        static let legacyCodexSubagentVisibilityMode = "codexSubagentVisibilityMode"
         static let showUsage = "showUsage"
         static let usageValueMode = "usageValueMode"
         static let contentFontSize = "contentFontSize"
@@ -407,6 +447,18 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(showAgentDetail, forKey: Keys.showAgentDetail)
+        }
+    }
+
+    var subagentVisibilityMode: SubagentVisibilityMode {
+        get { subagentVisibilityModeStorage }
+        set {
+            guard subagentVisibilityModeStorage != newValue else { return }
+            objectWillChange.send()
+            subagentVisibilityModeStorage = newValue
+            guard !isBootstrapping else { return }
+            defaults.set(newValue.rawValue, forKey: Keys.subagentVisibilityMode)
+            defaults.set(newValue.rawValue, forKey: Keys.legacyCodexSubagentVisibilityMode)
         }
     }
 
@@ -704,6 +756,7 @@ final class AppSettingsStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        self.subagentVisibilityModeStorage = .visible
         let persistedKeys = Set(defaults.dictionaryRepresentation().keys)
         let appLanguageRaw = defaults.string(forKey: Keys.appLanguage)
         let legacyNotificationSound = NotificationSound(
@@ -714,6 +767,8 @@ final class AppSettingsStore: ObservableObject {
         let resolvedSoundThemeMode = SoundThemeMode(
             rawValue: soundThemeModeRaw ?? ""
         ) ?? .island8Bit
+        let subagentVisibilityModeRaw = defaults.string(forKey: Keys.subagentVisibilityMode)
+            ?? defaults.string(forKey: Keys.legacyCodexSubagentVisibilityMode)
         let temporarilyMuteNotificationsUntilTimestamp = persistedKeys.contains(Keys.temporarilyMuteNotificationsUntil)
             ? defaults.double(forKey: Keys.temporarilyMuteNotificationsUntil)
             : nil
@@ -842,6 +897,12 @@ final class AppSettingsStore: ObservableObject {
             exists: persistedKeys.contains(Keys.showAgentDetail),
             default: true
         ))
+        subagentVisibilityModeStorage = SubagentVisibilityMode(
+            persistedValue: subagentVisibilityModeRaw ?? ""
+        ) ?? .visible
+        if defaults.string(forKey: Keys.subagentVisibilityMode) == nil {
+            defaults.set(subagentVisibilityModeStorage.rawValue, forKey: Keys.subagentVisibilityMode)
+        }
         _showUsage = Published(initialValue: Self.boolValue(
             from: defaults,
             key: Keys.showUsage,
@@ -969,6 +1030,11 @@ enum AppSettings {
     static var showAgentDetail: Bool {
         get { shared.showAgentDetail }
         set { shared.showAgentDetail = newValue }
+    }
+
+    static var subagentVisibilityMode: SubagentVisibilityMode {
+        get { shared.subagentVisibilityMode }
+        set { shared.subagentVisibilityMode = newValue }
     }
 
     static var showUsage: Bool {

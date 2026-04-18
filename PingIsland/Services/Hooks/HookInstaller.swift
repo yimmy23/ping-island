@@ -689,7 +689,7 @@ struct HookInstaller {
             Bundle.main.executableURL?
                 .deletingLastPathComponent()
                 .appendingPathComponent(bridgeBinaryName),
-            URL(fileURLWithPath: "/Users/wudanwu/Island/Prototype/.build/debug/\(bridgeBinaryName)")
+            URL(fileURLWithPath: "/Users/ping-island/Island/Prototype/.build/debug/\(bridgeBinaryName)")
         ]
         .compactMap { $0 }
         .filter { FileManager.default.isReadableFile(atPath: $0.path) }

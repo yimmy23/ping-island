@@ -470,7 +470,7 @@ struct HookInstaller {
             .deletingLastPathComponent()
             .appending(path: Self.bridgeBinaryName)
             .path()
-        return executable ?? "/Users/wudanwu/Island/Prototype/.build/debug/\(Self.bridgeBinaryName)"
+        return executable ?? "/Users/ping-island/Island/Prototype/.build/debug/\(Self.bridgeBinaryName)"
     }
 
     private func legacyBridgeBinaryPath() -> String {
@@ -478,7 +478,7 @@ struct HookInstaller {
             .deletingLastPathComponent()
             .appending(path: Self.legacyBridgeBinaryName)
             .path()
-        return executable ?? "/Users/wudanwu/Island/Prototype/.build/debug/\(Self.legacyBridgeBinaryName)"
+        return executable ?? "/Users/ping-island/Island/Prototype/.build/debug/\(Self.legacyBridgeBinaryName)"
     }
 
     private func bridgeCommand(source: String, extraArguments: [String] = []) -> String {

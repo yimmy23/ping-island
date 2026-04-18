@@ -1227,6 +1227,19 @@ private struct SettingsPanelContentView: View {
                 )
                 SettingsLineDivider()
 
+                SettingsInfoLine(
+                    title: "子 Agent 显示",
+                    subtitle: "控制主列表里是否展示子 Agent 消息项；当前会影响 Codex、Qoder 等带子会话的客户端"
+                ) {
+                    SubagentVisibilityPicker(
+                        mode: Binding(
+                            get: { settings.subagentVisibilityMode },
+                            set: { settings.subagentVisibilityMode = $0 }
+                        )
+                    )
+                }
+                SettingsLineDivider()
+
                 SettingsSliderLine(
                     title: "内容字号",
                     subtitle: "调整会话列表、hover 预览和结果视图的文字大小",
@@ -3758,6 +3771,21 @@ private struct ShortcutIconButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.09), lineWidth: 1)
             )
+    }
+}
+
+private struct SubagentVisibilityPicker: View {
+    @Binding var mode: SubagentVisibilityMode
+
+    var body: some View {
+        Picker("", selection: $mode) {
+            ForEach(SubagentVisibilityMode.allCases) { candidate in
+                Text(candidate.title).tag(candidate)
+            }
+        }
+        .labelsHidden()
+        .accessibilityLabel("子 Agent 显示")
+        .settingsMenuPicker(width: 168)
     }
 }
 

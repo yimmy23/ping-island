@@ -161,7 +161,8 @@ struct SessionListView: View {
     private func activateSession(_ session: SessionState) {
         guard !session.clientInfo.suppressesActivationNavigation else { return }
         Task {
-            _ = await SessionLauncher.shared.activate(session)
+            let targetSession = await interactionTargetSession(for: session)
+            _ = await SessionLauncher.shared.activate(targetSession)
         }
     }
 
@@ -178,7 +179,12 @@ struct SessionListView: View {
 
     private func openChat(_ session: SessionState) {
         selectSession(session)
-        viewModel.showChat(for: session)
+        Task {
+            let targetSession = await interactionTargetSession(for: session)
+            await MainActor.run {
+                viewModel.showChat(for: targetSession)
+            }
+        }
     }
 
     private func openClient(_ session: SessionState) {
@@ -295,8 +301,23 @@ struct SessionListView: View {
         viewModel.notchClose()
 
         Task {
-            _ = await SessionLauncher.shared.activate(targetSession)
+            let interactionTarget = await interactionTargetSession(for: targetSession)
+            _ = await SessionLauncher.shared.activate(interactionTarget)
         }
+    }
+
+    private func interactionTargetSession(for session: SessionState) async -> SessionState {
+        if let parentSessionId = session.codexParentThreadId,
+           let parentSession = await SessionStore.shared.session(for: parentSessionId) {
+            return parentSession
+        }
+
+        if let linkedParentSessionId = session.linkedParentSessionId,
+           let linkedParentSession = await SessionStore.shared.session(for: linkedParentSessionId) {
+            return linkedParentSession
+        }
+
+        return session
     }
 
     private func launchNativeRuntime(_ provider: SessionProvider) {
@@ -401,8 +422,20 @@ struct InstanceRow: View {
         session.shouldUseMinimalCompactPresentation
     }
 
+    private var isCodexSubagentCompactPresentation: Bool {
+        session.shouldUseCodexSubagentCompactPresentation
+    }
+
+    private var usesSingleLineCompactLayout: Bool {
+        isCollapsedCompactPresentation || isCodexSubagentCompactPresentation
+    }
+
     private var isCollapsedCompactPresentation: Bool {
         isMinimalCompactPresentation && !isExpanded
+    }
+
+    private var usesCodexSubagentTitleOnlyPresentation: Bool {
+        session.usesTitleOnlySubagentPresentation
     }
 
     private var projectTitleFontSize: CGFloat {
@@ -410,17 +443,26 @@ struct InstanceRow: View {
     }
 
     private var sessionTitleFontSize: CGFloat {
-        if isCollapsedCompactPresentation {
+        if usesSingleLineCompactLayout {
             return max(11, titleFontSize - 1)
         }
         return max(12, titleFontSize + 1)
     }
 
     var body: some View {
-        HStack(alignment: isCollapsedCompactPresentation ? .center : .top, spacing: 10) {
+        HStack(alignment: usesSingleLineCompactLayout ? .center : .top, spacing: 10) {
             leadingContent
 
-            if isCollapsedCompactPresentation {
+            if isCodexSubagentCompactPresentation {
+                subagentCompactBadgeLine
+            } else if usesCodexSubagentTitleOnlyPresentation {
+                VStack(alignment: .trailing, spacing: 6) {
+                    subagentCompactBadgeLine
+
+                    trailingActions
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+            } else if isCollapsedCompactPresentation {
                 compactMetaLine
             } else {
                 VStack(alignment: .trailing, spacing: 6) {
@@ -437,6 +479,14 @@ struct InstanceRow: View {
                                 "NATIVE",
                                 tint: Color.white.opacity(0.12),
                                 foreground: .white.opacity(0.92),
+                                fontDesign: .monospaced
+                            )
+                        }
+                        if let codexSubagentBadgeText = session.codexSubagentBadgeText {
+                            metaBadge(
+                                codexSubagentBadgeText,
+                                tint: Color.white.opacity(0.12),
+                                foreground: .white.opacity(0.9),
                                 fontDesign: .monospaced
                             )
                         }
@@ -466,7 +516,7 @@ struct InstanceRow: View {
         }
         .padding(.leading, 10)
         .padding(.trailing, 12)
-        .padding(.vertical, isCollapsedCompactPresentation ? 5 : 8)
+        .padding(.vertical, usesSingleLineCompactLayout ? 5 : 8)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: session.phase)
         .animation(.spring(response: 0.28, dampingFraction: 0.82), value: isExpanded)
         .saturation(isCollapsedCompactPresentation ? 0 : 1)
@@ -502,6 +552,16 @@ struct InstanceRow: View {
                         onSelect()
                         onToggleExpanded()
                     }
+            } else if isCodexSubagentCompactPresentation {
+                baseLeadingContent
+                    .onTapGesture(count: 2) {
+                        onSelect()
+                        onChat()
+                    }
+                    .onTapGesture {
+                        onSelect()
+                        onActivate()
+                    }
             } else {
                 baseLeadingContent
                     .onTapGesture(count: 2) {
@@ -517,10 +577,10 @@ struct InstanceRow: View {
     }
 
     private var baseLeadingContent: some View {
-        HStack(alignment: isCollapsedCompactPresentation ? .center : .top, spacing: 10) {
+        HStack(alignment: usesSingleLineCompactLayout ? .center : .top, spacing: 10) {
             avatarView
 
-            VStack(alignment: .leading, spacing: isCollapsedCompactPresentation ? 0 : 5) {
+            VStack(alignment: .leading, spacing: usesSingleLineCompactLayout ? 0 : 5) {
                 titleLine
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -540,8 +600,8 @@ struct InstanceRow: View {
     }
 
     private var titleLine: Text {
-        if session.shouldHideProjectContextInUI {
-            return Text(session.displayTitle)
+        if usesCodexSubagentTitleOnlyPresentation || session.shouldHideProjectContextInUI {
+            return Text(usesCodexSubagentTitleOnlyPresentation ? session.titleOnlySubagentDisplayTitle : session.displayTitle)
                 .font(.system(size: sessionTitleFontSize, weight: .bold))
                 .foregroundColor(.white)
         }
@@ -566,14 +626,14 @@ struct InstanceRow: View {
             MascotView(
                 kind: settings.mascotKind(for: session.mascotClient),
                 status: MascotStatus(session: session),
-                size: isCollapsedCompactPresentation ? 16 : 18
+                size: usesSingleLineCompactLayout ? 16 : 18
             )
             .padding(6)
 
             avatarStatusBadge
                 .offset(x: 2, y: 2)
         }
-        .frame(width: isCollapsedCompactPresentation ? 30 : 34, height: isCollapsedCompactPresentation ? 30 : 34)
+        .frame(width: usesSingleLineCompactLayout ? 30 : 34, height: usesSingleLineCompactLayout ? 30 : 34)
     }
 
     @ViewBuilder
@@ -702,7 +762,8 @@ struct InstanceRow: View {
     }
 
     private var shouldShowExpandedDetails: Bool {
-        !isMinimalCompactPresentation || isExpanded
+        guard !usesCodexSubagentTitleOnlyPresentation else { return false }
+        return !isMinimalCompactPresentation || isExpanded
     }
 
     private var compactMetaLine: some View {
@@ -732,6 +793,16 @@ struct InstanceRow: View {
                 )
             }
 
+            if let codexSubagentBadgeText = session.codexSubagentBadgeText {
+                metaBadge(
+                    codexSubagentBadgeText,
+                    tint: Color.white.opacity(0.12),
+                    foreground: .white.opacity(0.9),
+                    fontDesign: .monospaced,
+                    compact: true
+                )
+            }
+
             if session.isRemoteSession {
                 remoteSessionBadge(compact: true)
             }
@@ -741,6 +812,30 @@ struct InstanceRow: View {
                     terminalSourceLabel,
                     tint: terminalBadgeTint,
                     foreground: .white.opacity(0.82),
+                    compact: true
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var subagentCompactBadgeLine: some View {
+        HStack(spacing: 5) {
+            if let subagentClientTypeBadgeText = session.subagentClientTypeBadgeText {
+                metaBadge(
+                    subagentClientTypeBadgeText,
+                    tint: providerColor.opacity(0.18),
+                    foreground: .white.opacity(0.86),
+                    compact: true
+                )
+            }
+
+            if let codexSubagentBadgeText = session.codexSubagentBadgeText {
+                metaBadge(
+                    codexSubagentBadgeText,
+                    tint: Color.white.opacity(0.12),
+                    foreground: .white.opacity(0.9),
+                    fontDesign: .monospaced,
                     compact: true
                 )
             }
@@ -893,24 +988,32 @@ struct InstanceRow: View {
 
         if session.phase == .processing {
             if session.isNativeRuntimeSession {
-                return sanitized(session.lastMessage) ?? AppLocalization.string("Native runtime 正在处理…")
+                return session.codexSubagentSummaryText(
+                    for: sanitized(session.lastMessage) ?? AppLocalization.string("Native runtime 正在处理…")
+                )
             }
-            return sanitized(session.lastMessage) ?? AppLocalization.string("工作中...")
+            return session.codexSubagentSummaryText(
+                for: sanitized(session.lastMessage) ?? AppLocalization.string("工作中...")
+            )
         }
 
         if session.phase == .compacting {
-            return AppLocalization.string("正在压缩上下文...")
+            return session.codexSubagentSummaryText(for: AppLocalization.string("正在压缩上下文..."))
         }
 
         if session.phase == .waitingForInput, session.intervention == nil {
             if session.isNativeRuntimeSession {
-                return sanitized(session.lastMessage) ?? AppLocalization.string("Native session 已就绪")
+                return session.codexSubagentSummaryText(
+                    for: sanitized(session.lastMessage) ?? AppLocalization.string("Native session 已就绪")
+                )
             }
-            return sanitized(session.lastMessage) ?? AppLocalization.string("等待你的下一条消息")
+            return session.codexSubagentSummaryText(
+                for: sanitized(session.lastMessage) ?? AppLocalization.string("等待你的下一条消息")
+            )
         }
 
         if let lastMessage = sanitized(session.lastMessage) {
-            return lastMessage
+            return session.codexSubagentSummaryText(for: lastMessage)
         }
 
         return compactDetailSummary
@@ -1014,28 +1117,30 @@ struct InstanceRow: View {
     private var compactDetailSummary: String? {
         switch session.phase {
         case .processing:
-            return session.isNativeRuntimeSession
+            return session.codexSubagentSummaryText(for: session.isNativeRuntimeSession
                 ? AppLocalization.string("Native runtime 正在处理…")
-                : AppLocalization.string("工作中...")
+                : AppLocalization.string("工作中..."))
         case .compacting:
-            return AppLocalization.string("正在压缩上下文...")
+            return session.codexSubagentSummaryText(for: AppLocalization.string("正在压缩上下文..."))
         case .waitingForApproval:
-            return session.needsQuestionResponse
+            return session.codexSubagentSummaryText(for: session.needsQuestionResponse
                 ? AppLocalization.string("需要你的输入")
-                : AppLocalization.string("等待批准")
+                : AppLocalization.string("等待批准"))
         case .waitingForInput:
             if session.needsQuestionResponse {
-                return AppLocalization.string("需要你的输入")
+                return session.codexSubagentSummaryText(for: AppLocalization.string("需要你的输入"))
             }
-            return session.isNativeRuntimeSession
+            return session.codexSubagentSummaryText(for: session.isNativeRuntimeSession
                 ? AppLocalization.string("Native session 已就绪")
-                : AppLocalization.string("等待你的下一条消息")
+                : AppLocalization.string("等待你的下一条消息"))
         case .ended:
-            return session.isNativeRuntimeSession
+            return session.codexSubagentSummaryText(for: session.isNativeRuntimeSession
                 ? AppLocalization.string("Native session 已结束")
-                : AppLocalization.string("会话已结束")
+                : AppLocalization.string("会话已结束"))
         case .idle:
-            return sanitized(session.lastMessage) ?? (session.shouldHideProjectContextInUI ? nil : session.projectName)
+            return session.codexSubagentSummaryText(
+                for: sanitized(session.lastMessage) ?? (session.shouldHideProjectContextInUI ? nil : session.projectName)
+            )
         }
     }
 

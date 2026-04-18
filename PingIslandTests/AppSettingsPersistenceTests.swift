@@ -69,6 +69,38 @@ final class AppSettingsPersistenceTests: XCTestCase {
         XCTAssertNil(defaults.dictionary(forKey: key))
     }
 
+    func testSubagentVisibilityModePersists() {
+        let defaults = makeDefaults()
+        let store = AppSettingsStore(defaults: defaults)
+
+        XCTAssertEqual(store.subagentVisibilityMode, .visible)
+
+        store.subagentVisibilityMode = .visible
+
+        XCTAssertEqual(AppSettingsStore(defaults: defaults).subagentVisibilityMode, .visible)
+        XCTAssertEqual(defaults.string(forKey: "subagentVisibilityMode"), SubagentVisibilityMode.visible.rawValue)
+        XCTAssertEqual(defaults.string(forKey: "codexSubagentVisibilityMode"), SubagentVisibilityMode.visible.rawValue)
+    }
+
+    func testSubagentVisibilityModeFallsBackToLegacyCodexKey() {
+        let defaults = makeDefaults()
+        defaults.set(SubagentVisibilityMode.hidden.rawValue, forKey: "codexSubagentVisibilityMode")
+
+        let store = AppSettingsStore(defaults: defaults)
+
+        XCTAssertEqual(store.subagentVisibilityMode, .hidden)
+        XCTAssertEqual(defaults.string(forKey: "subagentVisibilityMode"), SubagentVisibilityMode.hidden.rawValue)
+    }
+
+    func testSubagentVisibilityModeMigratesLegacyAllValueToVisible() {
+        let defaults = makeDefaults()
+        defaults.set("all", forKey: "subagentVisibilityMode")
+
+        let store = AppSettingsStore(defaults: defaults)
+
+        XCTAssertEqual(store.subagentVisibilityMode, .visible)
+    }
+
     func testAutoOpenCompactedNotificationPanelPersists() {
         let defaults = makeDefaults()
         let store = AppSettingsStore(defaults: defaults)
