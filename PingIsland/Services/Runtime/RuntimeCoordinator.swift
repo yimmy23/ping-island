@@ -57,7 +57,7 @@ actor RuntimeCoordinator {
         for flag in RuntimeFeatureFlag.allCases where FeatureFlags.isEnabled(flag) {
             if let provider = provider(for: flag), let runtime = runtimes[provider] {
                 if listenerTasks[provider] == nil {
-                    let events = await runtime.events
+                    let events = runtime.events
                     listenerTasks[provider] = Task { [weak self] in
                         for await event in events {
                             await self?.handleRuntimeEvent(event)
