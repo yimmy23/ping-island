@@ -280,11 +280,19 @@ struct NotchView: View {
     // MARK: - Body
 
     var body: some View {
+        instrumentedBody
+    }
+
+    private var presentedBody: some View {
         bodyContent
             .offset(y: viewModel.closedPresentationOffsetY)
             .opacity(isVisible ? 1 : 0)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .preferredColorScheme(.dark)
+    }
+
+    private var instrumentedBody: some View {
+        presentedBody
             .onAppear {
                 sessionMonitor.startMonitoring()
                 isVisible = !viewModel.shouldHideClosedPresentation

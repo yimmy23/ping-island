@@ -231,7 +231,9 @@ actor ClaudeRuntime: SessionRuntime {
     nonisolated static func resolveClaudeExecutable(
         environment: [String: String] = Foundation.ProcessInfo.processInfo.environment,
         isExecutable: @escaping @Sendable (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) },
-        shellResolver: @escaping @Sendable ([String: String]) -> String? = probeClaudeExecutableFromShell(environment:)
+        shellResolver: @escaping @Sendable ([String: String]) -> String? = { environment in
+            probeClaudeExecutableFromShell(environment: environment)
+        }
     ) -> String? {
         if let explicit = environment["PING_CLAUDE_PATH"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
