@@ -1118,20 +1118,40 @@ struct MascotView: View {
         time: TimeInterval,
         mode: MascotRenderMode
     ) {
-        let space = PixelSpace(canvasSize, logicalWidth: 18, logicalHeight: 14, yOffset: 2)
+        let space = PixelSpace(canvasSize, logicalWidth: 18, logicalHeight: 16, yOffset: 1)
         let motion = motionValues(for: mode, time: time)
-        let shell = Color(red: 1.0, green: 0.36, blue: 0.25)
+        let shell = Color(red: 0.98, green: 0.36, blue: 0.24)
+        let shellShadow = Color(red: 0.70, green: 0.18, blue: 0.15)
+        let belly = Color(red: 1.0, green: 0.70, blue: 0.56)
         let highlight = Color(red: 1.0, green: 0.56, blue: 0.43)
         let dark = Color(red: 0.27, green: 0.07, blue: 0.07)
         let eye = Color.black
 
-        drawShadow(in: context, space: space, centerX: 9, y: 15.7, width: 7.8 - abs(motion.bounce) * 0.28, opacity: 0.2)
+        func drawRects(_ rects: [(CGFloat, CGFloat, CGFloat, CGFloat)], color: Color) {
+            for rect in rects {
+                context.fill(
+                    Path(space.rect(rect.0 + motion.shake, rect.1 + motion.vertical, rect.2, rect.3)),
+                    with: .color(color)
+                )
+            }
+        }
+
+        func drawRows(_ rows: [(CGFloat, CGFloat, CGFloat)], color: Color, height: CGFloat = 0.9) {
+            for row in rows {
+                context.fill(
+                    Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, height)),
+                    with: .color(color)
+                )
+            }
+        }
+
+        drawShadow(in: context, space: space, centerX: 9, y: 16.7, width: 8.2 - abs(motion.bounce) * 0.3, opacity: 0.2)
 
         if mode == .working {
             drawKeyboard(
                 in: context,
                 space: space,
-                y: 13.1,
+                y: 14.0,
                 base: Color(red: 0.22, green: 0.12, blue: 0.12),
                 key: Color(red: 0.43, green: 0.20, blue: 0.19),
                 highlight: highlight,
@@ -1139,79 +1159,156 @@ struct MascotView: View {
             )
         }
 
+        drawRects(
+            [
+                (7.2, 6.2, 0.8, 1.0), (6.2, 5.4, 0.8, 1.0), (5.2, 4.6, 0.8, 1.0), (4.4, 3.8, 0.8, 0.9),
+                (7.2, 11.0, 0.8, 1.0), (6.2, 11.8, 0.8, 1.0), (5.2, 12.6, 0.8, 1.0), (4.4, 13.4, 0.8, 0.9)
+            ],
+            color: dark.opacity(0.9)
+        )
+
+        drawRects(
+            [
+                (4.8, 3.2, 1.0, 0.9), (5.6, 4.0, 1.1, 0.9), (6.4, 4.8, 1.0, 0.9),
+                (4.8, 13.8, 1.0, 0.9), (5.6, 13.0, 1.1, 0.9), (6.4, 12.2, 1.0, 0.9)
+            ],
+            color: shellShadow
+        )
+
+        drawRects(
+            [
+                (4.8, 8.1, 1.0, 1.0), (3.8, 7.2, 1.0, 1.0), (2.9, 6.5, 1.0, 1.0),
+                (4.8, 8.9, 1.0, 1.0), (3.8, 9.8, 1.0, 1.0), (2.9, 10.5, 1.0, 1.0),
+                (12.2, 8.1, 1.0, 1.0), (13.2, 7.2, 1.0, 1.0), (14.1, 6.5, 1.0, 1.0),
+                (12.2, 8.9, 1.0, 1.0), (13.2, 9.8, 1.0, 1.0), (14.1, 10.5, 1.0, 1.0)
+            ],
+            color: shellShadow
+        )
+
+        drawRects(
+            [
+                (1.3, 5.8, 1.6, 2.0), (0.5, 4.9, 1.6, 0.9), (0.5, 7.7, 1.6, 0.9),
+                (15.1, 5.8, 1.6, 2.0), (15.9, 4.9, 1.6, 0.9), (15.9, 7.7, 1.6, 0.9)
+            ],
+            color: shell
+        )
+        drawRects(
+            [
+                (1.6, 6.1, 0.7, 0.8), (1.6, 6.9, 0.7, 0.8),
+                (15.7, 6.1, 0.7, 0.8), (15.7, 6.9, 0.7, 0.8)
+            ],
+            color: dark
+        )
+
         let bodyRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (12.8, 5.6, 6.8), (11.8, 4.6, 8.8), (10.8, 3.6, 10.8), (9.8, 2.8, 12.4),
-            (8.8, 2.2, 13.6), (7.8, 2.8, 12.4), (6.8, 3.6, 10.8), (5.8, 4.6, 8.8)
+            (5.0, 7.8, 2.4),
+            (6.0, 6.2, 5.6),
+            (7.0, 5.0, 8.0),
+            (8.0, 4.2, 9.6),
+            (9.0, 4.4, 9.2),
+            (10.0, 5.0, 8.0)
         ]
         for row in bodyRows {
             context.fill(
-                Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2 * motion.squashX, 1 * motion.squashY)),
+                Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2 * motion.squashX, motion.squashY)),
                 with: .color(shell)
             )
         }
 
-        let outlineRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (4.9, 5.1, 7.8), (13.7, 5.1, 7.8), (4.1, 6.0, 1.0), (12.9, 6.0, 1.0),
-            (3.2, 7.0, 1.0), (13.8, 7.0, 1.0), (2.4, 8.1, 1.0), (14.6, 8.1, 1.0),
-            (2.1, 9.1, 1.0), (14.9, 9.1, 1.0), (2.4, 10.1, 1.0), (14.6, 10.1, 1.0),
-            (3.2, 11.1, 1.0), (13.8, 11.1, 1.0), (4.1, 12.1, 1.0), (12.9, 12.1, 1.0)
-        ]
-        for row in outlineRows {
-            context.fill(Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.9)), with: .color(dark))
-        }
+        drawRows(
+            [
+                (4.8, 8.0, 2.0), (5.8, 6.2, 0.9), (5.8, 10.9, 0.9),
+                (6.8, 5.0, 0.9), (6.8, 12.1, 0.9),
+                (7.8, 4.1, 0.9), (7.8, 13.0, 0.9),
+                (8.8, 4.1, 0.9), (8.8, 13.0, 0.9),
+                (9.8, 4.8, 0.9), (9.8, 12.3, 0.9)
+            ],
+            color: dark
+        )
+        drawRows(
+            [
+                (6.2, 7.5, 3.0),
+                (7.2, 6.4, 0.9), (7.2, 10.7, 0.9),
+                (8.2, 6.2, 0.8), (8.2, 11.0, 0.8)
+            ],
+            color: shellShadow,
+            height: 0.8
+        )
 
-        context.fill(Path(space.rect(6.0 + motion.shake, 6.0 + motion.vertical, 6.0, 0.9)), with: .color(dark))
-        context.fill(Path(space.rect(6.8 + motion.shake, 8.1 + motion.vertical, 1.4, 2.0)), with: .color(.white))
-        context.fill(Path(space.rect(10.4 + motion.shake, 8.1 + motion.vertical, 1.4, 2.0)), with: .color(.white))
+        drawRows(
+            [
+                (10.9, 6.3, 5.4),
+                (11.9, 6.8, 4.4),
+                (12.9, 7.2, 3.6),
+                (13.8, 6.1, 1.8),
+                (13.8, 10.1, 1.8),
+                (14.6, 7.1, 3.6)
+            ],
+            color: shell
+        )
+        drawRows(
+            [
+                (11.3, 7.1, 3.8),
+                (12.3, 7.5, 3.0),
+                (13.3, 7.8, 2.4)
+            ],
+            color: belly,
+            height: 0.7
+        )
+        drawRows(
+            [
+                (10.7, 6.2, 5.6),
+                (11.7, 6.7, 0.9), (11.7, 10.6, 0.9),
+                (12.7, 7.1, 0.9), (12.7, 9.9, 0.9),
+                (13.7, 6.0, 1.1), (13.7, 10.9, 1.1),
+                (14.6, 7.0, 3.8)
+            ],
+            color: dark
+        )
+
+        drawRects(
+            [
+                (6.8, 6.6, 1.4, 1.7),
+                (9.8, 6.6, 1.4, 1.7)
+            ],
+            color: .white
+        )
 
         let eyeHeight: CGFloat = mode == .idle ? 0.6 : (mode == .warning ? 1.2 : blinkHeight(time: time, closedHeight: 0.2, openHeight: 1.2))
-        context.fill(Path(space.rect(7.2 + motion.shake, 9.0 + motion.vertical, 0.9, eyeHeight)), with: .color(eye))
-        context.fill(Path(space.rect(10.8 + motion.shake, 9.0 + motion.vertical, 0.9, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(7.2 + motion.shake, 7.2 + motion.vertical, 0.8, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(10.2 + motion.shake, 7.2 + motion.vertical, 0.8, eyeHeight)), with: .color(eye))
 
-        let highlightRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (8.0, 4.1, 1.4), (8.0, 13.4, 1.4), (11.0, 4.6, 1.0), (11.0, 12.8, 1.0)
-        ]
-        for row in highlightRows {
-            context.fill(Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.8)), with: .color(highlight.opacity(0.55)))
-        }
+        drawRects(
+            [
+                (7.2, 5.8, 1.4, 0.7),
+                (10.0, 6.0, 1.2, 0.7),
+                (8.3, 10.9, 1.4, 0.6)
+            ],
+            color: highlight.opacity(0.72)
+        )
 
-        // Claws
-        let clawRects: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
-            (0.8, 8.6, 1.2, 2.0), (1.8, 7.8, 1.2, 1.0), (1.8, 10.3, 1.2, 1.0),
-            (16.0, 8.6, 1.2, 2.0), (15.0, 7.8, 1.2, 1.0), (15.0, 10.3, 1.2, 1.0)
-        ]
-        for rect in clawRects {
-            context.fill(Path(space.rect(rect.0 + motion.shake, rect.1 + motion.vertical, rect.2, rect.3)), with: .color(shell))
-        }
-        context.fill(Path(space.rect(1.0 + motion.shake, 8.8 + motion.vertical, 0.9, 0.9)), with: .color(dark))
-        context.fill(Path(space.rect(1.0 + motion.shake, 9.9 + motion.vertical, 0.9, 0.9)), with: .color(dark))
-        context.fill(Path(space.rect(16.3 + motion.shake, 8.8 + motion.vertical, 0.9, 0.9)), with: .color(dark))
-        context.fill(Path(space.rect(16.3 + motion.shake, 9.9 + motion.vertical, 0.9, 0.9)), with: .color(dark))
-
-        // Tail and legs
-        let tailRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (13.4, 7.1, 4.0), (14.4, 6.2, 2.8), (15.4, 5.3, 1.8)
-        ]
-        for row in tailRows {
-            context.fill(Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, 0.9)), with: .color(dark))
-        }
-
-        let legs: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
-            (6.0, 13.5, 0.9, 1.4), (5.1, 14.4, 1.6, 0.8),
-            (11.1, 13.5, 0.9, 1.4), (11.3, 14.4, 1.6, 0.8),
-            (7.5, 12.8, 0.9, 1.2), (10.0, 12.8, 0.9, 1.2)
-        ]
-        for leg in legs {
-            context.fill(Path(space.rect(leg.0 + motion.shake, leg.1 + motion.vertical, leg.2, leg.3)), with: .color(dark))
-        }
+        drawRects(
+            [
+                (6.0, 10.4, 0.8, 1.2), (5.1, 11.4, 1.6, 0.7),
+                (7.1, 10.9, 0.8, 1.1), (6.4, 11.8, 1.4, 0.7),
+                (11.2, 10.4, 0.8, 1.2), (11.3, 11.4, 1.6, 0.7),
+                (10.1, 10.9, 0.8, 1.1), (10.2, 11.8, 1.4, 0.7)
+            ],
+            color: dark
+        )
 
         if mode != .idle {
-            context.fill(Path(space.rect(7.2 + motion.shake, 11.2 + motion.vertical, 1.4, 0.5)), with: .color(highlight))
-            context.fill(Path(space.rect(9.4 + motion.shake, 11.2 + motion.vertical, 1.4, 0.5)), with: .color(highlight))
+            drawRects(
+                [
+                    (7.3, 12.1, 1.1, 0.5),
+                    (9.6, 12.1, 1.1, 0.5)
+                ],
+                color: highlight
+            )
         }
 
         if mode == .warning {
-            drawAlertGlyph(in: context, space: space, x: 13.9 + motion.shake, y: 2.1, color: kind.alertColor)
+            drawAlertGlyph(in: context, space: space, x: 14.0 + motion.shake, y: 1.9, color: kind.alertColor)
         }
     }
 
