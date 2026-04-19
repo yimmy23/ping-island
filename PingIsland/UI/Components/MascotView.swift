@@ -267,7 +267,7 @@ enum MascotKind: String, CaseIterable, Identifiable, Sendable {
         case .qwen:
             return "薄荷围巾卡皮巴拉"
         case .openclaw:
-            return "侧身小虾"
+            return "双钳小龙虾"
         case .opencode:
             return "高高的白色小章鱼"
         case .cursor:
@@ -1120,52 +1120,66 @@ struct MascotView: View {
     ) {
         let space = PixelSpace(canvasSize, logicalWidth: 18, logicalHeight: 16, yOffset: 1)
         let motion = motionValues(for: mode, time: time)
-        let shell = Color(red: 1.0, green: 0.42, blue: 0.30)
-        let shellShadow = Color(red: 0.73, green: 0.20, blue: 0.16)
+        let shell = Color(red: 0.98, green: 0.42, blue: 0.28)
+        let shellShadow = Color(red: 0.72, green: 0.18, blue: 0.15)
         let belly = Color(red: 1.0, green: 0.76, blue: 0.62)
         let highlight = Color(red: 1.0, green: 0.66, blue: 0.54)
         let blush = Color(red: 1.0, green: 0.58, blue: 0.60)
+        let horn = Color(red: 1.0, green: 0.88, blue: 0.56)
+        let wing = Color(red: 0.94, green: 0.30, blue: 0.24)
+        let wingMembrane = Color(red: 1.0, green: 0.64, blue: 0.46)
         let dark = Color(red: 0.27, green: 0.07, blue: 0.07)
         let eye = Color.black
 
-        func drawRects(_ rects: [(CGFloat, CGFloat, CGFloat, CGFloat)], color: Color) {
+        func drawRects(
+            _ rects: [(CGFloat, CGFloat, CGFloat, CGFloat)],
+            color: Color,
+            xOffset: CGFloat = 0,
+            yOffset: CGFloat = 0
+        ) {
             for rect in rects {
                 context.fill(
-                    Path(space.rect(rect.0 + motion.shake, rect.1 + motion.vertical, rect.2, rect.3)),
+                    Path(space.rect(rect.0 + motion.shake + xOffset, rect.1 + motion.vertical + yOffset, rect.2, rect.3)),
                     with: .color(color)
                 )
             }
         }
 
-        func drawRows(_ rows: [(CGFloat, CGFloat, CGFloat)], color: Color, height: CGFloat = 0.9) {
+        func drawRows(
+            _ rows: [(CGFloat, CGFloat, CGFloat)],
+            color: Color,
+            height: CGFloat = 0.9,
+            xOffset: CGFloat = 0,
+            yOffset: CGFloat = 0
+        ) {
             for row in rows {
                 context.fill(
-                    Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2, height)),
+                    Path(space.rect(row.1 + motion.shake + xOffset, row.0 + motion.vertical + yOffset, row.2, height)),
                     with: .color(color)
                 )
             }
         }
 
-        let pinchPhase = CGFloat((sin(time * 12) + 1) * 0.5)
-        let clawInset: CGFloat
-        let clawOpen: CGFloat
-        let clawRaise: CGFloat
+        let flapPhase = CGFloat((sin(time * 8.0) + 1) * 0.5)
+        let wingLift: CGFloat
+        let tailWag: CGFloat
+        let headBob: CGFloat
         switch mode {
         case .idle:
-            clawInset = 0.25
-            clawOpen = 0.85
-            clawRaise = 0
+            wingLift = CGFloat(sin(time * 1.8) * 0.18)
+            tailWag = CGFloat(sin(time * 1.5) * 0.16)
+            headBob = 0
         case .working:
-            clawInset = 0.45 + pinchPhase * 1.15
-            clawOpen = 0.95 - pinchPhase * 0.45
-            clawRaise = CGFloat(sin(time * 12) * 0.18)
+            wingLift = -0.55 + flapPhase * 0.95
+            tailWag = CGFloat(sin(time * 9.0) * 0.38)
+            headBob = CGFloat(sin(time * 9.0) * 0.16)
         case .warning:
-            clawInset = 0.2
-            clawOpen = 0.42
-            clawRaise = -0.3
+            wingLift = -0.25
+            tailWag = 0.12
+            headBob = -0.12
         }
 
-        drawShadow(in: context, space: space, centerX: 9.0, y: 16.7, width: 8.6 - abs(motion.bounce) * 0.24, opacity: 0.2)
+        drawShadow(in: context, space: space, centerX: 9.0, y: 16.7, width: 8.7 - abs(motion.bounce) * 0.18, opacity: 0.2)
 
         if mode == .working {
             drawKeyboard(
@@ -1179,199 +1193,232 @@ struct MascotView: View {
             )
         }
 
-        drawRects(
+        drawRows(
             [
-                (6.0, 3.2, 0.7, 0.8), (5.0, 2.2, 0.7, 0.8), (4.1, 1.4, 0.7, 0.8),
-                (11.3, 3.2, 0.7, 0.8), (12.3, 2.2, 0.7, 0.8), (13.2, 1.4, 0.7, 0.8),
-                (4.8, 11.2, 0.8, 0.9), (6.0, 12.0, 0.8, 0.9), (7.3, 12.4, 0.8, 0.9),
-                (8.8, 12.5, 0.8, 0.9), (10.2, 12.2, 0.8, 0.9), (11.6, 11.4, 0.8, 0.9)
+                (5.0, 1.6, 2.2),
+                (6.0, 1.0, 3.3),
+                (7.0, 0.6, 4.0),
+                (8.0, 1.1, 3.0)
             ],
-            color: dark.opacity(0.9)
+            color: shellShadow,
+            yOffset: wingLift
+        )
+        drawRows(
+            [
+                (5.0, 14.2, 2.2),
+                (6.0, 13.7, 3.3),
+                (7.0, 13.4, 4.0),
+                (8.0, 14.4, 3.0)
+            ],
+            color: shellShadow,
+            yOffset: wingLift
+        )
+        drawRows(
+            [
+                (5.2, 1.8, 1.7),
+                (6.2, 1.2, 2.8),
+                (7.2, 0.9, 3.4),
+                (8.2, 1.6, 2.4)
+            ],
+            color: wing,
+            yOffset: wingLift
+        )
+        drawRows(
+            [
+                (5.2, 14.5, 1.7),
+                (6.2, 14.0, 2.8),
+                (7.2, 13.7, 3.4),
+                (8.2, 14.8, 2.4)
+            ],
+            color: wing,
+            yOffset: wingLift
+        )
+        drawRows(
+            [
+                (6.2, 2.5, 1.4),
+                (7.2, 1.9, 2.0),
+                (8.2, 2.5, 1.4)
+            ],
+            color: wingMembrane.opacity(0.82),
+            yOffset: wingLift
+        )
+        drawRows(
+            [
+                (6.2, 14.8, 1.4),
+                (7.2, 14.1, 2.0),
+                (8.2, 14.8, 1.4)
+            ],
+            color: wingMembrane.opacity(0.82),
+            yOffset: wingLift
         )
 
-        drawRects(
+        drawRows(
             [
-                (4.2 + clawInset, 6.8 + clawRaise, 1.0, 0.9), (3.2 + clawInset, 6.1 + clawRaise, 0.9, 0.9), (2.2 + clawInset, 5.4 + clawRaise, 0.9, 0.9),
-                (10.8 - clawInset, 6.8 + clawRaise, 1.0, 0.9), (11.9 - clawInset, 6.1 + clawRaise, 0.9, 0.9), (12.9 - clawInset, 5.4 + clawRaise, 0.9, 0.9),
-                (7.4, 10.7, 0.8, 1.2), (9.8, 10.7, 0.8, 1.2)
+                (9.6, 10.2, 2.5),
+                (10.6, 11.0, 2.2),
+                (11.6, 11.4, 2.0),
+                (12.5, 11.2, 1.6),
+                (13.3, 10.7, 1.1)
             ],
-            color: shellShadow
+            color: shell,
+            xOffset: tailWag
         )
-
-        drawRects(
+        drawRows(
             [
-                (1.4 + clawInset, 4.3 + clawRaise, 1.9, 1.1),
-                (0.6 + clawInset, 3.2 + clawRaise, 1.6, 0.9),
-                (0.6 + clawInset, 5.4 + clawRaise + clawOpen, 1.4, 0.9),
-                (14.7 - clawInset, 4.3 + clawRaise, 1.9, 1.1),
-                (15.8 - clawInset, 3.2 + clawRaise, 1.6, 0.9),
-                (15.8 - clawInset, 5.4 + clawRaise + clawOpen, 1.4, 0.9)
+                (10.0, 10.8, 1.6),
+                (11.0, 11.2, 1.5),
+                (11.9, 11.1, 1.0)
             ],
-            color: shellShadow
+            color: belly,
+            height: 0.7,
+            xOffset: tailWag
         )
-
-        drawRects(
+        drawRows(
             [
-                (4.4 + clawInset, 7.0 + clawRaise, 1.1, 0.9), (3.4 + clawInset, 6.2 + clawRaise, 1.0, 0.9), (2.4 + clawInset, 5.5 + clawRaise, 0.9, 0.9),
-                (10.5 - clawInset, 7.0 + clawRaise, 1.1, 0.9), (11.6 - clawInset, 6.2 + clawRaise, 1.0, 0.9), (12.6 - clawInset, 5.5 + clawRaise, 0.9, 0.9),
-                (1.1 + clawInset, 4.1 + clawRaise, 2.1, 1.3),
-                (0.3 + clawInset, 2.9 + clawRaise, 1.8, 1.0),
-                (0.3 + clawInset, 5.5 + clawRaise + clawOpen, 1.7, 1.0),
-                (14.8 - clawInset, 4.1 + clawRaise, 2.1, 1.3),
-                (15.9 - clawInset, 2.9 + clawRaise, 1.8, 1.0),
-                (15.9 - clawInset, 5.5 + clawRaise + clawOpen, 1.7, 1.0)
+                (9.5, 10.0, 2.9),
+                (10.5, 10.8, 0.8), (10.5, 12.3, 0.7),
+                (11.5, 11.2, 0.8), (11.5, 12.2, 0.7),
+                (12.4, 11.0, 0.8), (12.4, 11.8, 0.7)
             ],
-            color: shell
-        )
-        drawRects(
-            [
-                (1.0 + clawInset, 4.4 + clawRaise, 0.6, 0.45), (1.0 + clawInset, 6.0 + clawRaise + clawOpen, 0.6, 0.45),
-                (16.4 - clawInset, 4.4 + clawRaise, 0.6, 0.45), (16.4 - clawInset, 6.0 + clawRaise + clawOpen, 0.6, 0.45)
-            ],
-            color: dark
+            color: dark,
+            xOffset: tailWag
         )
 
         let bodyRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (4.2, 5.7, 5.8),
-            (5.2, 4.8, 7.6),
-            (6.2, 4.0, 9.0),
-            (7.2, 3.5, 10.0),
-            (8.2, 3.7, 9.6),
-            (9.2, 4.4, 8.2),
-            (10.2, 5.4, 6.4)
+            (4.4, 5.6, 5.2),
+            (5.4, 4.7, 6.8),
+            (6.4, 4.0, 8.2),
+            (7.4, 3.6, 8.8),
+            (8.4, 3.8, 8.4),
+            (9.4, 4.5, 7.0),
+            (10.4, 5.4, 5.5)
         ]
         for row in bodyRows {
             context.fill(
-                Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical, row.2 * motion.squashX, motion.squashY)),
+                Path(space.rect(row.1 + motion.shake, row.0 + motion.vertical + headBob, row.2 * motion.squashX, motion.squashY)),
                 with: .color(shell)
             )
         }
 
         drawRows(
             [
-                (4.2, 5.5, 1.0), (4.2, 10.4, 1.0),
-                (5.2, 4.7, 0.9), (5.2, 12.0, 0.9),
-                (6.2, 3.9, 0.9), (6.2, 13.0, 0.9),
-                (7.2, 3.4, 0.9), (7.2, 13.4, 0.9),
-                (8.2, 3.6, 0.9), (8.2, 12.8, 0.9),
-                (9.2, 4.3, 0.9), (9.2, 11.8, 0.9),
-                (10.2, 5.3, 0.9), (10.2, 10.4, 0.9)
+                (4.4, 5.4, 1.0), (4.4, 9.7, 1.0),
+                (5.4, 4.6, 0.9), (5.4, 11.0, 0.9),
+                (6.4, 4.0, 0.9), (6.4, 11.8, 0.9),
+                (7.4, 3.5, 0.9), (7.4, 12.0, 0.9),
+                (8.4, 3.7, 0.9), (8.4, 11.5, 0.9),
+                (9.4, 4.4, 0.9), (9.4, 10.4, 0.9),
+                (10.4, 5.3, 0.9), (10.4, 9.1, 0.9)
             ],
-            color: dark
+            color: dark,
+            yOffset: headBob
         )
         drawRows(
             [
-                (4.9, 6.4, 5.0),
-                (5.9, 5.5, 6.5),
-                (6.9, 5.0, 7.0),
-                (7.9, 5.2, 6.6),
-                (8.9, 5.8, 5.7)
+                (5.0, 6.1, 4.3),
+                (6.0, 5.3, 5.5),
+                (7.0, 4.9, 6.0),
+                (8.0, 5.1, 5.8),
+                (9.0, 5.6, 5.0)
             ],
             color: shellShadow,
-            height: 0.8
-        )
-
-        drawRows(
-            [
-                (10.8, 6.6, 4.2),
-                (11.8, 7.0, 3.4),
-                (12.8, 7.3, 2.6),
-                (13.7, 7.6, 1.9),
-                (14.5, 7.2, 1.0)
-            ],
-            color: shell
-        )
-        drawRows(
-            [
-                (11.1, 7.1, 3.1),
-                (12.1, 7.4, 2.4),
-                (13.1, 7.7, 1.7)
-            ],
-            color: belly,
-            height: 0.7
-        )
-        drawRows(
-            [
-                (10.7, 6.4, 4.5),
-                (11.7, 7.0, 0.9), (11.7, 9.4, 0.8),
-                (12.7, 7.4, 0.9), (12.7, 8.9, 0.8),
-                (13.7, 7.6, 0.9), (13.7, 8.5, 0.8),
-                (14.5, 7.2, 1.0)
-            ],
-            color: dark
+            height: 0.8,
+            yOffset: headBob
         )
 
         drawRects(
             [
-                (6.0, 6.2, 1.8, 2.1),
-                (9.8, 6.2, 1.8, 2.1)
+                (5.8, 6.2, 1.9, 2.15),
+                (10.2, 6.2, 1.9, 2.15)
             ],
-            color: .white
+            color: .white,
+            yOffset: headBob
         )
 
         let eyeHeight: CGFloat = mode == .idle ? 0.9 : (mode == .warning ? 1.35 : blinkHeight(time: time, closedHeight: 0.24, openHeight: 1.35))
-        context.fill(Path(space.rect(6.5 + motion.shake, 6.8 + motion.vertical, 0.95, eyeHeight)), with: .color(eye))
-        context.fill(Path(space.rect(10.25 + motion.shake, 6.8 + motion.vertical, 0.95, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(6.35 + motion.shake, 6.9 + motion.vertical + headBob, 1.0, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(10.55 + motion.shake, 6.9 + motion.vertical + headBob, 1.0, eyeHeight)), with: .color(eye))
         drawRects(
             [
-                (6.75, 7.0, 0.3, 0.35),
-                (10.5, 7.0, 0.3, 0.35)
+                (6.62, 7.1, 0.3, 0.35),
+                (10.82, 7.1, 0.3, 0.35)
             ],
-            color: .white.opacity(0.72)
+            color: .white.opacity(0.72),
+            yOffset: headBob
         )
 
         drawRects(
             [
-                (5.6, 8.9, 1.0, 0.6),
-                (11.1, 8.9, 1.0, 0.6)
+                (5.3, 9.1, 1.0, 0.6),
+                (11.5, 9.1, 1.0, 0.6)
             ],
-            color: blush.opacity(0.7)
+            color: blush.opacity(0.7),
+            yOffset: headBob
         )
 
         if mode == .idle {
-            context.fill(Path(space.rect(8.0 + motion.shake, 9.7 + motion.vertical, 1.8, 0.32)), with: .color(dark.opacity(0.42)))
+            context.fill(Path(space.rect(8.1 + motion.shake, 10.0 + motion.vertical + headBob, 1.8, 0.32)), with: .color(dark.opacity(0.42)))
         } else {
             drawRects(
                 [
-                    (7.9, 9.6, 0.9, 0.32),
-                    (8.8, 9.9, 0.9, 0.32)
+                    (8.1, 9.9, 0.8, 0.32),
+                    (8.9, 10.2, 0.8, 0.32)
                 ],
-                color: dark.opacity(0.58)
+                color: dark.opacity(0.58),
+                yOffset: headBob
             )
         }
 
         drawRects(
             [
-                (6.7, 5.8, 2.0, 0.7),
-                (9.4, 6.0, 1.5, 0.7),
-                (8.5, 11.0, 1.3, 0.5)
+                (6.3, 5.8, 2.5, 0.7),
+                (9.5, 6.1, 1.9, 0.7),
+                (8.1, 10.8, 1.6, 0.5)
             ],
-            color: highlight.opacity(0.72)
+            color: highlight.opacity(0.72),
+            yOffset: headBob
         )
 
         drawRects(
             [
-                (5.3, 10.6, 0.7, 0.95), (4.6, 11.3, 1.0, 0.55),
-                (6.8, 11.1, 0.7, 0.95), (6.2, 11.8, 1.0, 0.55),
-                (9.7, 11.1, 0.7, 0.95), (10.1, 11.8, 1.0, 0.55),
-                (11.2, 10.6, 0.7, 0.95), (11.2, 11.3, 1.0, 0.55)
+                (6.0, 10.8, 0.7, 0.95), (5.3, 11.5, 0.9, 0.5),
+                (7.4, 11.2, 0.7, 0.95), (6.8, 11.9, 0.9, 0.5),
+                (10.2, 11.2, 0.7, 0.95), (10.6, 11.9, 0.9, 0.5),
+                (11.6, 10.8, 0.7, 0.95), (11.5, 11.5, 0.9, 0.5)
             ],
             color: dark
         )
 
         drawRects(
             [
-                (6.0, 3.5, 0.6, 0.8), (5.0, 2.5, 0.6, 0.8), (4.1, 1.5, 0.6, 0.8),
-                (11.4, 3.5, 0.6, 0.8), (12.4, 2.5, 0.6, 0.8), (13.3, 1.5, 0.6, 0.8)
+                (6.2, 3.6, 0.8, 1.0), (5.5, 2.4, 0.8, 0.9),
+                (11.0, 3.6, 0.8, 1.0), (11.7, 2.4, 0.8, 0.9)
             ],
-            color: shell
+            color: shellShadow,
+            yOffset: headBob
         )
         drawRects(
             [
-                (5.1, 6.2 + clawRaise, 0.55, 0.7), (4.2, 5.4 + clawRaise, 0.55, 0.7),
-                (10.9, 6.2 + clawRaise, 0.55, 0.7), (11.9, 5.4 + clawRaise, 0.55, 0.7)
+                (6.1, 3.4, 0.8, 1.0), (5.4, 2.1, 0.8, 0.9),
+                (11.1, 3.4, 0.8, 1.0), (11.8, 2.1, 0.8, 0.9)
             ],
-            color: highlight
+            color: horn,
+            yOffset: headBob
+        )
+
+        drawRects(
+            [
+                (5.0, 9.8, 0.7, 0.7), (4.1, 10.6, 0.7, 0.7),
+                (11.8, 9.8, 0.7, 0.7), (12.7, 10.6, 0.7, 0.7)
+            ],
+            color: shellShadow
+        )
+        drawRects(
+            [
+                (4.9, 9.6, 0.7, 0.7), (4.0, 10.4, 0.7, 0.7),
+                (11.9, 9.6, 0.7, 0.7), (12.8, 10.4, 0.7, 0.7)
+            ],
+            color: shell
         )
 
         if mode == .warning {
