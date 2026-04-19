@@ -696,14 +696,13 @@ private struct V030CodexChinesePoster: View {
                 PosterHeader(
                     iconURL: options.iconURL,
                     eyebrow: "PING ISLAND VERSION 0.3.0",
-                    title: "Codex 更新海报",
+                    title: "Codex 监控能力升级",
                     subtitle: "这次 0.3.0 的 Codex 重点，是把上下文压缩提示和子 Agent 层级真正做成可见的执行流。"
                 )
 
                 HStack(alignment: .top, spacing: 34) {
                     VStack(spacing: 28) {
-                        BigFeatureCard(
-                            title: "本次重点",
+                        V030CodexFeatureCard(
                             bullets: featureRows,
                             accent: Color(red: 0.22, green: 0.63, blue: 0.98),
                             minHeight: 760,
@@ -1201,6 +1200,40 @@ private struct V030CodexPositionCard: View {
         }
         .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
         .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct V030CodexFeatureCard: View {
+    let bullets: [String]
+    let accent: Color
+    var minHeight: CGFloat = 760
+    var bulletFontSize: CGFloat = 40
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Text("本次重点")
+                .font(.system(size: 52, weight: .black, design: .rounded))
+                .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
+
+            ForEach(bullets, id: \.self) { bullet in
+                HStack(alignment: .top, spacing: 16) {
+                    Circle()
+                        .fill(accent)
+                        .frame(width: 14, height: 14)
+                        .padding(.top, 14)
+
+                    Text(bullet)
+                        .font(.system(size: bulletFontSize, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+        .padding(38)
         .background(PosterCardBackground())
     }
 }
