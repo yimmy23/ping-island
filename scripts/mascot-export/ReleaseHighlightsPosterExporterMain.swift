@@ -550,8 +550,7 @@ private struct V030ChinesePoster: View {
 
                 HStack(alignment: .top, spacing: 34) {
                     VStack(spacing: 28) {
-                        BigFeatureCard(
-                            title: "本次重点",
+                        V030CodexFeatureCard(
                             bullets: featureRows,
                             accent: Color(red: 0.24, green: 0.69, blue: 0.98),
                             minHeight: 760,
