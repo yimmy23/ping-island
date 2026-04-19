@@ -2666,10 +2666,19 @@ private struct AddRemoteHostSheet: View {
 
     @State private var displayName = ""
     @State private var sshTarget = ""
+    @State private var sshPort = "\(RemoteSSHLink.defaultPort)"
     @State private var password = ""
 
+    private var parsedPort: Int? {
+        guard let port = Int(sshPort.trimmingCharacters(in: .whitespacesAndNewlines)),
+              (1...65_535).contains(port) else {
+            return nil
+        }
+        return port
+    }
+
     private var canAdd: Bool {
-        !sshTarget.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !sshTarget.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && parsedPort != nil
     }
 
     var body: some View {
@@ -2680,7 +2689,8 @@ private struct AddRemoteHostSheet: View {
 
                 VStack(alignment: .leading, spacing: 14) {
                 remoteField(title: "显示名称（可选）", placeholder: "例如 GPU Box", text: $displayName)
-                remoteField(title: "SSH 目标", placeholder: "例如 dev@10.0.0.8:2222 或 my-server", text: $sshTarget)
+                remoteField(title: "SSH 目标", placeholder: "例如 dev@10.0.0.8 或 my-server", text: $sshTarget)
+                remoteField(title: "端口", placeholder: "22", text: $sshPort)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(appLocalized: "密码（可选）")
@@ -2705,6 +2715,13 @@ private struct AddRemoteHostSheet: View {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .strokeBorder(.white.opacity(0.1), lineWidth: 1)
                         )
+                }
+
+                if sshPort.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+                   parsedPort == nil {
+                    Text(appLocalized: "端口需为 1 到 65535")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(TerminalColors.amber)
                 }
             }
 
@@ -2779,8 +2796,8 @@ private struct AddRemoteHostSheet: View {
     }
 
     private func addAndConnect() {
-        guard canAdd else { return }
-        let endpoint = remoteManager.addEndpoint(displayName: displayName, sshTarget: sshTarget)
+        guard let port = parsedPort, canAdd else { return }
+        let endpoint = remoteManager.addEndpoint(displayName: displayName, sshTarget: sshTarget, sshPort: port)
         remoteManager.connect(
             endpointID: endpoint.id,
             password: password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : password
