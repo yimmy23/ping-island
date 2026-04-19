@@ -225,7 +225,7 @@ validate_release_progression() {
     fi
 
     local previous_release_tsv
-    previous_release_tsv=$(gh api "repos/$repo/releases" --jq ".[] | select(.draft == false and .prerelease == false and .tag_name != \"v$VERSION\") | [.tag_name, (.assets[]? | select(.name | endswith(\".zip\")) | .browser_download_url)] | @tsv" | head -n 1)
+    previous_release_tsv=$(gh api "repos/$repo/releases" --jq ".[] | select(.draft == false and .prerelease == false and .tag_name != \"v$VERSION\") | . as \$release | ([\$release.assets[]? | select((.name | startswith(\"PingIsland-\")) and (.name | endswith(\".zip\"))) | .browser_download_url][0]) as \$app_zip | select(\$app_zip != null) | [\$release.tag_name, \$app_zip] | @tsv" | head -n 1)
 
     if [ -z "$previous_release_tsv" ]; then
         echo "No earlier published release found for version progression check."
