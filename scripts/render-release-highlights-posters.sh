@@ -33,3 +33,8 @@ xcrun swiftc \
   --variant v0.3.0-cn \
   --output-name ping-island-0.3.0-update-log-cn.png \
   "$@"
+
+"${EXECUTABLE_PATH}" \
+  --variant v0.3.0-codex-qoder-cn \
+  --output-name ping-island-0.3.0-codex-qoder-cn.png \
+  "$@"

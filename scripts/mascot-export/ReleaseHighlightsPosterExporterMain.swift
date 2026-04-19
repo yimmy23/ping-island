@@ -142,6 +142,7 @@ private enum PosterVariant: String {
     case v010Chinese = "v0.1.0-cn"
     case v011CodeBuddyWorkBuddyChinese = "v0.1.1-codebuddy-workbuddy-cn"
     case v030Chinese = "v0.3.0-cn"
+    case v030CodexQoderChinese = "v0.3.0-codex-qoder-cn"
 
     init(rawValue: String) throws {
         guard let value = PosterVariant(rawValue: rawValue) else {
@@ -184,7 +185,7 @@ private enum PosterExportError: LocalizedError {
               --workbuddy-icon <path>    WorkBuddy product icon path
               --notch-preview <path>     Notch preview image path
               --question-preview <path>  Question preview image path
-              --variant <name>           remote-workflows | smooth-updates | v0.1.0-cn | v0.1.1-codebuddy-workbuddy-cn | v0.3.0-cn
+              --variant <name>           remote-workflows | smooth-updates | v0.1.0-cn | v0.1.1-codebuddy-workbuddy-cn | v0.3.0-cn | v0.3.0-codex-qoder-cn
             """
         }
     }
@@ -205,6 +206,8 @@ private struct ReleaseHighlightsPosterView: View {
             V011CodeBuddyWorkBuddyChinesePoster(options: options)
         case .v030Chinese:
             V030ChinesePoster(options: options)
+        case .v030CodexQoderChinese:
+            V030CodexQoderChinesePoster(options: options)
         }
     }
 }
@@ -594,6 +597,81 @@ private struct V030ChinesePoster: View {
     }
 }
 
+private struct V030CodexQoderChinesePoster: View {
+    let options: PosterOptions
+
+    private let featureRows = [
+        "新增 Codex 上下文压缩通知，压缩完成后会通过 Island 提示，并支持独立开关控制",
+        "正式支持 Codex、Qoder 等会话里的子 Agent 层级识别与展示，列表、悬浮预览和状态流都能看见更细的执行层级",
+        "让 Codex / Qoder 的执行流不再只是单条消息，而是能更清楚地看到压缩、子 Agent 与主线程续跑的关系",
+        "把 Island 的信息密度集中到真正影响效率的地方：更少猜测、更少跳回终端确认、更容易看清当前执行层级",
+    ]
+
+    var body: some View {
+        ZStack {
+            SharedPosterBackground(
+                topGlow: Color(red: 0.26, green: 0.67, blue: 0.98),
+                bottomGlow: Color(red: 0.65, green: 0.47, blue: 0.98)
+            )
+
+            VStack(spacing: 44) {
+                PosterHeader(
+                    iconURL: options.iconURL,
+                    eyebrow: "PING ISLAND VERSION 0.3.0",
+                    title: "Codex / Qoder 更新海报",
+                    subtitle: "这次 0.3.0 的重点，是把 Codex 与 Qoder 的可见性做细：压缩提示、子 Agent 层级，以及执行状态流都更完整。"
+                )
+
+                HStack(alignment: .top, spacing: 34) {
+                    VStack(spacing: 28) {
+                        BigFeatureCard(
+                            title: "本次重点",
+                            bullets: featureRows,
+                            accent: Color(red: 0.26, green: 0.67, blue: 0.98),
+                            minHeight: 760,
+                            bulletFontSize: 39
+                        )
+
+                        HStack(spacing: 22) {
+                            V030CodexQoderPositionCard()
+                            V030CodexQoderKeywordsCard()
+                        }
+                    }
+
+                    VStack(spacing: 28) {
+                        PreviewCard(
+                            title: "更细的执行层级",
+                            caption: "Codex 压缩完成提示、Qoder 子 Agent 层级，以及主线程的续跑状态，现在都能在同一个 Island 视图里更清楚地被看见。",
+                            imageURL: options.notchPreviewURL,
+                            accent: Color(red: 0.65, green: 0.47, blue: 0.98)
+                        )
+
+                        MascotStripCard(
+                            title: "这次重点打磨的客户端",
+                            subtitle: "Codex 与 Qoder 在 0.3.0 一起拿到了更细的执行层级感和更明确的状态提示。",
+                            mascots: [
+                                (.codex, .working),
+                                (.qoder, .warning),
+                            ],
+                            accent: Color(red: 0.26, green: 0.67, blue: 0.98)
+                        )
+                    }
+                    .frame(width: 920)
+                }
+
+                PosterFooter(tags: [
+                    "Codex 压缩通知",
+                    "Qoder 子 Agent 识别",
+                    "层级可见性",
+                    "状态流更细",
+                ])
+            }
+            .padding(.horizontal, 106)
+            .padding(.vertical, 88)
+        }
+    }
+}
+
 private struct SharedPosterBackground: View {
     let topGlow: Color
     let bottomGlow: Color
@@ -969,6 +1047,53 @@ private struct V030KeywordsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             CardLabel(text: "关键词", accent: Color(red: 0.24, green: 0.69, blue: 0.98))
+
+            Text("这一版的核心变化")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
+
+            FlowTagCloud(tags: tags)
+        }
+        .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+        .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct V030CodexQoderPositionCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            CardLabel(text: "版本定位", accent: Color(red: 0.65, green: 0.47, blue: 0.98))
+
+            Text("0.3.0 把 Codex / Qoder 的层级感拉出来了。")
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("你不再只知道“有个会话在跑”，而是能更清楚地看到它是在做压缩、在跑子 Agent，还是已经回到主线程继续推进。")
+                .font(.system(size: 26, weight: .medium, design: .rounded))
+                .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.28))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+        .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct V030CodexQoderKeywordsCard: View {
+    private let tags = [
+        "Codex",
+        "Qoder",
+        "子 Agent",
+        "压缩通知",
+        "层级展示",
+        "状态流",
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            CardLabel(text: "关键词", accent: Color(red: 0.26, green: 0.67, blue: 0.98))
 
             Text("这一版的核心变化")
                 .font(.system(size: 32, weight: .bold, design: .rounded))
