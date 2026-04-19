@@ -96,6 +96,7 @@ OpenClaw is supported through a managed internal hook directory under `~/.opencl
 SSH support is a core workflow, not a sidecar script. Ping Island can bootstrap a bridge onto a remote macOS or Linux host, rewrite remote Claude-compatible and Qwen Code hook configs to use that bridge, install supported OpenClaw internal hooks on the remote host, and keep a bidirectional forwarding path back into the local menu-bar UI. That means approvals, follow-up questions, notifications, and jump-back routing from remote SSH terminals still land in the same Island surface on your Mac.
 
 The mascot GIFs used throughout this README are generated from the live `MascotView` implementation via `./scripts/render-mascots.sh`.
+The 0.3.0 Codex poster in `docs/images/ping-island-0.3.0-codex-cn.png` is generated via `./scripts/render-release-highlights-posters.sh`.
 The 0.3.0 Codex/Qoder poster in `docs/images/ping-island-0.3.0-codex-qoder-cn.png` is generated via `./scripts/render-release-highlights-posters.sh`.
 The 0.3.0 update poster in `docs/images/ping-island-0.3.0-update-log-cn.png` is generated via `./scripts/render-release-highlights-posters.sh`.
 The OpenClaw feature poster in `docs/images/ping-island-openclaw-poster.png` is generated via `./scripts/render-openclaw-poster.sh`.
