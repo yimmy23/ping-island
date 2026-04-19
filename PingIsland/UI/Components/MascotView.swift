@@ -267,7 +267,7 @@ enum MascotKind: String, CaseIterable, Identifiable, Sendable {
         case .qwen:
             return "薄荷围巾卡皮巴拉"
         case .openclaw:
-            return "像素小龙虾"
+            return "侧身小虾"
         case .opencode:
             return "高高的白色小章鱼"
         case .cursor:
@@ -1146,7 +1146,26 @@ struct MascotView: View {
             }
         }
 
-        drawShadow(in: context, space: space, centerX: 9, y: 16.7, width: 8.2 - abs(motion.bounce) * 0.3, opacity: 0.2)
+        let pinchPhase = CGFloat((sin(time * 12) + 1) * 0.5)
+        let clawInset: CGFloat
+        let clawOpen: CGFloat
+        let clawRaise: CGFloat
+        switch mode {
+        case .idle:
+            clawInset = 0.25
+            clawOpen = 0.85
+            clawRaise = 0
+        case .working:
+            clawInset = 0.45 + pinchPhase * 1.15
+            clawOpen = 0.95 - pinchPhase * 0.45
+            clawRaise = CGFloat(sin(time * 12) * 0.18)
+        case .warning:
+            clawInset = 0.2
+            clawOpen = 0.42
+            clawRaise = -0.3
+        }
+
+        drawShadow(in: context, space: space, centerX: 9.0, y: 16.7, width: 8.6 - abs(motion.bounce) * 0.24, opacity: 0.2)
 
         if mode == .working {
             drawKeyboard(
@@ -1162,52 +1181,64 @@ struct MascotView: View {
 
         drawRects(
             [
-                (7.2, 6.2, 0.8, 1.0), (6.2, 5.4, 0.8, 1.0), (5.2, 4.6, 0.8, 1.0), (4.4, 3.8, 0.8, 0.9),
-                (7.2, 11.0, 0.8, 1.0), (6.2, 11.8, 0.8, 1.0), (5.2, 12.6, 0.8, 1.0), (4.4, 13.4, 0.8, 0.9)
+                (6.0, 3.2, 0.7, 0.8), (5.0, 2.2, 0.7, 0.8), (4.1, 1.4, 0.7, 0.8),
+                (11.3, 3.2, 0.7, 0.8), (12.3, 2.2, 0.7, 0.8), (13.2, 1.4, 0.7, 0.8),
+                (4.8, 11.2, 0.8, 0.9), (6.0, 12.0, 0.8, 0.9), (7.3, 12.4, 0.8, 0.9),
+                (8.8, 12.5, 0.8, 0.9), (10.2, 12.2, 0.8, 0.9), (11.6, 11.4, 0.8, 0.9)
             ],
             color: dark.opacity(0.9)
         )
 
         drawRects(
             [
-                (4.8, 3.2, 1.0, 0.9), (5.6, 4.0, 1.1, 0.9), (6.4, 4.8, 1.0, 0.9),
-                (4.8, 13.8, 1.0, 0.9), (5.6, 13.0, 1.1, 0.9), (6.4, 12.2, 1.0, 0.9)
+                (4.2 + clawInset, 6.8 + clawRaise, 1.0, 0.9), (3.2 + clawInset, 6.1 + clawRaise, 0.9, 0.9), (2.2 + clawInset, 5.4 + clawRaise, 0.9, 0.9),
+                (10.8 - clawInset, 6.8 + clawRaise, 1.0, 0.9), (11.9 - clawInset, 6.1 + clawRaise, 0.9, 0.9), (12.9 - clawInset, 5.4 + clawRaise, 0.9, 0.9),
+                (7.4, 10.7, 0.8, 1.2), (9.8, 10.7, 0.8, 1.2)
             ],
             color: shellShadow
         )
 
         drawRects(
             [
-                (4.8, 8.1, 1.0, 1.0), (3.8, 7.2, 1.0, 1.0), (2.9, 6.5, 1.0, 1.0),
-                (4.8, 8.9, 1.0, 1.0), (3.8, 9.8, 1.0, 1.0), (2.9, 10.5, 1.0, 1.0),
-                (12.2, 8.1, 1.0, 1.0), (13.2, 7.2, 1.0, 1.0), (14.1, 6.5, 1.0, 1.0),
-                (12.2, 8.9, 1.0, 1.0), (13.2, 9.8, 1.0, 1.0), (14.1, 10.5, 1.0, 1.0)
+                (1.4 + clawInset, 4.3 + clawRaise, 1.9, 1.1),
+                (0.6 + clawInset, 3.2 + clawRaise, 1.6, 0.9),
+                (0.6 + clawInset, 5.4 + clawRaise + clawOpen, 1.4, 0.9),
+                (14.7 - clawInset, 4.3 + clawRaise, 1.9, 1.1),
+                (15.8 - clawInset, 3.2 + clawRaise, 1.6, 0.9),
+                (15.8 - clawInset, 5.4 + clawRaise + clawOpen, 1.4, 0.9)
             ],
             color: shellShadow
         )
 
         drawRects(
             [
-                (1.3, 5.8, 1.6, 2.0), (0.5, 4.9, 1.6, 0.9), (0.5, 7.7, 1.6, 0.9),
-                (15.1, 5.8, 1.6, 2.0), (15.9, 4.9, 1.6, 0.9), (15.9, 7.7, 1.6, 0.9)
+                (4.4 + clawInset, 7.0 + clawRaise, 1.1, 0.9), (3.4 + clawInset, 6.2 + clawRaise, 1.0, 0.9), (2.4 + clawInset, 5.5 + clawRaise, 0.9, 0.9),
+                (10.5 - clawInset, 7.0 + clawRaise, 1.1, 0.9), (11.6 - clawInset, 6.2 + clawRaise, 1.0, 0.9), (12.6 - clawInset, 5.5 + clawRaise, 0.9, 0.9),
+                (1.1 + clawInset, 4.1 + clawRaise, 2.1, 1.3),
+                (0.3 + clawInset, 2.9 + clawRaise, 1.8, 1.0),
+                (0.3 + clawInset, 5.5 + clawRaise + clawOpen, 1.7, 1.0),
+                (14.8 - clawInset, 4.1 + clawRaise, 2.1, 1.3),
+                (15.9 - clawInset, 2.9 + clawRaise, 1.8, 1.0),
+                (15.9 - clawInset, 5.5 + clawRaise + clawOpen, 1.7, 1.0)
             ],
             color: shell
         )
         drawRects(
             [
-                (1.6, 6.1, 0.7, 0.8), (1.6, 6.9, 0.7, 0.8),
-                (15.7, 6.1, 0.7, 0.8), (15.7, 6.9, 0.7, 0.8)
+                (1.0 + clawInset, 4.4 + clawRaise, 0.6, 0.45), (1.0 + clawInset, 6.0 + clawRaise + clawOpen, 0.6, 0.45),
+                (16.4 - clawInset, 4.4 + clawRaise, 0.6, 0.45), (16.4 - clawInset, 6.0 + clawRaise + clawOpen, 0.6, 0.45)
             ],
             color: dark
         )
 
         let bodyRows: [(CGFloat, CGFloat, CGFloat)] = [
-            (4.8, 7.1, 3.8),
-            (6.0, 6.2, 5.6),
-            (7.0, 5.0, 8.0),
-            (8.0, 4.2, 9.6),
-            (9.0, 4.4, 9.2),
-            (10.0, 5.0, 8.0)
+            (4.2, 5.7, 5.8),
+            (5.2, 4.8, 7.6),
+            (6.2, 4.0, 9.0),
+            (7.2, 3.5, 10.0),
+            (8.2, 3.7, 9.6),
+            (9.2, 4.4, 8.2),
+            (10.2, 5.4, 6.4)
         ]
         for row in bodyRows {
             context.fill(
@@ -1218,19 +1249,23 @@ struct MascotView: View {
 
         drawRows(
             [
-                (4.8, 7.8, 2.4), (5.8, 6.2, 0.9), (5.8, 10.9, 0.9),
-                (6.8, 5.0, 0.9), (6.8, 12.1, 0.9),
-                (7.8, 4.1, 0.9), (7.8, 13.0, 0.9),
-                (8.8, 4.1, 0.9), (8.8, 13.0, 0.9),
-                (9.8, 4.8, 0.9), (9.8, 12.3, 0.9)
+                (4.2, 5.5, 1.0), (4.2, 10.4, 1.0),
+                (5.2, 4.7, 0.9), (5.2, 12.0, 0.9),
+                (6.2, 3.9, 0.9), (6.2, 13.0, 0.9),
+                (7.2, 3.4, 0.9), (7.2, 13.4, 0.9),
+                (8.2, 3.6, 0.9), (8.2, 12.8, 0.9),
+                (9.2, 4.3, 0.9), (9.2, 11.8, 0.9),
+                (10.2, 5.3, 0.9), (10.2, 10.4, 0.9)
             ],
             color: dark
         )
         drawRows(
             [
-                (5.8, 7.0, 4.0),
-                (7.2, 6.4, 0.9), (7.2, 10.7, 0.9),
-                (8.2, 6.2, 0.8), (8.2, 11.0, 0.8)
+                (4.9, 6.4, 5.0),
+                (5.9, 5.5, 6.5),
+                (6.9, 5.0, 7.0),
+                (7.9, 5.2, 6.6),
+                (8.9, 5.8, 5.7)
             ],
             color: shellShadow,
             height: 0.8
@@ -1238,69 +1273,68 @@ struct MascotView: View {
 
         drawRows(
             [
-                (10.9, 6.3, 5.4),
-                (11.9, 6.8, 4.4),
-                (12.9, 7.2, 3.6),
-                (13.8, 6.1, 1.8),
-                (13.8, 10.1, 1.8),
-                (14.6, 7.1, 3.6)
+                (10.8, 6.6, 4.2),
+                (11.8, 7.0, 3.4),
+                (12.8, 7.3, 2.6),
+                (13.7, 7.6, 1.9),
+                (14.5, 7.2, 1.0)
             ],
             color: shell
         )
         drawRows(
             [
-                (11.3, 7.1, 3.8),
-                (12.3, 7.5, 3.0),
-                (13.3, 7.8, 2.4)
+                (11.1, 7.1, 3.1),
+                (12.1, 7.4, 2.4),
+                (13.1, 7.7, 1.7)
             ],
             color: belly,
             height: 0.7
         )
         drawRows(
             [
-                (10.7, 6.2, 5.6),
-                (11.7, 6.7, 0.9), (11.7, 10.6, 0.9),
-                (12.7, 7.1, 0.9), (12.7, 9.9, 0.9),
-                (13.7, 6.0, 1.1), (13.7, 10.9, 1.1),
-                (14.6, 7.0, 3.8)
+                (10.7, 6.4, 4.5),
+                (11.7, 7.0, 0.9), (11.7, 9.4, 0.8),
+                (12.7, 7.4, 0.9), (12.7, 8.9, 0.8),
+                (13.7, 7.6, 0.9), (13.7, 8.5, 0.8),
+                (14.5, 7.2, 1.0)
             ],
             color: dark
         )
 
         drawRects(
             [
-                (6.5, 6.5, 1.7, 1.9),
-                (9.8, 6.5, 1.7, 1.9)
+                (6.0, 6.2, 1.8, 2.1),
+                (9.8, 6.2, 1.8, 2.1)
             ],
             color: .white
         )
 
-        let eyeHeight: CGFloat = mode == .idle ? 0.7 : (mode == .warning ? 1.25 : blinkHeight(time: time, closedHeight: 0.24, openHeight: 1.25))
-        context.fill(Path(space.rect(6.9 + motion.shake, 7.0 + motion.vertical, 0.95, eyeHeight)), with: .color(eye))
-        context.fill(Path(space.rect(10.15 + motion.shake, 7.0 + motion.vertical, 0.95, eyeHeight)), with: .color(eye))
+        let eyeHeight: CGFloat = mode == .idle ? 0.9 : (mode == .warning ? 1.35 : blinkHeight(time: time, closedHeight: 0.24, openHeight: 1.35))
+        context.fill(Path(space.rect(6.5 + motion.shake, 6.8 + motion.vertical, 0.95, eyeHeight)), with: .color(eye))
+        context.fill(Path(space.rect(10.25 + motion.shake, 6.8 + motion.vertical, 0.95, eyeHeight)), with: .color(eye))
         drawRects(
             [
-                (7.15, 7.2, 0.3, 0.35),
-                (10.4, 7.2, 0.3, 0.35)
+                (6.75, 7.0, 0.3, 0.35),
+                (10.5, 7.0, 0.3, 0.35)
             ],
             color: .white.opacity(0.72)
         )
 
         drawRects(
             [
-                (5.6, 8.8, 1.1, 0.6),
-                (11.3, 8.8, 1.1, 0.6)
+                (5.6, 8.9, 1.0, 0.6),
+                (11.1, 8.9, 1.0, 0.6)
             ],
             color: blush.opacity(0.7)
         )
 
         if mode == .idle {
-            context.fill(Path(space.rect(8.1 + motion.shake, 9.9 + motion.vertical, 1.8, 0.35)), with: .color(dark.opacity(0.42)))
+            context.fill(Path(space.rect(8.0 + motion.shake, 9.7 + motion.vertical, 1.8, 0.32)), with: .color(dark.opacity(0.42)))
         } else {
             drawRects(
                 [
-                    (8.0, 9.7, 0.9, 0.35),
-                    (8.9, 10.0, 0.9, 0.35)
+                    (7.9, 9.6, 0.9, 0.32),
+                    (8.8, 9.9, 0.9, 0.32)
                 ],
                 color: dark.opacity(0.58)
             )
@@ -1308,32 +1342,37 @@ struct MascotView: View {
 
         drawRects(
             [
-                (7.2, 5.8, 1.4, 0.7),
-                (10.0, 6.0, 1.2, 0.7),
-                (8.3, 10.9, 1.4, 0.6)
+                (6.7, 5.8, 2.0, 0.7),
+                (9.4, 6.0, 1.5, 0.7),
+                (8.5, 11.0, 1.3, 0.5)
             ],
             color: highlight.opacity(0.72)
         )
 
         drawRects(
             [
-                (6.2, 10.6, 0.7, 1.0), (5.4, 11.4, 1.3, 0.6),
-                (7.2, 11.0, 0.7, 0.9), (6.6, 11.7, 1.2, 0.6),
-                (11.1, 10.6, 0.7, 1.0), (11.3, 11.4, 1.3, 0.6),
-                (10.1, 11.0, 0.7, 0.9), (10.2, 11.7, 1.2, 0.6)
+                (5.3, 10.6, 0.7, 0.95), (4.6, 11.3, 1.0, 0.55),
+                (6.8, 11.1, 0.7, 0.95), (6.2, 11.8, 1.0, 0.55),
+                (9.7, 11.1, 0.7, 0.95), (10.1, 11.8, 1.0, 0.55),
+                (11.2, 10.6, 0.7, 0.95), (11.2, 11.3, 1.0, 0.55)
             ],
             color: dark
         )
 
-        if mode != .idle {
-            drawRects(
-                [
-                    (7.3, 12.1, 1.1, 0.5),
-                    (9.6, 12.1, 1.1, 0.5)
-                ],
-                color: highlight
-            )
-        }
+        drawRects(
+            [
+                (6.0, 3.5, 0.6, 0.8), (5.0, 2.5, 0.6, 0.8), (4.1, 1.5, 0.6, 0.8),
+                (11.4, 3.5, 0.6, 0.8), (12.4, 2.5, 0.6, 0.8), (13.3, 1.5, 0.6, 0.8)
+            ],
+            color: shell
+        )
+        drawRects(
+            [
+                (5.1, 6.2 + clawRaise, 0.55, 0.7), (4.2, 5.4 + clawRaise, 0.55, 0.7),
+                (10.9, 6.2 + clawRaise, 0.55, 0.7), (11.9, 5.4 + clawRaise, 0.55, 0.7)
+            ],
+            color: highlight
+        )
 
         if mode == .warning {
             drawAlertGlyph(in: context, space: space, x: 14.0 + motion.shake, y: 1.9, color: kind.alertColor)
