@@ -141,6 +141,7 @@ private enum PosterVariant: String {
     case smoothUpdates = "smooth-updates"
     case v010Chinese = "v0.1.0-cn"
     case v011CodeBuddyWorkBuddyChinese = "v0.1.1-codebuddy-workbuddy-cn"
+    case v030Chinese = "v0.3.0-cn"
 
     init(rawValue: String) throws {
         guard let value = PosterVariant(rawValue: rawValue) else {
@@ -183,7 +184,7 @@ private enum PosterExportError: LocalizedError {
               --workbuddy-icon <path>    WorkBuddy product icon path
               --notch-preview <path>     Notch preview image path
               --question-preview <path>  Question preview image path
-              --variant <name>           remote-workflows | smooth-updates | v0.1.0-cn | v0.1.1-codebuddy-workbuddy-cn
+              --variant <name>           remote-workflows | smooth-updates | v0.1.0-cn | v0.1.1-codebuddy-workbuddy-cn | v0.3.0-cn
             """
         }
     }
@@ -202,6 +203,8 @@ private struct ReleaseHighlightsPosterView: View {
             V010ChinesePoster(options: options)
         case .v011CodeBuddyWorkBuddyChinese:
             V011CodeBuddyWorkBuddyChinesePoster(options: options)
+        case .v030Chinese:
+            V030ChinesePoster(options: options)
         }
     }
 }
@@ -504,6 +507,85 @@ private struct V011CodeBuddyWorkBuddyChinesePoster: View {
                     "follow-up 状态修正",
                     "一键打开客户端",
                     "历史增量回填",
+                ])
+            }
+            .padding(.horizontal, 106)
+            .padding(.vertical, 88)
+        }
+    }
+}
+
+private struct V030ChinesePoster: View {
+    let options: PosterOptions
+
+    private let featureRows = [
+        "新增 Codex 上下文压缩通知，并支持独立开关控制",
+        "正式支持 Codex、Qoder 等会话里的子 Agent 层级识别与展示",
+        "优化 OpenClaw 宠物形象，让小龙虾特征在刘海和菜单栏尺寸下更清晰",
+        "优化 SSH Remote 资源包体积与下发方式，远程 bridge 安装更轻更顺滑",
+        "修复 SSH 远程场景里重复审批会阻塞会话的问题",
+        "修复全屏偏好与系统刘海尺寸下的 Island 显示细节",
+    ]
+
+    var body: some View {
+        ZStack {
+            SharedPosterBackground(
+                topGlow: Color(red: 0.24, green: 0.69, blue: 0.98),
+                bottomGlow: Color(red: 0.98, green: 0.58, blue: 0.19)
+            )
+
+            VStack(spacing: 44) {
+                PosterHeader(
+                    iconURL: options.iconURL,
+                    eyebrow: "PING ISLAND VERSION 0.3.0",
+                    title: "0.3.0 版本更新日志",
+                    subtitle: "这一版聚焦 Codex / Qoder 可见性、远程监控体验和客户端形象打磨，把会话层级、远程链路和 UI 细节一起收紧。"
+                )
+
+                HStack(alignment: .top, spacing: 34) {
+                    VStack(spacing: 28) {
+                        BigFeatureCard(
+                            title: "本次重点",
+                            bullets: featureRows,
+                            accent: Color(red: 0.24, green: 0.69, blue: 0.98),
+                            minHeight: 760,
+                            bulletFontSize: 40
+                        )
+
+                        HStack(spacing: 22) {
+                            V030PositionCard()
+                            V030KeywordsCard()
+                        }
+                    }
+
+                    VStack(spacing: 28) {
+                        PreviewCard(
+                            title: "更细的会话层级",
+                            caption: "子 Agent 会话、Codex 压缩完成提示和远程链路事件，现在都能在同一个 Island 视图里更清楚地被看见。",
+                            imageURL: options.notchPreviewURL,
+                            accent: Color(red: 0.98, green: 0.58, blue: 0.19)
+                        )
+
+                        MascotStripCard(
+                            title: "这次一起被打磨的客户端",
+                            subtitle: "Codex / Qoder 的层级识别、OpenClaw 的宠物形象，以及远程 SSH 工作流，都在 0.3.0 一起变得更清晰。",
+                            mascots: [
+                                (.codex, .working),
+                                (.qoder, .warning),
+                                (.openclaw, .working),
+                                (.claude, .working),
+                            ],
+                            accent: Color(red: 0.24, green: 0.69, blue: 0.98)
+                        )
+                    }
+                    .frame(width: 920)
+                }
+
+                PosterFooter(tags: [
+                    "Codex 压缩通知",
+                    "子 Agent 会话识别",
+                    "OpenClaw 宠物更新",
+                    "SSH Remote 优化",
                 ])
             }
             .padding(.horizontal, 106)
@@ -840,6 +922,53 @@ private struct MonitoringKeywordsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             CardLabel(text: "关键词", accent: Color(red: 0.12, green: 0.78, blue: 0.62))
+
+            Text("这一版的核心变化")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
+
+            FlowTagCloud(tags: tags)
+        }
+        .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+        .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct V030PositionCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            CardLabel(text: "版本定位", accent: Color(red: 0.98, green: 0.58, blue: 0.19))
+
+            Text("0.3.0 是一次会话可见性与远程体验升级。")
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.18, green: 0.15, blue: 0.12))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("重点不在再加多少客户端，而在于把 Codex / Qoder 的层级感、SSH 远程链路的稳定性，以及客户端形象的辨识度一起拉高。")
+                .font(.system(size: 26, weight: .medium, design: .rounded))
+                .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.28))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+        .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct V030KeywordsCard: View {
+    private let tags = [
+        "Codex",
+        "Qoder",
+        "子 Agent",
+        "SSH Remote",
+        "OpenClaw",
+        "压缩通知",
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            CardLabel(text: "关键词", accent: Color(red: 0.24, green: 0.69, blue: 0.98))
 
             Text("这一版的核心变化")
                 .font(.system(size: 32, weight: .bold, design: .rounded))
