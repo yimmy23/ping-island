@@ -1405,7 +1405,7 @@ private struct SettingsPanelContentView: View {
                     ForEach(NotificationEvent.allCases) { event in
                         BundledThemeEventLine(
                             event: event,
-                            soundLabel: event.island8BitSound.label,
+                            soundLabel: AppLocalization.string(event.island8BitSound.label),
                             isEnabled: Binding(
                                 get: { AppSettings.isSoundEnabled(for: event) },
                                 set: { AppSettings.setSoundEnabled($0, for: event) }
@@ -2624,7 +2624,7 @@ private struct RemoteHostManagementLine: View {
                 }
 
                 HookManagementButton(
-                    title: "卸载 bridge",
+                    title: "卸载",
                     tint: TerminalColors.amber,
                     isLoading: isUninstalling,
                     isDisabled: isBusy
@@ -2645,8 +2645,8 @@ private struct RemoteHostManagementLine: View {
                 }
             }
 
-            if let lastError = runtimeState.lastError, !lastError.isEmpty {
-                Text(verbatim: AppLocalization.string(lastError))
+            if let lastError = localizedLastError {
+                Text(verbatim: lastError)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(TerminalColors.amber)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2724,6 +2724,20 @@ private struct RemoteHostManagementLine: View {
         case .disconnected:
             return .white.opacity(0.68)
         }
+    }
+
+    private var localizedLastError: String? {
+        guard let lastError = runtimeState.lastError, !lastError.isEmpty else {
+            return nil
+        }
+
+        let attachDisconnectPrefix = "SSH attach 已断开: "
+        if lastError.hasPrefix(attachDisconnectPrefix) {
+            let detail = String(lastError.dropFirst(attachDisconnectPrefix.count))
+            return AppLocalization.format("SSH attach 已断开: %@", detail)
+        }
+
+        return AppLocalization.string(lastError)
     }
 }
 
@@ -3909,7 +3923,7 @@ private struct SubagentVisibilityPicker: View {
             }
         }
         .labelsHidden()
-        .accessibilityLabel("子 Agent 显示")
+        .accessibilityLabel(Text(appLocalized: "子 Agent 显示"))
         .settingsMenuPicker(width: 168)
     }
 }
