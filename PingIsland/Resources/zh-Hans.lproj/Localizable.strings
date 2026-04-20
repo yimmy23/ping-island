@@ -257,6 +257,7 @@
 "会话已结束" = "会话已结束";
 "Deny" = "拒绝";
 "Allow" = "允许";
+"Allow Once" = "允许一次";
 "Go to Terminal" = "前往终端";
 "Terminal" = "终端";
 
@@ -274,6 +275,11 @@
 "No messages yet" = "还没有消息";
 "Message Claude..." = "给 Claude 发送消息...";
 "Message %@..." = "给 %@ 发送消息...";
+"Submit" = "提交";
+"Loading thread details..." = "正在加载线程详情...";
+"Latest thread result" = "最新线程结果";
+"Session result" = "会话结果";
+"No thread details yet. Once Codex responds, the latest result will show here." = "暂时还没有线程详情。等 Codex 回复后，最新结果会显示在这里。";
 "Open Claude Code in tmux to enable messaging" = "在 tmux 中打开 Claude Code 以启用发消息";
 "Processing" = "处理中";
 "Working" = "工作中";

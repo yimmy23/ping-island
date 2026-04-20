@@ -262,6 +262,7 @@
 "会话已结束" = "Session ended";
 "Deny" = "Deny";
 "Allow" = "Allow";
+"Allow Once" = "Allow Once";
 "Go to Terminal" = "Go to Terminal";
 "Terminal" = "Terminal";
 
@@ -279,6 +280,11 @@
 "No messages yet" = "No messages yet";
 "Message Claude..." = "Message Claude...";
 "Message %@..." = "Message %@...";
+"Submit" = "Submit";
+"Loading thread details..." = "Loading thread details...";
+"Latest thread result" = "Latest thread result";
+"Session result" = "Session result";
+"No thread details yet. Once Codex responds, the latest result will show here." = "No thread details yet. Once Codex responds, the latest result will show here.";
 "Open Claude Code in tmux to enable messaging" = "Open Claude Code in tmux to enable messaging";
 "Processing" = "Processing";
 "Working" = "Working";

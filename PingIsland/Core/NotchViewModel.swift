@@ -514,11 +514,8 @@ class NotchViewModel: ObservableObject {
     }
 
     func notchClose() {
-        // Save chat session before closing if in chat mode
-        if case .chat(let session) = contentType {
-            currentChatSession = session
-        }
         status = .closed
+        currentChatSession = nil
         contentType = .instances
         openedMeasuredHeight = nil
     }

@@ -4,10 +4,13 @@ struct CodexSessionView: View {
     let session: SessionState
     let sessionMonitor: SessionMonitor
     @ObservedObject var viewModel: NotchViewModel
+    @State private var isHeaderHovered = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
+                header
+
                 summaryCard
 
                 if let intervention = session.intervention {
@@ -23,6 +26,38 @@ struct CodexSessionView: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
+    }
+
+    private var header: some View {
+        HStack(spacing: 0) {
+            Button {
+                viewModel.exitChat()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(isHeaderHovered ? 1.0 : 0.6))
+                        .frame(width: 24, height: 24)
+
+                    Text(appLocalized: "会话列表")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(isHeaderHovered ? 1.0 : 0.85))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isHeaderHovered ? Color.white.opacity(0.08) : Color.clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .onHover { isHeaderHovered = $0 }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 4)
     }
 
     private var summaryCard: some View {
@@ -111,7 +146,7 @@ struct CodexSessionView: View {
 
     private func approvalButtons(_ intervention: SessionIntervention) -> some View {
         HStack(spacing: 8) {
-            Button("Allow Once") {
+            Button(AppLocalization.string("Allow Once")) {
                 sessionMonitor.approvePermission(sessionId: session.sessionId)
                 viewModel.exitChat()
             }
@@ -125,7 +160,7 @@ struct CodexSessionView: View {
                 .buttonStyle(CodexCapsuleButtonStyle(background: TerminalColors.blue.opacity(0.28)))
             }
 
-            Button("Deny") {
+            Button(AppLocalization.string("Deny")) {
                 sessionMonitor.denyPermission(sessionId: session.sessionId, reason: nil)
                 viewModel.exitChat()
             }
@@ -149,7 +184,7 @@ struct CodexSessionView: View {
                     && session.clientInfo.prefersAnsweredQuestionFollowupAction {
                     AppLocalization.format("打开 %@", session.interactionDisplayName)
                 } else {
-                    "Cancel"
+                    AppLocalization.string("取消")
                 }
 
                 SessionQuestionForm(
@@ -294,7 +329,7 @@ struct CodexThreadInspectorView: View {
             } else if isLoading {
                 loadingText
             } else {
-                Text("No thread details yet. Once Codex responds, the latest result will show here.")
+                Text(appLocalized: "No thread details yet. Once Codex responds, the latest result will show here.")
                     .font(.system(size: max(11, bodyFontSize - 1), weight: .medium))
                     .foregroundColor(.white.opacity(0.56))
             }
@@ -335,9 +370,9 @@ struct CodexThreadInspectorView: View {
     private var sectionTitle: String {
         switch mode {
         case .chat:
-            return "Latest thread result"
+            return AppLocalization.string("Latest thread result")
         case .hover:
-            return "Session result"
+            return AppLocalization.string("Session result")
         }
     }
 
@@ -352,7 +387,7 @@ struct CodexThreadInspectorView: View {
     }
 
     private var loadingText: some View {
-        Text("Loading thread details...")
+        Text(appLocalized: "Loading thread details...")
             .font(.system(size: max(11, bodyFontSize - 1), weight: .medium))
             .foregroundColor(.white.opacity(0.56))
     }
