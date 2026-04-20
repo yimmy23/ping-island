@@ -541,10 +541,15 @@ private struct Downloads10KChinesePoster: View {
                     clients: [
                         ("Claude Code", .claude, .working),
                         ("Codex", .codex, .working),
+                        ("Gemini CLI", .gemini, .idle),
                         ("Qwen Code", .qwen, .idle),
                         ("Hermes", .hermes, .working),
                         ("OpenClaw", .openclaw, .warning),
                         ("OpenCode", .opencode, .working),
+                        ("Cursor", .cursor, .working),
+                        ("Qoder", .qoder, .working),
+                        ("CodeBuddy", .codebuddy, .idle),
+                        ("Copilot", .copilot, .working),
                     ],
                     accent: Color(red: 0.17, green: 0.76, blue: 0.66)
                 )
@@ -568,6 +573,13 @@ private struct MilestoneClientStripCard: View {
     let clients: [(String, MascotKind, MascotStatus)]
     let accent: Color
 
+    private let columns = [
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14),
+    ]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             CardLabel(text: title, accent: accent)
@@ -577,24 +589,24 @@ private struct MilestoneClientStripCard: View {
                 .foregroundStyle(Color(red: 0.37, green: 0.32, blue: 0.28))
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 16) {
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
                 ForEach(Array(clients.enumerated()), id: \.offset) { _, client in
                     VStack(spacing: 12) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 24, style: .continuous)
                                 .fill(.white.opacity(0.76))
-                                .frame(width: 168, height: 168)
+                                .frame(height: 156)
 
-                            MascotView(kind: client.1, status: client.2, size: 118, animationTime: 0.8)
+                            MascotView(kind: client.1, status: client.2, size: 108, animationTime: 0.8)
                         }
 
                         Text(client.0)
-                            .font(.system(size: 21, weight: .bold, design: .rounded))
+                            .font(.system(size: 19, weight: .bold, design: .rounded))
                             .foregroundStyle(Color(red: 0.19, green: 0.16, blue: 0.13))
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
                             .minimumScaleFactor(0.85)
-                            .frame(maxWidth: 168)
+                            .frame(maxWidth: .infinity)
                     }
                     .frame(maxWidth: .infinity)
                 }
