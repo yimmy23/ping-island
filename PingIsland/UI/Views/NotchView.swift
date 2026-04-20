@@ -565,6 +565,38 @@ struct NotchView: View {
         max(0, closedCenterWidth - compactCenterContentInset)
     }
 
+    private var tokenUsageSession: SessionState? {
+        guard settings.showUsage else { return nil }
+
+        switch viewModel.contentType {
+        case .chat(let session):
+            return sessionMonitor.instances.first(where: { $0.sessionId == session.sessionId }) ?? session
+        case .instances:
+            let candidateSessions: [SessionState]
+            if viewModel.openReason == .notification,
+               let notification = activeCompletionNotification {
+                candidateSessions = [
+                    sessionMonitor.instances.first(where: { $0.sessionId == notification.session.sessionId }) ?? notification.session
+                ]
+            } else {
+                candidateSessions = sessionMonitor.instances
+                    .sorted(by: { $0.lastActivity > $1.lastActivity })
+            }
+
+            return candidateSessions.first(where: { $0.latestTaskTotalTokens != nil })
+        }
+    }
+
+    private var tokenUsageBadgeText: String? {
+        guard let totalTokens = tokenUsageSession?.latestTaskTotalTokens else { return nil }
+        let compactValue = totalTokens.formatted(
+            .number
+                .locale(settings.locale)
+                .notation(.compactName)
+        )
+        return "Token \(compactValue)"
+    }
+
     @ViewBuilder
     private var closedCenterContent: some View {
         HStack {
@@ -604,6 +636,10 @@ struct NotchView: View {
             }
 
             Spacer()
+
+            if let tokenUsageBadgeText {
+                NotchTokenUsageBadge(text: tokenUsageBadgeText)
+            }
 
             NotchTemporaryMuteButton(
                 isActive: areReminderNotificationsSuppressed,
@@ -1358,6 +1394,34 @@ private struct NotchTemporaryMuteButton: View {
             return Color.white.opacity(isHovering ? 0.22 : 0.12)
         }
         return .clear
+    }
+}
+
+private struct NotchTokenUsageBadge: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "number.circle.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.78))
+
+            Text(text)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.88))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.08))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .help("最近活跃会话的 Token 用量")
     }
 }
 

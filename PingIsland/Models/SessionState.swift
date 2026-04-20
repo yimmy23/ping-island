@@ -830,6 +830,19 @@ struct SessionState: Equatable, Identifiable, Sendable {
         return tool
     }
 
+    nonisolated var latestTaskTotalTokens: Int? {
+        for item in chatItems.reversed() {
+            guard case .toolCall(let tool) = item.type,
+                  case .task(let result) = tool.structuredResult,
+                  let totalTokens = result.totalTokens,
+                  totalTokens > 0 else {
+                continue
+            }
+            return totalTokens
+        }
+        return nil
+    }
+
     private nonisolated var latestToolCallIsCompletedFollowupQuestion: Bool {
         latestCompletedFollowupQuestionTool != nil
     }

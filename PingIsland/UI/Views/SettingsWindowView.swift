@@ -1232,6 +1232,13 @@ private struct SettingsPanelContentView: View {
                 )
                 SettingsLineDivider()
 
+                SettingsToggleLine(
+                    title: "显示 Token 用量",
+                    subtitle: "在展开后的看板顶栏显示最近活跃会话的 token 用量",
+                    isOn: $settings.showUsage
+                )
+                SettingsLineDivider()
+
                 SettingsInfoLine(
                     title: "子 Agent 显示",
                     subtitle: "控制主列表里是否展示子 Agent 消息项；当前会影响 Codex、Qoder 等带子会话的客户端"

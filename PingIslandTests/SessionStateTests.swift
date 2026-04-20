@@ -1330,6 +1330,122 @@ final class SessionStateTests: XCTestCase {
         XCTAssertFalse(session.shouldShowClientFollowupPrompt)
     }
 
+    func testLatestTaskTotalTokensUsesNewestCompletedTaskResult() {
+        let session = SessionState(
+            sessionId: "task-usage",
+            cwd: "/tmp/project",
+            chatItems: [
+                ChatHistoryItem(
+                    id: "task-older",
+                    type: .toolCall(
+                        ToolCallItem(
+                            name: "Task",
+                            input: [:],
+                            status: .success,
+                            result: nil,
+                            structuredResult: .task(
+                                TaskResult(
+                                    agentId: "agent-1",
+                                    status: "completed",
+                                    content: "done",
+                                    prompt: nil,
+                                    totalDurationMs: 1000,
+                                    totalTokens: 1200,
+                                    totalToolUseCount: 2
+                                )
+                            ),
+                            subagentTools: []
+                        )
+                    ),
+                    timestamp: Date().addingTimeInterval(-1)
+                ),
+                ChatHistoryItem(
+                    id: "task-newer",
+                    type: .toolCall(
+                        ToolCallItem(
+                            name: "Task",
+                            input: [:],
+                            status: .success,
+                            result: nil,
+                            structuredResult: .task(
+                                TaskResult(
+                                    agentId: "agent-2",
+                                    status: "completed",
+                                    content: "done",
+                                    prompt: nil,
+                                    totalDurationMs: 1500,
+                                    totalTokens: 2400,
+                                    totalToolUseCount: 3
+                                )
+                            ),
+                            subagentTools: []
+                        )
+                    ),
+                    timestamp: Date()
+                )
+            ]
+        )
+
+        XCTAssertEqual(session.latestTaskTotalTokens, 2400)
+    }
+
+    func testLatestTaskTotalTokensSkipsNonTaskResultsAndMissingUsage() {
+        let session = SessionState(
+            sessionId: "task-usage-empty",
+            cwd: "/tmp/project",
+            chatItems: [
+                ChatHistoryItem(
+                    id: "read-result",
+                    type: .toolCall(
+                        ToolCallItem(
+                            name: "Read",
+                            input: [:],
+                            status: .success,
+                            result: nil,
+                            structuredResult: .read(
+                                ReadResult(
+                                    filePath: "/tmp/project/README.md",
+                                    content: "hello",
+                                    numLines: 1,
+                                    startLine: 1,
+                                    totalLines: 1
+                                )
+                            ),
+                            subagentTools: []
+                        )
+                    ),
+                    timestamp: Date().addingTimeInterval(-1)
+                ),
+                ChatHistoryItem(
+                    id: "task-without-usage",
+                    type: .toolCall(
+                        ToolCallItem(
+                            name: "Task",
+                            input: [:],
+                            status: .success,
+                            result: nil,
+                            structuredResult: .task(
+                                TaskResult(
+                                    agentId: "agent-3",
+                                    status: "completed",
+                                    content: "done",
+                                    prompt: nil,
+                                    totalDurationMs: 900,
+                                    totalTokens: nil,
+                                    totalToolUseCount: 1
+                                )
+                            ),
+                            subagentTools: []
+                        )
+                    ),
+                    timestamp: Date()
+                )
+            ]
+        )
+
+        XCTAssertNil(session.latestTaskTotalTokens)
+    }
+
     func testCodexAppPrefersDirectLaunchURLBeforeWorkspaceRouting() {
         XCTAssertTrue(
             SessionLauncher.shouldPrioritizeDirectLaunchURL(
