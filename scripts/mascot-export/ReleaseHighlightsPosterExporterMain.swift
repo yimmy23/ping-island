@@ -518,12 +518,6 @@ private struct V011CodeBuddyWorkBuddyChinesePoster: View {
 private struct Downloads10KChinesePoster: View {
     let options: PosterOptions
 
-    private let featureRows = [
-        "统一监控 Claude Code、Codex、Gemini CLI、Qwen Code、Hermes、OpenClaw、OpenCode 等客户端",
-        "把 AI coding session、追问、审批、完成态和远程 SSH 工作流收拢到一个原生 Island 界面",
-        "持续围绕真实开发工作流打磨状态可见性、会话跳转、hooks 集成和客户端形象体系",
-    ]
-
     var body: some View {
         ZStack {
             SharedPosterBackground(
@@ -541,24 +535,16 @@ private struct Downloads10KChinesePoster: View {
 
                 MilestoneNumberCard()
 
-                BigFeatureCard(
-                    title: "这次想说",
-                    bullets: featureRows,
-                    accent: Color(red: 0.99, green: 0.65, blue: 0.22),
-                    minHeight: 520,
-                    bulletFontSize: 34
-                )
-
-                MascotStripCard(
+                MilestoneClientStripCard(
                     title: "一起成长的客户端阵列",
-                    subtitle: "从 Claude Code 到 Codex，再到 Qwen、Hermes、OpenClaw、OpenCode，越来越多的工作流被 Island 统一接住。",
-                    mascots: [
-                        (.claude, .working),
-                        (.codex, .working),
-                        (.qwen, .idle),
-                        (.hermes, .working),
-                        (.openclaw, .warning),
-                        (.opencode, .working),
+                    subtitle: "Ping Island 已经陪着越来越多不同客户端和开发工作流一起运行。",
+                    clients: [
+                        ("Claude Code", .claude, .working),
+                        ("Codex", .codex, .working),
+                        ("Qwen Code", .qwen, .idle),
+                        ("Hermes", .hermes, .working),
+                        ("OpenClaw", .openclaw, .warning),
+                        ("OpenCode", .opencode, .working),
                     ],
                     accent: Color(red: 0.17, green: 0.76, blue: 0.66)
                 )
@@ -573,6 +559,49 @@ private struct Downloads10KChinesePoster: View {
             .padding(.horizontal, 88)
             .padding(.vertical, 82)
         }
+    }
+}
+
+private struct MilestoneClientStripCard: View {
+    let title: String
+    let subtitle: String
+    let clients: [(String, MascotKind, MascotStatus)]
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            CardLabel(text: title, accent: accent)
+
+            Text(subtitle)
+                .font(.system(size: 28, weight: .medium, design: .rounded))
+                .foregroundStyle(Color(red: 0.37, green: 0.32, blue: 0.28))
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 16) {
+                ForEach(Array(clients.enumerated()), id: \.offset) { _, client in
+                    VStack(spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(.white.opacity(0.76))
+                                .frame(width: 168, height: 168)
+
+                            MascotView(kind: client.1, status: client.2, size: 118, animationTime: 0.8)
+                        }
+
+                        Text(client.0)
+                            .font(.system(size: 21, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.19, green: 0.16, blue: 0.13))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.85)
+                            .frame(maxWidth: 168)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(30)
+        .background(PosterCardBackground())
     }
 }
 
