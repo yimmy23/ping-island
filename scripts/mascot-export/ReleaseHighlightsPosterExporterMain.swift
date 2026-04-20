@@ -141,6 +141,7 @@ private enum PosterVariant: String {
     case smoothUpdates = "smooth-updates"
     case v010Chinese = "v0.1.0-cn"
     case v011CodeBuddyWorkBuddyChinese = "v0.1.1-codebuddy-workbuddy-cn"
+    case downloads10kChinese = "downloads-10k-cn"
 
     init(rawValue: String) throws {
         guard let value = PosterVariant(rawValue: rawValue) else {
@@ -183,7 +184,7 @@ private enum PosterExportError: LocalizedError {
               --workbuddy-icon <path>    WorkBuddy product icon path
               --notch-preview <path>     Notch preview image path
               --question-preview <path>  Question preview image path
-              --variant <name>           remote-workflows | smooth-updates | v0.1.0-cn | v0.1.1-codebuddy-workbuddy-cn
+              --variant <name>           remote-workflows | smooth-updates | v0.1.0-cn | v0.1.1-codebuddy-workbuddy-cn | downloads-10k-cn
             """
         }
     }
@@ -202,6 +203,8 @@ private struct ReleaseHighlightsPosterView: View {
             V010ChinesePoster(options: options)
         case .v011CodeBuddyWorkBuddyChinese:
             V011CodeBuddyWorkBuddyChinesePoster(options: options)
+        case .downloads10kChinese:
+            Downloads10KChinesePoster(options: options)
         }
     }
 }
@@ -512,6 +515,67 @@ private struct V011CodeBuddyWorkBuddyChinesePoster: View {
     }
 }
 
+private struct Downloads10KChinesePoster: View {
+    let options: PosterOptions
+
+    private let featureRows = [
+        "统一监控 Claude Code、Codex、Gemini CLI、Qwen Code、Hermes、OpenClaw、OpenCode 等客户端",
+        "把 AI coding session、追问、审批、完成态和远程 SSH 工作流收拢到一个原生 Island 界面",
+        "持续围绕真实开发工作流打磨状态可见性、会话跳转、hooks 集成和客户端形象体系",
+    ]
+
+    var body: some View {
+        ZStack {
+            SharedPosterBackground(
+                topGlow: Color(red: 0.99, green: 0.65, blue: 0.22),
+                bottomGlow: Color(red: 0.17, green: 0.76, blue: 0.66)
+            )
+
+            VStack(spacing: 34) {
+                MilestonePosterHeader(
+                    iconURL: options.iconURL,
+                    eyebrow: "PING ISLAND MILESTONE",
+                    title: "下载量突破 10,000",
+                    subtitle: "谢谢每一次安装、更新和转发。Ping Island 正在成为更多 AI coding workflows 的统一状态面板。"
+                )
+
+                MilestoneNumberCard()
+
+                BigFeatureCard(
+                    title: "这次想说",
+                    bullets: featureRows,
+                    accent: Color(red: 0.99, green: 0.65, blue: 0.22),
+                    minHeight: 520,
+                    bulletFontSize: 34
+                )
+
+                MascotStripCard(
+                    title: "一起成长的客户端阵列",
+                    subtitle: "从 Claude Code 到 Codex，再到 Qwen、Hermes、OpenClaw、OpenCode，越来越多的工作流被 Island 统一接住。",
+                    mascots: [
+                        (.claude, .working),
+                        (.codex, .working),
+                        (.qwen, .idle),
+                        (.hermes, .working),
+                        (.openclaw, .warning),
+                        (.opencode, .working),
+                    ],
+                    accent: Color(red: 0.17, green: 0.76, blue: 0.66)
+                )
+
+                PosterFooter(tags: [
+                    "10,000+ Downloads",
+                    "Native macOS Island",
+                    "AI Coding Monitor",
+                    "Thanks for installing",
+                ])
+            }
+            .padding(.horizontal, 88)
+            .padding(.vertical, 82)
+        }
+    }
+}
+
 private struct SharedPosterBackground: View {
     let topGlow: Color
     let bottomGlow: Color
@@ -543,6 +607,40 @@ private struct SharedPosterBackground: View {
             RoundedRectangle(cornerRadius: 120, style: .continuous)
                 .stroke(Color.white.opacity(0.72), lineWidth: 2)
                 .padding(24)
+        }
+    }
+}
+
+private struct MilestonePosterHeader: View {
+    let iconURL: URL
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(spacing: 26) {
+            PosterAppIcon(iconURL: iconURL)
+                .frame(width: 280, height: 280)
+
+            VStack(spacing: 14) {
+                Text(eyebrow)
+                    .font(.system(size: 24, weight: .black, design: .rounded))
+                    .tracking(3.2)
+                    .foregroundStyle(Color(red: 0.56, green: 0.47, blue: 0.34))
+
+                Text(title)
+                    .font(.system(size: 102, weight: .black, design: .rounded))
+                    .foregroundStyle(Color(red: 0.14, green: 0.12, blue: 0.10))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(subtitle)
+                    .font(.system(size: 31, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color(red: 0.42, green: 0.36, blue: 0.30))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 1380)
+            }
         }
     }
 }
@@ -755,6 +853,39 @@ private struct MetricBoardCard: View {
             }
         }
         .padding(30)
+        .background(PosterCardBackground())
+    }
+}
+
+private struct MilestoneNumberCard: View {
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("10,000")
+                .font(.system(size: 250, weight: .black, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.18, green: 0.16, blue: 0.14),
+                            Color(red: 0.30, green: 0.26, blue: 0.22),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .tracking(-5)
+
+            Text("Downloads and still climbing")
+                .font(.system(size: 40, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.39, green: 0.34, blue: 0.29))
+
+            Text("每一次下载，都是对这套原生 AI coding 监控体验的投票。")
+                .font(.system(size: 30, weight: .medium, design: .rounded))
+                .foregroundStyle(Color(red: 0.47, green: 0.40, blue: 0.34))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 44)
+        .padding(.horizontal, 34)
         .background(PosterCardBackground())
     }
 }
