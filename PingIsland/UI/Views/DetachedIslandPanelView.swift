@@ -159,6 +159,7 @@ enum DetachedIslandContentModel {
         }
     }
 
+    @MainActor
     static func route(
         for sessions: [SessionState],
         viewModel: NotchViewModel,
@@ -177,6 +178,7 @@ enum DetachedIslandContentModel {
         )
     }
 
+    @MainActor
     static func bubbleContentSize(
         for route: IslandExpandedRoute,
         sessions: [SessionState],
@@ -254,6 +256,7 @@ enum DetachedIslandContentModel {
         )
     }
 
+    @MainActor
     static func layout(
         for sessions: [SessionState],
         viewModel: NotchViewModel,
