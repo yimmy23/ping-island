@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 @MainActor
 final class IslandPresentationCoordinator {
@@ -9,24 +10,19 @@ final class IslandPresentationCoordinator {
     private var dockedWindowController: NotchWindowController?
     private var detachedWindowController: DetachedIslandWindowController?
     private var activeDetachmentPayload: IslandDetachmentPayload?
+    private var cancellables = Set<AnyCancellable>()
 
     init(screen: NSScreen) {
         self.screen = screen
         self.viewModel = Self.makeViewModel(for: screen)
         bindViewModel()
-        recreateDockedWindow(performBootAnimation: true)
+        bindSettings()
+        applySurfaceMode(AppSettings.surfaceMode, performBootAnimation: true)
     }
 
     func updateScreen(_ screen: NSScreen) {
         self.screen = screen
-
-        if viewModel.presentationMode == .detached {
-            dockedWindowController?.window?.orderOut(nil)
-            dockedWindowController = nil
-            return
-        }
-
-        recreateDockedWindow(performBootAnimation: false)
+        applySurfaceMode(AppSettings.surfaceMode, performBootAnimation: false)
     }
 
     func beginDetachment(from request: IslandDetachmentRequest) {
@@ -37,9 +33,12 @@ final class IslandPresentationCoordinator {
             sessions: sessionMonitor.instances
         )
 
-        viewModel.beginDetachedPresentation(contentType: resolvedContent)
+        viewModel.beginDetachedPresentation(contentType: resolvedContent, playSound: true)
 
-        let windowSize = DetachedIslandWindowController.windowSize(for: viewModel)
+        let windowSize = DetachedIslandWindowController.windowSize(
+            for: viewModel,
+            sessionMonitor: sessionMonitor
+        )
         let cursorWindowOffset = CGPoint(
             x: windowSize.width / 2,
             y: max(viewModel.closedHeight + 18, windowSize.height - 24)
@@ -54,15 +53,10 @@ final class IslandPresentationCoordinator {
         activeDetachmentPayload = payload
 
         dockedWindowController?.window?.orderOut(nil)
+        dockedWindowController?.close()
+        dockedWindowController = nil
 
-        let detachedWindowController = DetachedIslandWindowController(
-            viewModel: viewModel,
-            sessionMonitor: sessionMonitor,
-            onClose: { [weak self] in
-                self?.redockDetached()
-            }
-        )
-        self.detachedWindowController = detachedWindowController
+        let detachedWindowController = ensureDetachedWindowController()
 
         let origin = DetachedIslandWindowController.windowOrigin(
             for: payload.initialCursorScreenLocation,
@@ -70,6 +64,7 @@ final class IslandPresentationCoordinator {
             windowSize: windowSize
         )
         detachedWindowController.present(at: origin)
+        AppSettings.surfaceMode = .floatingPet
     }
 
     func updateDetachment(cursorLocation: CGPoint) {
@@ -87,6 +82,19 @@ final class IslandPresentationCoordinator {
 
         DispatchQueue.main.async { [weak self] in
             self?.detachedWindowController?.activateInteraction()
+            self?.persistCurrentFloatingPetAnchor()
+        }
+    }
+
+    func applySurfaceMode(
+        _ mode: IslandSurfaceMode,
+        performBootAnimation: Bool = false
+    ) {
+        switch mode {
+        case .notch:
+            showDockedIsland(performBootAnimation: performBootAnimation)
+        case .floatingPet:
+            presentFloatingPet(playSound: false)
         }
     }
 
@@ -99,6 +107,16 @@ final class IslandPresentationCoordinator {
         recreateDockedWindow(performBootAnimation: false)
     }
 
+    func invalidate() {
+        cancellables.removeAll()
+        activeDetachmentPayload = nil
+        detachedWindowController?.dismiss()
+        detachedWindowController = nil
+        dockedWindowController?.window?.orderOut(nil)
+        dockedWindowController?.close()
+        dockedWindowController = nil
+    }
+
     private func bindViewModel() {
         viewModel.onDetachmentRequested = { [weak self] request in
             self?.beginDetachment(from: request)
@@ -109,6 +127,95 @@ final class IslandPresentationCoordinator {
         viewModel.onDetachmentFinished = { [weak self] location in
             self?.finishDetachment(cursorLocation: location)
         }
+    }
+
+    private func bindSettings() {
+        AppSettings.shared.$surfaceMode
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] mode in
+                self?.applySurfaceMode(mode)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func showDockedIsland(performBootAnimation: Bool) {
+        activeDetachmentPayload = nil
+
+        if viewModel.presentationMode == .detached || detachedWindowController != nil {
+            detachedWindowController?.dismiss()
+            detachedWindowController = nil
+            viewModel.redockAfterDetached()
+        }
+
+        recreateDockedWindow(performBootAnimation: performBootAnimation)
+    }
+
+    private func presentFloatingPet(playSound: Bool) {
+        if viewModel.presentationMode == .detached, detachedWindowController != nil {
+            return
+        }
+
+        dockedWindowController?.window?.orderOut(nil)
+        dockedWindowController?.close()
+        dockedWindowController = nil
+        activeDetachmentPayload = nil
+
+        let resolvedContent = IslandDetachedContentResolver.resolve(
+            status: viewModel.status,
+            openReason: viewModel.openReason,
+            contentType: viewModel.contentType,
+            sessions: sessionMonitor.instances
+        )
+
+        viewModel.beginDetachedPresentation(
+            contentType: resolvedContent,
+            playSound: playSound
+        )
+
+        let detachedWindowController = ensureDetachedWindowController()
+        let visibleFrame = screen.visibleFrame
+        let activeWindowFrame = ActiveWindowFrameResolver.currentActiveWindowFrame()
+        let petAnchor = DetachedIslandWindowController.petAnchor(
+            from: AppSettings.floatingPetAnchor,
+            in: visibleFrame,
+            defaultWindowFrame: activeWindowFrame
+        )
+        detachedWindowController.present(atPetAnchor: petAnchor)
+        detachedWindowController.activateInteraction()
+    }
+
+    private func ensureDetachedWindowController() -> DetachedIslandWindowController {
+        if let detachedWindowController {
+            return detachedWindowController
+        }
+
+        let detachedWindowController = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: { [weak self] in
+                AppSettings.surfaceMode = .notch
+                self?.activeDetachmentPayload = nil
+            },
+            onPetAnchorChanged: { [weak self] petAnchor in
+                self?.persistFloatingPetAnchor(petAnchor)
+            }
+        )
+        self.detachedWindowController = detachedWindowController
+        return detachedWindowController
+    }
+
+    private func persistCurrentFloatingPetAnchor() {
+        guard let petAnchor = detachedWindowController?.currentPetAnchor else { return }
+        persistFloatingPetAnchor(petAnchor)
+    }
+
+    private func persistFloatingPetAnchor(_ petAnchor: CGPoint) {
+        AppSettings.floatingPetAnchor = DetachedIslandWindowController.floatingPetAnchor(
+            from: petAnchor,
+            in: screen.visibleFrame
+        )
     }
 
     private func recreateDockedWindow(performBootAnimation: Bool) {

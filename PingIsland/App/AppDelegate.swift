@@ -6,7 +6,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowManager: WindowManager?
     private var screenObserver: ScreenObserver?
     private let launchConfiguration = AppLaunchConfiguration()
+    private let startupSessionMonitor = SessionMonitor()
     private let globalShortcutManager = GlobalShortcutManager.shared
+    private var shouldPresentSettingsAfterOnboarding = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if launchConfiguration.shouldEnforceSingleInstance && !ensureSingleInstance() {
@@ -25,9 +27,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSApplication.shared.setActivationPolicy(launchConfiguration.activationPolicy)
 
-        if launchConfiguration.shouldCreateNotchWindow {
-            windowManager = WindowManager()
-            _ = windowManager?.setupNotchWindow()
+        let launchFlow = AppLaunchFlow(
+            configuration: launchConfiguration,
+            presentationModeOnboardingPending: AppSettings.presentationModeOnboardingPending
+        )
+        shouldPresentSettingsAfterOnboarding = launchFlow.shouldPresentSettingsWindowAfterOnboarding
+
+        if launchFlow.shouldStartMonitoringImmediately {
+            // Keep hook and app-server ingestion alive even when first-run onboarding
+            // defers the initial Island window.
+            startupSessionMonitor.startMonitoring()
+        }
+
+        if launchFlow.shouldCreateInitialIslandWindow {
+            startWindowManagerIfNeeded()
         }
 
         if launchConfiguration.shouldObserveScreens {
@@ -38,7 +51,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         globalShortcutManager.start()
 
-        if launchConfiguration.shouldPresentSettingsWindowOnLaunch {
+        if launchFlow.shouldPresentSurfaceModeOnboarding {
+            PresentationModeWelcomeWindowController.shared.present { [weak self] selectedMode in
+                self?.completePresentationModeOnboarding(with: selectedMode)
+            }
+        } else if launchFlow.shouldPresentSettingsWindowImmediately {
             SettingsWindowController.shared.present()
         }
         
@@ -50,11 +67,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     private func handleScreenChange() {
+        guard !AppSettings.presentationModeOnboardingPending else { return }
+        startWindowManagerIfNeeded()
+    }
+
+    @MainActor
+    private func completePresentationModeOnboarding(with selectedMode: IslandSurfaceMode) {
+        AppSettings.surfaceMode = selectedMode
+        AppSettings.presentationModeOnboardingPending = false
+        startWindowManagerIfNeeded()
+
+        if shouldPresentSettingsAfterOnboarding {
+            SettingsWindowController.shared.present()
+            shouldPresentSettingsAfterOnboarding = false
+        }
+    }
+
+    @MainActor
+    private func startWindowManagerIfNeeded() {
+        if windowManager == nil {
+            windowManager = WindowManager()
+        }
         _ = windowManager?.setupNotchWindow()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         screenObserver = nil
+        startupSessionMonitor.stopMonitoring()
     }
     private func ensureSingleInstance() -> Bool {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.wudanwu.PingIsland"

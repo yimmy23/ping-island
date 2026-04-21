@@ -9,6 +9,12 @@ import AppKit
 import Combine
 import Foundation
 
+enum AppSettingsDefaultKeys {
+    static let surfaceMode = "surfaceMode"
+    static let floatingPetAnchor = "floatingPetAnchor"
+    static let presentationModeOnboardingPending = "presentationModeOnboardingPending"
+}
+
 enum AppLanguage: String, CaseIterable, Identifiable {
     case system
     case simplifiedChinese
@@ -110,6 +116,36 @@ enum NotchDisplayMode: String, CaseIterable, Identifiable {
             return "额外显示激活会话的最新消息"
         }
     }
+}
+
+enum IslandSurfaceMode: String, CaseIterable, Identifiable {
+    case notch
+    case floatingPet
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .notch:
+            return "刘海屏方式"
+        case .floatingPet:
+            return "独立悬浮宠物"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .notch:
+            return "固定在屏幕顶部中央，沿用 Island 刘海/胶囊体验"
+        case .floatingPet:
+            return "默认贴近当前激活窗口右下角，可拖动并记住位置"
+        }
+    }
+}
+
+struct FloatingPetAnchor: Codable, Equatable {
+    let xRatio: Double
+    let yRatio: Double
 }
 
 enum SubagentVisibilityMode: String, CaseIterable, Identifiable {
@@ -257,6 +293,10 @@ final class AppSettingsStore: ObservableObject {
         static let maxPanelHeight = "maxPanelHeight"
         static let notchPetStyle = "notchPetStyle"
         static let notchDisplayMode = "notchDisplayMode"
+        static let previewMascotKind = "previewMascotKind"
+        static let surfaceMode = AppSettingsDefaultKeys.surfaceMode
+        static let floatingPetAnchor = AppSettingsDefaultKeys.floatingPetAnchor
+        static let presentationModeOnboardingPending = AppSettingsDefaultKeys.presentationModeOnboardingPending
         static let mascotOverrides = "mascotOverrides"
         static let openActiveSessionShortcut = "openActiveSessionShortcut"
         static let openSessionListShortcut = "openSessionListShortcut"
@@ -525,6 +565,34 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var previewMascotKind: MascotKind {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(previewMascotKind.rawValue, forKey: Keys.previewMascotKind)
+        }
+    }
+
+    @Published var surfaceMode: IslandSurfaceMode {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(surfaceMode.rawValue, forKey: Keys.surfaceMode)
+        }
+    }
+
+    @Published var floatingPetAnchor: FloatingPetAnchor? {
+        didSet {
+            guard !isBootstrapping else { return }
+            Self.persistValue(floatingPetAnchor, defaults: defaults, key: Keys.floatingPetAnchor)
+        }
+    }
+
+    @Published var presentationModeOnboardingPending: Bool {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(presentationModeOnboardingPending, forKey: Keys.presentationModeOnboardingPending)
+        }
+    }
+
     @Published var mascotOverrides: [String: String] {
         didSet {
             let sanitized = Self.sanitizedMascotOverrides(mascotOverrides)
@@ -785,6 +853,9 @@ final class AppSettingsStore: ObservableObject {
             : nil
         let notchPetStyleRaw = defaults.string(forKey: Keys.notchPetStyle)
         let notchDisplayModeRaw = defaults.string(forKey: Keys.notchDisplayMode)
+        let previewMascotKindRaw = defaults.string(forKey: Keys.previewMascotKind)
+        let surfaceModeRaw = defaults.string(forKey: Keys.surfaceMode)
+        let floatingPetAnchor = Self.decodeValue(FloatingPetAnchor.self, from: defaults, key: Keys.floatingPetAnchor)
         let mascotOverrideRaw = Self.mascotOverrides(from: defaults, key: Keys.mascotOverrides)
         let openActiveSessionShortcut = Self.resolvedShortcut(
             from: defaults,
@@ -935,6 +1006,15 @@ final class AppSettingsStore: ObservableObject {
         ))
         _notchPetStyle = Published(initialValue: NotchPetStyle(rawValue: notchPetStyleRaw ?? "") ?? .cat)
         _notchDisplayMode = Published(initialValue: NotchDisplayMode(rawValue: notchDisplayModeRaw ?? "") ?? .compact)
+        _previewMascotKind = Published(initialValue: MascotKind(rawValue: previewMascotKindRaw ?? "") ?? .claude)
+        _surfaceMode = Published(initialValue: IslandSurfaceMode(rawValue: surfaceModeRaw ?? "") ?? .notch)
+        _floatingPetAnchor = Published(initialValue: floatingPetAnchor)
+        _presentationModeOnboardingPending = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.presentationModeOnboardingPending,
+            exists: persistedKeys.contains(Keys.presentationModeOnboardingPending),
+            default: false
+        ))
         _mascotOverrides = Published(initialValue: Self.sanitizedMascotOverrides(mascotOverrideRaw))
         _openActiveSessionShortcut = Published(initialValue: openActiveSessionShortcut)
         _openSessionListShortcut = Published(initialValue: openSessionListShortcut)
@@ -1076,6 +1156,26 @@ enum AppSettings {
     static var notchDisplayMode: NotchDisplayMode {
         get { shared.notchDisplayMode }
         set { shared.notchDisplayMode = newValue }
+    }
+
+    static var previewMascotKind: MascotKind {
+        get { shared.previewMascotKind }
+        set { shared.previewMascotKind = newValue }
+    }
+
+    static var surfaceMode: IslandSurfaceMode {
+        get { shared.surfaceMode }
+        set { shared.surfaceMode = newValue }
+    }
+
+    static var floatingPetAnchor: FloatingPetAnchor? {
+        get { shared.floatingPetAnchor }
+        set { shared.floatingPetAnchor = newValue }
+    }
+
+    static var presentationModeOnboardingPending: Bool {
+        get { shared.presentationModeOnboardingPending }
+        set { shared.presentationModeOnboardingPending = newValue }
     }
 
     static func shortcut(for action: GlobalShortcutAction) -> GlobalShortcut? {

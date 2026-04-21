@@ -1273,7 +1273,23 @@ private struct SettingsPanelContentView: View {
                 )
                 SettingsLineDivider()
 
-                NotchDisplayModeSelector(mode: $settings.notchDisplayMode)
+                IslandSurfaceModeSelector(mode: $settings.surfaceMode)
+                SettingsLineDivider()
+
+                SettingsInfoLine(
+                    title: "默认宠物形象",
+                    subtitle: "设置展示模式和刘海示意图里使用的默认宠物。当前只影响设置内示意图。"
+                ) {
+                    DisplayPreviewMascotPicker(kind: $settings.previewMascotKind)
+                }
+
+                if settings.surfaceMode == .notch {
+                    SettingsLineDivider()
+                    NotchDisplayModeSelector(mode: $settings.notchDisplayMode)
+                } else {
+                    SettingsLineDivider()
+                    FloatingPetPlacementInfoCard()
+                }
             }
 
             SettingsSectionCard(title: "客户端形象") {
@@ -3928,6 +3944,337 @@ private struct SubagentVisibilityPicker: View {
     }
 }
 
+struct IslandSurfaceModeSelector: View {
+    @Binding var mode: IslandSurfaceMode
+    var title: String? = "展示模式"
+    var subtitle: String? = "选择 Ping Island 的主显示方式。你随时可以在设置里切换，并立即看到新的渲染效果。"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let title {
+                Text(appLocalized: title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+
+            if let subtitle {
+                Text(appLocalized: subtitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.58))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 12) {
+                ForEach(IslandSurfaceMode.allCases) { candidate in
+                    IslandSurfaceModeCard(
+                        mode: candidate,
+                        isSelected: mode == candidate
+                    ) {
+                        mode = candidate
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+    }
+}
+
+struct IslandSurfaceModeCard: View {
+    let mode: IslandSurfaceMode
+    let isSelected: Bool
+    let action: () -> Void
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(previewBackground)
+                        .aspectRatio(7.0 / 3.0, contentMode: .fit)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(previewBorder, lineWidth: 1)
+                        )
+                        .overlay {
+                            IslandSurfaceModePreviewScene(
+                                surfaceMode: mode,
+                                notchDisplayMode: settings.notchDisplayMode
+                            )
+                            .padding(12)
+                        }
+                }
+
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(appLocalized: mode.title)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+
+                        Text(appLocalized: mode.subtitle)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.62))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(isSelected ? accentColor : .white.opacity(0.26))
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(isSelected ? 0.09 : 0.035))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(isSelected ? accentColor.opacity(0.56) : Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .shadow(color: isSelected ? accentColor.opacity(0.18) : .clear, radius: 16, y: 8)
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var accentColor: Color {
+        switch mode {
+        case .notch:
+            return Color(red: 0.24, green: 0.72, blue: 0.98)
+        case .floatingPet:
+            return Color(red: 0.98, green: 0.64, blue: 0.26)
+        }
+    }
+
+    private var previewBackground: LinearGradient {
+        switch mode {
+        case .notch:
+            return LinearGradient(
+                colors: [
+                    Color(red: 0.10, green: 0.18, blue: 0.30),
+                    Color(red: 0.05, green: 0.09, blue: 0.18)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .floatingPet:
+            return LinearGradient(
+                colors: [
+                    Color(red: 0.27, green: 0.17, blue: 0.08),
+                    Color(red: 0.10, green: 0.08, blue: 0.06)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    private var previewBorder: Color {
+        isSelected ? accentColor.opacity(0.42) : Color.white.opacity(0.10)
+    }
+}
+
+private struct IslandSurfaceModePreviewScene: View {
+    let surfaceMode: IslandSurfaceMode
+    let notchDisplayMode: NotchDisplayMode
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.035))
+
+                switch surfaceMode {
+                case .notch:
+                    notchPreview(in: proxy.size)
+                case .floatingPet:
+                    floatingPreview(in: proxy.size)
+                }
+            }
+        }
+    }
+
+    private func notchPreview(in size: CGSize) -> some View {
+        let notchWidth = min(max(size.width * 0.9, 112), 168)
+        let notchHeight = min(max(size.height * 0.28, 22), 28)
+
+        return VStack(spacing: 0) {
+            NotchDisplayPreviewMock(
+                mode: notchDisplayMode,
+                mascotKind: settings.previewMascotKind,
+                width: notchWidth,
+                height: notchHeight
+            )
+            .padding(.top, 10)
+
+            Spacer(minLength: 0)
+
+            HStack {
+                Spacer()
+                Text(appLocalized: "顶部 Island")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.42))
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
+        }
+    }
+
+    private func floatingPreview(in size: CGSize) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            VStack {
+                HStack {
+                    Text(appLocalized: "右下角悬浮")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.46))
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(10)
+
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(Color.white.opacity(0.16))
+                        .frame(width: min(24, size.width * 0.10), height: 2)
+
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(Color.white.opacity(0.10))
+                        .frame(width: min(12, size.width * 0.05), height: 2)
+                }
+
+                HStack(alignment: .bottom, spacing: 3) {
+                    MascotView(
+                        kind: settings.previewMascotKind,
+                        status: .idle,
+                        size: 34
+                    )
+
+                    Text("2")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(red: 1.0, green: 0.55, blue: 0.26))
+                        .offset(y: -1)
+                }
+            }
+            .padding(.trailing, 16)
+            .padding(.bottom, 12)
+        }
+    }
+}
+
+private struct DisplayPreviewMascotPicker: View {
+    private let accessibilityTitleKey = "默认宠物形象"
+    @Binding var kind: MascotKind
+
+    var body: some View {
+        Picker(selection: $kind) {
+            ForEach(MascotKind.allCases) { candidate in
+                Text(
+                    verbatim: AppLocalization.format(
+                        "%@ · %@",
+                        AppLocalization.string(candidate.subtitle),
+                        AppLocalization.string(candidate.title)
+                    )
+                )
+                .tag(candidate)
+            }
+        } label: {
+            EmptyView()
+        }
+        .labelsHidden()
+        .accessibilityLabel(Text(verbatim: AppLocalization.string(accessibilityTitleKey)))
+        .pickerStyle(.menu)
+        .frame(minWidth: 180, alignment: .trailing)
+    }
+}
+
+private struct FloatingPetPlacementInfoCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(appLocalized: "独立悬浮宠物")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+
+            Text(appLocalized: "独立悬浮宠物默认贴近当前激活窗口右下角显示。拖动后会记住新位置，双击宠物可再次打开设置。")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.58))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+    }
+}
+
+private struct NotchDisplayPreviewMock: View {
+    let mode: NotchDisplayMode
+    let mascotKind: MascotKind
+    let width: CGFloat
+    let height: CGFloat
+
+    private let actualClosedWidth: CGFloat = 274
+    private let actualSideWidth: CGFloat = 30
+    private let actualCenterWidth: CGFloat = 186
+
+    var body: some View {
+        let sideSlotWidth = width * (actualSideWidth / actualClosedWidth)
+        let centerSlotWidth = width * (actualCenterWidth / actualClosedWidth)
+
+        return HStack(spacing: 0) {
+            HStack {
+                MascotView(kind: mascotKind, status: .idle, size: 14)
+            }
+            .frame(width: sideSlotWidth, alignment: .center)
+
+            HStack {
+                if mode == .detailed {
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 14)
+                        .overlay(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(Color.white.opacity(0.76))
+                                .frame(width: 42, height: 3)
+                                .padding(.leading, 8)
+                        }
+                        .frame(width: centerSlotWidth * 0.92, alignment: .center)
+                } else {
+                    Color.clear
+                        .frame(width: centerSlotWidth * 0.92)
+                }
+            }
+            .frame(width: centerSlotWidth, alignment: .center)
+
+            HStack {
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.12))
+                    .frame(width: 18, height: 14)
+                    .overlay(
+                        Text("3")
+                            .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.9))
+                    )
+            }
+            .frame(width: sideSlotWidth, alignment: .center)
+        }
+        .frame(width: width, height: height)
+        .background(
+            RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                .fill(Color.black.opacity(0.96))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.35), radius: 10, y: 5)
+    }
+}
+
 private struct NotchDisplayModeSelector: View {
     @Binding var mode: NotchDisplayMode
 
@@ -4055,9 +4402,6 @@ private struct NotchDisplayModeCard: View {
     @ViewBuilder
     private var previewScene: some View {
         GeometryReader { proxy in
-            let notchWidth = min(max(proxy.size.width * 0.9, 112), 168)
-            let notchHeight = min(max(proxy.size.height * 0.28, 22), 28)
-
             ZStack(alignment: .top) {
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .fill(
@@ -4072,7 +4416,12 @@ private struct NotchDisplayModeCard: View {
                     )
 
                 VStack(spacing: 0) {
-                    notchMock(width: notchWidth, height: notchHeight)
+                    NotchDisplayPreviewMock(
+                        mode: mode,
+                        mascotKind: settings.previewMascotKind,
+                        width: min(max(proxy.size.width * 0.9, 112), 168),
+                        height: min(max(proxy.size.height * 0.28, 22), 28)
+                    )
                         .padding(.top, 10)
 
                     Spacer(minLength: 0)
@@ -4088,74 +4437,6 @@ private struct NotchDisplayModeCard: View {
                 }
             }
         }
-    }
-
-    private func notchMock(width: CGFloat, height: CGFloat) -> some View {
-        let actualClosedWidth: CGFloat = 274
-        let actualSideWidth: CGFloat = 30
-        let actualCenterWidth: CGFloat = 186
-        let sideSlotWidth = width * (actualSideWidth / actualClosedWidth)
-        let centerSlotWidth = width * (actualCenterWidth / actualClosedWidth)
-
-        return HStack(spacing: 0) {
-            HStack {
-                petMock
-            }
-            .frame(width: sideSlotWidth, alignment: .center)
-
-            HStack {
-                if mode == .detailed {
-                    processMock
-                        .frame(width: centerSlotWidth * 0.92, alignment: .center)
-                } else {
-                    Color.clear
-                        .frame(width: centerSlotWidth * 0.92)
-                }
-            }
-            .frame(width: centerSlotWidth, alignment: .center)
-
-            HStack {
-                countMock
-            }
-            .frame(width: sideSlotWidth, alignment: .center)
-        }
-        .frame(width: width, height: height)
-        .background(
-            RoundedRectangle(cornerRadius: height / 2, style: .continuous)
-                .fill(Color.black.opacity(0.96))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: height / 2, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.35), radius: 10, y: 5)
-    }
-
-    private var petMock: some View {
-        MascotView(kind: settings.mascotKind(for: .claude), status: .idle, size: 14)
-    }
-
-    private var processMock: some View {
-        Capsule(style: .continuous)
-            .fill(Color.white.opacity(0.12))
-            .frame(height: 14)
-            .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color.white.opacity(0.76))
-                    .frame(width: 42, height: 3)
-                    .padding(.leading, 8)
-            }
-    }
-
-    private var countMock: some View {
-        Capsule(style: .continuous)
-            .fill(Color.white.opacity(0.12))
-            .frame(width: 18, height: 14)
-            .overlay(
-                Text("3")
-                    .font(.system(size: 8.5, weight: .bold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.9))
-            )
     }
 }
 

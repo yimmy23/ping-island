@@ -61,6 +61,55 @@ final class AppLaunchConfigurationTests: XCTestCase {
         XCTAssertEqual(configuration.activationPolicy, .accessory)
     }
 
+    func testLaunchFlowDefersMainWindowUntilPresentationModeOnboardingCompletes() {
+        let configuration = AppLaunchConfiguration(environment: [:], isDebuggerAttached: false)
+
+        let flow = AppLaunchFlow(
+            configuration: configuration,
+            presentationModeOnboardingPending: true
+        )
+
+        XCTAssertTrue(flow.shouldStartMonitoringImmediately)
+        XCTAssertTrue(flow.shouldPresentSurfaceModeOnboarding)
+        XCTAssertFalse(flow.shouldCreateInitialIslandWindow)
+        XCTAssertFalse(flow.shouldPresentSettingsWindowImmediately)
+        XCTAssertFalse(flow.shouldPresentSettingsWindowAfterOnboarding)
+    }
+
+    func testLaunchFlowDefersSettingsWindowUntilAfterOnboardingWhenRequested() {
+        let configuration = AppLaunchConfiguration(
+            environment: ["PING_ISLAND_SHOW_SETTINGS_ON_LAUNCH": "1"],
+            isDebuggerAttached: false
+        )
+
+        let flow = AppLaunchFlow(
+            configuration: configuration,
+            presentationModeOnboardingPending: true
+        )
+
+        XCTAssertTrue(flow.shouldStartMonitoringImmediately)
+        XCTAssertTrue(flow.shouldPresentSurfaceModeOnboarding)
+        XCTAssertFalse(flow.shouldCreateInitialIslandWindow)
+        XCTAssertFalse(flow.shouldPresentSettingsWindowImmediately)
+        XCTAssertTrue(flow.shouldPresentSettingsWindowAfterOnboarding)
+    }
+
+    func testLaunchFlowKeepsMonitoringDisabledWhileRunningTests() {
+        let configuration = AppLaunchConfiguration(
+            environment: ["XCTestConfigurationFilePath": "/tmp/test.xctestconfiguration"],
+            isDebuggerAttached: false
+        )
+
+        let flow = AppLaunchFlow(
+            configuration: configuration,
+            presentationModeOnboardingPending: false
+        )
+
+        XCTAssertFalse(flow.shouldStartMonitoringImmediately)
+        XCTAssertFalse(flow.shouldPresentSurfaceModeOnboarding)
+        XCTAssertFalse(flow.shouldCreateInitialIslandWindow)
+    }
+
     func testMouseEventReplayMarkerDistinguishesSyntheticEvents() {
         let location = CGPoint(x: 120, y: 48)
         let originalEvent = CGEvent(

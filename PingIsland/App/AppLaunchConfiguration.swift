@@ -44,3 +44,24 @@ struct AppLaunchConfiguration: Equatable {
         return (info.kp_proc.p_flag & P_TRACED) != 0
     }
 }
+
+struct AppLaunchFlow: Equatable {
+    let shouldStartMonitoringImmediately: Bool
+    let shouldPresentSurfaceModeOnboarding: Bool
+    let shouldCreateInitialIslandWindow: Bool
+    let shouldPresentSettingsWindowImmediately: Bool
+    let shouldPresentSettingsWindowAfterOnboarding: Bool
+
+    init(
+        configuration: AppLaunchConfiguration,
+        presentationModeOnboardingPending: Bool
+    ) {
+        let shouldPresentOnboarding = configuration.shouldCreateNotchWindow && presentationModeOnboardingPending
+
+        self.shouldStartMonitoringImmediately = !configuration.isRunningTests
+        self.shouldPresentSurfaceModeOnboarding = shouldPresentOnboarding
+        self.shouldCreateInitialIslandWindow = configuration.shouldCreateNotchWindow && !shouldPresentOnboarding
+        self.shouldPresentSettingsWindowImmediately = configuration.shouldPresentSettingsWindowOnLaunch && !shouldPresentOnboarding
+        self.shouldPresentSettingsWindowAfterOnboarding = configuration.shouldPresentSettingsWindowOnLaunch && shouldPresentOnboarding
+    }
+}
