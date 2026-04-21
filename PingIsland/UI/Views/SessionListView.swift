@@ -463,7 +463,7 @@ struct InstanceRow: View {
     }
 
     var body: some View {
-        HStack(alignment: usesSingleLineCompactLayout ? .center : .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             leadingContent
 
             if isCodexSubagentCompactPresentation {
@@ -487,38 +487,8 @@ struct InstanceRow: View {
                             fontDesign: .monospaced
                         )
                         metaBadge(providerLabel, tint: providerColor.opacity(0.2))
-                        if showsNativeRuntimeBadge {
-                            metaBadge(
-                                "NATIVE",
-                                tint: Color.white.opacity(0.12),
-                                foreground: .white.opacity(0.92),
-                                fontDesign: .monospaced
-                            )
-                        }
-                        if let codexSubagentBadgeText = session.codexSubagentBadgeText {
-                            metaBadge(
-                                codexSubagentBadgeText,
-                                tint: Color.white.opacity(0.12),
-                                foreground: .white.opacity(0.9),
-                                fontDesign: .monospaced
-                            )
-                        }
-                        if session.isRemoteSession {
-                            remoteSessionBadge()
-                        }
-                        if let ideHostBadgeLabel = session.ideHostBadgeLabel {
-                            metaBadge(
-                                ideHostBadgeLabel,
-                                tint: ideHostBadgeTint,
-                                foreground: .white.opacity(0.9)
-                            )
-                        }
-                        if let terminalSourceLabel {
-                            metaBadge(
-                                terminalSourceLabel,
-                                tint: terminalBadgeTint,
-                                foreground: .white.opacity(0.9)
-                            )
+                        if let primarySupplementaryBadge {
+                            supplementaryBadgeView(primarySupplementaryBadge)
                         }
                     }
 
@@ -590,7 +560,7 @@ struct InstanceRow: View {
     }
 
     private var baseLeadingContent: some View {
-        HStack(alignment: usesSingleLineCompactLayout ? .center : .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             avatarView
 
             VStack(alignment: .leading, spacing: usesSingleLineCompactLayout ? 0 : 5) {
@@ -715,6 +685,50 @@ struct InstanceRow: View {
         Color.white.opacity(0.1)
     }
 
+    private enum SupplementaryBadge {
+        case text(String, tint: Color, foreground: Color, fontDesign: Font.Design)
+        case remote
+    }
+
+    private var primarySupplementaryBadge: SupplementaryBadge? {
+        if showsNativeRuntimeBadge {
+            return .text(
+                "NATIVE",
+                tint: Color.white.opacity(0.12),
+                foreground: .white.opacity(0.92),
+                fontDesign: .monospaced
+            )
+        }
+        if let codexSubagentBadgeText = session.codexSubagentBadgeText {
+            return .text(
+                codexSubagentBadgeText,
+                tint: Color.white.opacity(0.12),
+                foreground: .white.opacity(0.9),
+                fontDesign: .monospaced
+            )
+        }
+        if session.isRemoteSession {
+            return .remote
+        }
+        if let ideHostBadgeLabel = session.ideHostBadgeLabel {
+            return .text(
+                ideHostBadgeLabel,
+                tint: ideHostBadgeTint,
+                foreground: .white.opacity(0.9),
+                fontDesign: .default
+            )
+        }
+        if let terminalSourceLabel {
+            return .text(
+                terminalSourceLabel,
+                tint: terminalBadgeTint,
+                foreground: .white.opacity(0.9),
+                fontDesign: .default
+            )
+        }
+        return nil
+    }
+
     private var rowBackgroundColor: Color {
         if isSelected {
             if session.needsQuestionResponse {
@@ -813,38 +827,8 @@ struct InstanceRow: View {
                 foreground: .white.opacity(0.86),
                 compact: true
             )
-
-            if showsNativeRuntimeBadge {
-                metaBadge(
-                    "NATIVE",
-                    tint: Color.white.opacity(0.12),
-                    foreground: .white.opacity(0.9),
-                    fontDesign: .monospaced,
-                    compact: true
-                )
-            }
-
-            if let codexSubagentBadgeText = session.codexSubagentBadgeText {
-                metaBadge(
-                    codexSubagentBadgeText,
-                    tint: Color.white.opacity(0.12),
-                    foreground: .white.opacity(0.9),
-                    fontDesign: .monospaced,
-                    compact: true
-                )
-            }
-
-            if session.isRemoteSession {
-                remoteSessionBadge(compact: true)
-            }
-
-            if let terminalSourceLabel {
-                metaBadge(
-                    terminalSourceLabel,
-                    tint: terminalBadgeTint,
-                    foreground: .white.opacity(0.82),
-                    compact: true
-                )
+            if let primarySupplementaryBadge {
+                supplementaryBadgeView(primarySupplementaryBadge, compact: true)
             }
         }
     }
@@ -1122,11 +1106,11 @@ struct InstanceRow: View {
         compact: Bool = false
     ) -> some View {
         Text(text)
-            .font(.system(size: compact ? 9 : 10, weight: .semibold, design: fontDesign))
+            .font(.system(size: compact ? 7 : 8, weight: .semibold, design: fontDesign))
             .monospacedDigit()
             .foregroundColor(foreground)
-            .padding(.horizontal, compact ? 6 : 8)
-            .padding(.vertical, compact ? 2 : 4)
+            .padding(.horizontal, compact ? 5 : 6)
+            .padding(.vertical, compact ? 1 : 3)
             .background(tint)
             .clipShape(Capsule())
     }
@@ -1143,6 +1127,25 @@ struct InstanceRow: View {
                     .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
             )
             .help(AppLocalization.string("远程连接"))
+    }
+
+    @ViewBuilder
+    private func supplementaryBadgeView(
+        _ badge: SupplementaryBadge,
+        compact: Bool = false
+    ) -> some View {
+        switch badge {
+        case .text(let text, let tint, let foreground, let fontDesign):
+            metaBadge(
+                text,
+                tint: tint,
+                foreground: foreground,
+                fontDesign: fontDesign,
+                compact: compact
+            )
+        case .remote:
+            remoteSessionBadge(compact: compact)
+        }
     }
 
     private var compactDetailSummary: String? {

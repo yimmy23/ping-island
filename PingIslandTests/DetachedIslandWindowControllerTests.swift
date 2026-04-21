@@ -99,7 +99,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
             containerSize: CGSize(width: 92, height: 164),
             petFrame: CGRect(x: 0, y: 36, width: 92, height: 92),
             bubbleFrame: CGRect(x: 104, y: 12, width: 280, height: 140),
-            bubbleDirection: .right,
+            bubblePlacement: .topRight,
             petAnchorInWindow: CGPoint(x: 46, y: 82),
             bubbleContentMode: .hoverPreview
         )
@@ -116,6 +116,26 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         let translation = DetachedIslandWindowController.floatingDragTranslation(
             from: CGPoint(x: 400, y: 600),
             to: CGPoint(x: 438, y: 572)
+        )
+
+        XCTAssertEqual(translation.width, 38, accuracy: 0.5)
+        XCTAssertEqual(translation.height, -28, accuracy: 0.5)
+    }
+
+    func testQuartzScreenCoordinatesConvertToPositiveUpwardFloatingDragTranslation() {
+        let screenBounds = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let start = MouseEventReplay.appKitScreenLocation(
+            fromQuartzScreenLocation: CGPoint(x: 400, y: 600),
+            screenBounds: screenBounds
+        )
+        let current = MouseEventReplay.appKitScreenLocation(
+            fromQuartzScreenLocation: CGPoint(x: 438, y: 572),
+            screenBounds: screenBounds
+        )
+
+        let translation = DetachedIslandWindowController.floatingDragTranslation(
+            from: start,
+            to: current
         )
 
         XCTAssertEqual(translation.width, 38, accuracy: 0.5)
@@ -145,7 +165,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         controller.endFloatingDrag()
 
         XCTAssertEqual(window.frame.origin.x, 204, accuracy: 0.5)
-        XCTAssertEqual(window.frame.origin.y, 404, accuracy: 0.5)
+        XCTAssertEqual(window.frame.origin.y, 436, accuracy: 0.5)
     }
 
     func testFloatingDragKeepsMouseEventsEnabled() throws {
@@ -166,6 +186,33 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         controller.beginFloatingDrag()
 
         XCTAssertFalse(window.ignoresMouseEvents)
+    }
+
+    func testBeginFloatingDragPreservesPetAnchorWhenHoverBubbleIsVisible() throws {
+        let viewModel = makeViewModel()
+        let sessionMonitor = SessionMonitor()
+        sessionMonitor.instances = [
+            makeSession(id: "active", phase: .processing)
+        ]
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        defer { controller.dismiss() }
+
+        controller.present(atPetAnchor: CGPoint(x: 1260, y: 180))
+        controller.presentHoverBubbleForTesting()
+
+        let beforeAnchor = try XCTUnwrap(controller.currentPetAnchor)
+        controller.beginFloatingDrag()
+        let afterAnchor = try XCTUnwrap(controller.currentPetAnchor)
+
+        XCTAssertEqual(beforeAnchor.x, afterAnchor.x, accuracy: 0.5)
+        XCTAssertEqual(beforeAnchor.y, afterAnchor.y, accuracy: 0.5)
+        XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
+        XCTAssertFalse(controller.isBubbleVisibleForTesting)
     }
 
     func testPetSecondaryClickPresentsSettingsWindow() throws {
@@ -255,14 +302,66 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         XCTAssertEqual(DetachedIslandContentModel.activeCount(from: sessions), 1)
     }
 
-    func testBubbleDirectionUsesPetSideOfScreen() {
+    func testBubblePlacementPriorityPrefersTopLeftWhenItFits() {
         XCTAssertEqual(
-            DetachedIslandContentModel.bubbleDirection(for: 220, screenMidX: 720),
-            .right
+            DetachedIslandContentModel.preferredBubblePlacement(
+                for: CGPoint(x: 980, y: 320),
+                bubbleSize: CGSize(width: 280, height: 180),
+                availableFrame: CGRect(x: 0, y: 0, width: 1440, height: 900)
+            ),
+            .topLeft
+        )
+    }
+
+    func testBubblePlacementFallsBackToTopRightWhenLeftSpaceIsTight() {
+        XCTAssertEqual(
+            DetachedIslandContentModel.preferredBubblePlacement(
+                for: CGPoint(x: 180, y: 320),
+                bubbleSize: CGSize(width: 280, height: 180),
+                availableFrame: CGRect(x: 0, y: 0, width: 1440, height: 900)
+            ),
+            .topRight
+        )
+    }
+
+    func testBubblePlacementFallsBackToBottomLeftWhenTopRowDoesNotFit() {
+        XCTAssertEqual(
+            DetachedIslandContentModel.preferredBubblePlacement(
+                for: CGPoint(x: 980, y: 760),
+                bubbleSize: CGSize(width: 280, height: 180),
+                availableFrame: CGRect(x: 0, y: 0, width: 1440, height: 900)
+            ),
+            .bottomLeft
+        )
+    }
+
+    func testBubblePlacementFallsBackToBottomRightWhenOnlyTrailingBottomFits() {
+        XCTAssertEqual(
+            DetachedIslandContentModel.preferredBubblePlacement(
+                for: CGPoint(x: 180, y: 760),
+                bubbleSize: CGSize(width: 280, height: 180),
+                availableFrame: CGRect(x: 0, y: 0, width: 1440, height: 900)
+            ),
+            .bottomRight
+        )
+    }
+
+    func testBubblePlacementMapsTrimmedCornerToPetFacingEdge() {
+        XCTAssertEqual(
+            DetachedIslandBubblePlacement.topLeft.trimmedCorner,
+            .bottomTrailing
         )
         XCTAssertEqual(
-            DetachedIslandContentModel.bubbleDirection(for: 980, screenMidX: 720),
-            .left
+            DetachedIslandBubblePlacement.topRight.trimmedCorner,
+            .bottomLeading
+        )
+        XCTAssertEqual(
+            DetachedIslandBubblePlacement.bottomLeft.trimmedCorner,
+            .topTrailing
+        )
+        XCTAssertEqual(
+            DetachedIslandBubblePlacement.bottomRight.trimmedCorner,
+            .topLeading
         )
     }
 
@@ -364,6 +463,39 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         XCTAssertLessThan(mixedHeight, activeOnlyHeight)
     }
 
+    func testAttentionBubbleUsesMeasuredHeightBeforeFallback() {
+        let viewModel = makeViewModel()
+        let attention = makeSession(
+            id: "approval",
+            phase: .waitingForApproval(
+                PermissionContext(
+                    toolUseId: "tool-1",
+                    toolName: "Bash",
+                    toolInput: [
+                        "command": AnyCodable("cat very-long-file.txt")
+                    ],
+                    receivedAt: Date()
+                )
+            )
+        )
+
+        let measuredHeight = DetachedIslandContentModel.bubbleContentSize(
+            for: .attentionNotification(attention),
+            sessions: [attention],
+            viewModel: viewModel,
+            measuredAttentionBubbleHeight: 420
+        ).height
+        let cappedHeight = DetachedIslandContentModel.bubbleContentSize(
+            for: .attentionNotification(attention),
+            sessions: [attention],
+            viewModel: viewModel,
+            measuredAttentionBubbleHeight: 1_200
+        ).height
+
+        XCTAssertEqual(measuredHeight, 420, accuracy: 0.5)
+        XCTAssertEqual(cappedHeight, 740, accuracy: 0.5)
+    }
+
     func testNewAttentionAutoOpensHoverBubble() {
         let attention = makeSession(
             id: "attention",
@@ -384,6 +516,107 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
         XCTAssertEqual(target, attention)
         XCTAssertEqual(interactionModel.bubbleContentMode, .hoverPreview)
+    }
+
+    func testPresentAutoOpensAttentionBubbleForExistingNotification() {
+        let viewModel = makeViewModel()
+        let attention = makeSession(
+            id: "attention",
+            phase: .waitingForInput,
+            intervention: makeIntervention(
+                id: "question-1",
+                kind: .question,
+                message: "Need your answer"
+            )
+        )
+        let sessionMonitor = SessionMonitor()
+        sessionMonitor.instances = [attention]
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        defer { controller.dismiss() }
+
+        controller.present(atPetAnchor: CGPoint(x: 1200, y: 220))
+
+        let bubblePresented = expectation(description: "existing attention bubble auto-opens")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            XCTAssertEqual(controller.renderedBubbleStateForTesting, .hoverPreview)
+            XCTAssertTrue(controller.isBubbleVisibleForTesting)
+            XCTAssertEqual(controller.currentExpandedRoute, .attentionNotification(attention))
+            bubblePresented.fulfill()
+        }
+
+        wait(for: [bubblePresented], timeout: 1.0)
+    }
+
+    func testNewAttentionSessionAutoOpensBubbleInFloatingMode() {
+        let viewModel = makeViewModel()
+        let sessionMonitor = SessionMonitor()
+        sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        defer { controller.dismiss() }
+
+        controller.present(atPetAnchor: CGPoint(x: 1200, y: 220))
+
+        let attention = makeSession(
+            id: "attention",
+            phase: .waitingForInput,
+            intervention: makeIntervention(
+                id: "question-1",
+                kind: .question,
+                message: "Need your answer"
+            )
+        )
+        controller.applySessionSnapshotForTesting([attention, makeSession(id: "active", phase: .processing)])
+
+        let bubblePresented = expectation(description: "new attention bubble auto-opens")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            XCTAssertEqual(controller.renderedBubbleStateForTesting, .hoverPreview)
+            XCTAssertTrue(controller.isBubbleVisibleForTesting)
+            XCTAssertEqual(controller.currentExpandedRoute, .attentionNotification(attention))
+            bubblePresented.fulfill()
+        }
+
+        wait(for: [bubblePresented], timeout: 1.0)
+    }
+
+    func testDismissAttentionBubbleHidesHoverPreview() {
+        let viewModel = makeViewModel()
+        let sessionMonitor = SessionMonitor()
+        sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        defer { controller.dismiss() }
+
+        controller.present(atPetAnchor: CGPoint(x: 1200, y: 220))
+        controller.presentHoverBubbleForTesting()
+
+        XCTAssertEqual(controller.renderedBubbleStateForTesting, .hoverPreview)
+        XCTAssertTrue(controller.isBubbleVisibleForTesting)
+
+        controller.dismissAttentionBubble()
+
+        XCTAssertFalse(controller.isBubbleVisibleForTesting)
+
+        let bubbleDismissed = expectation(description: "attention bubble fully dismisses")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
+            bubbleDismissed.fulfill()
+        }
+
+        wait(for: [bubbleDismissed], timeout: 1.0)
     }
 
     func testPinnedBubbleKeepsSessionListAndHighlightStateSeparateFromRoute() {
@@ -419,56 +652,12 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         XCTAssertEqual(bubbleViewState.highlightedSessionStableID, attention.stableId)
     }
 
-    func testHoverBubbleBottomAlignsWithPetWhenBubblePointsRight() throws {
-        let active = makeSession(id: "active", phase: .processing)
-
-        let layout = DetachedIslandContentModel.layout(
-            for: [active],
-            viewModel: makeViewModel(),
-            bubbleState: .hoverPreview,
-            bubbleDirection: .right
-        )
-
-        let bubbleFrame = try XCTUnwrap(layout.bubbleFrame)
-        XCTAssertEqual(bubbleFrame.maxY, layout.petFrame.maxY, accuracy: 0.5)
-        XCTAssertLessThan(bubbleFrame.minY, layout.petFrame.minY)
-        XCTAssertEqual(
-            bubbleFrame.minX - layout.petFrame.maxX,
-            DetachedIslandPanelMetrics.bubbleGap,
-            accuracy: 0.5
-        )
-    }
-
-    func testHoverBubbleBottomAlignsWithPetWhenBubblePointsLeft() throws {
-        let active = makeSession(id: "active", phase: .processing)
-
-        let layout = DetachedIslandContentModel.layout(
-            for: [active],
-            viewModel: makeViewModel(),
-            bubbleState: .hoverPreview,
-            bubbleDirection: .left
-        )
-
-        let bubbleFrame = try XCTUnwrap(layout.bubbleFrame)
-        XCTAssertEqual(
-            layout.petFrame.maxY - bubbleFrame.maxY,
-            DetachedIslandPanelMetrics.leftBubbleVerticalLift,
-            accuracy: 0.5
-        )
-        XCTAssertLessThan(bubbleFrame.minY, layout.petFrame.minY)
-        XCTAssertEqual(
-            layout.petFrame.minX - bubbleFrame.maxX,
-            DetachedIslandPanelMetrics.leftBubbleGap,
-            accuracy: 0.5
-        )
-    }
-
     func testWindowOriginPreservesPetAnchorWhenBubbleExpandsRight() {
         let hiddenLayout = DetachedIslandWindowLayout(
             containerSize: CGSize(width: 92, height: 92),
             petFrame: CGRect(x: 0, y: 0, width: 92, height: 92),
             bubbleFrame: nil,
-            bubbleDirection: .right,
+            bubblePlacement: .topRight,
             petAnchorInWindow: CGPoint(x: 46, y: 46),
             bubbleContentMode: nil
         )
@@ -479,7 +668,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
             containerSize: CGSize(width: 464, height: 164),
             petFrame: CGRect(x: 0, y: 36, width: 92, height: 92),
             bubbleFrame: CGRect(x: 104, y: 12, width: 360, height: 140),
-            bubbleDirection: .right,
+            bubblePlacement: .topRight,
             petAnchorInWindow: CGPoint(x: 46, y: 82),
             bubbleContentMode: .hoverPreview
         )
@@ -513,7 +702,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
             containerSize: CGSize(width: 92, height: 92),
             petFrame: CGRect(x: 0, y: 0, width: 92, height: 92),
             bubbleFrame: nil,
-            bubbleDirection: .left,
+            bubblePlacement: .bottomLeft,
             petAnchorInWindow: CGPoint(x: 46, y: 46),
             bubbleContentMode: nil
         )
@@ -522,10 +711,10 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
         let expandedLayout = DetachedIslandWindowLayout(
             containerSize: CGSize(width: 464, height: 164),
-            petFrame: CGRect(x: 372, y: 36, width: 92, height: 92),
-            bubbleFrame: CGRect(x: 0, y: 12, width: 360, height: 140),
-            bubbleDirection: .left,
-            petAnchorInWindow: CGPoint(x: 418, y: 82),
+            petFrame: CGRect(x: 372, y: 0, width: 92, height: 92),
+            bubbleFrame: CGRect(x: 0, y: 24, width: 360, height: 140),
+            bubblePlacement: .bottomLeft,
+            petAnchorInWindow: CGPoint(x: 418, y: 46),
             bubbleContentMode: .hoverPreview
         )
 

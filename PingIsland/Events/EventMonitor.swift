@@ -18,6 +18,17 @@ enum MouseEventReplay {
         event.setIntegerValueField(.eventSourceUserData, value: marker)
     }
 
+    static func appKitScreenLocation(
+        for event: NSEvent,
+        fallbackScreenLocation: NSPoint? = nil
+    ) -> CGPoint {
+        if let cgLocation = event.cgEvent?.location {
+            return appKitScreenLocation(fromQuartzScreenLocation: cgLocation)
+        }
+
+        return fallbackScreenLocation ?? .zero
+    }
+
     static func repostLocation(for event: NSEvent, fallbackScreenLocation: NSPoint? = nil) -> CGPoint {
         if let cgLocation = event.cgEvent?.location {
             return cgLocation
@@ -27,20 +38,46 @@ enum MouseEventReplay {
             return .zero
         }
 
+        return quartzScreenLocation(fromAppKitScreenLocation: fallbackScreenLocation)
+    }
+
+    static func appKitScreenLocation(
+        fromQuartzScreenLocation location: CGPoint,
+        screenBounds: CGRect? = nil
+    ) -> CGPoint {
+        guard let bounds = resolvedScreenBounds(fallback: screenBounds) else {
+            return location
+        }
+
+        return CGPoint(
+            x: location.x,
+            y: bounds.maxY - location.y
+        )
+    }
+
+    private static func quartzScreenLocation(fromAppKitScreenLocation location: CGPoint) -> CGPoint {
+        guard let bounds = resolvedScreenBounds() else {
+            return location
+        }
+
+        return CGPoint(
+            x: location.x,
+            y: bounds.maxY - location.y
+        )
+    }
+
+    private static func resolvedScreenBounds(fallback: CGRect? = nil) -> CGRect? {
         let screenBounds = NSScreen.screens
             .map(\.frame)
             .reduce(CGRect.null) { partial, frame in
                 partial.union(frame)
             }
 
-        guard !screenBounds.isNull else {
-            return CGPoint(x: fallbackScreenLocation.x, y: fallbackScreenLocation.y)
+        if !screenBounds.isNull {
+            return screenBounds
         }
 
-        return CGPoint(
-            x: fallbackScreenLocation.x,
-            y: screenBounds.maxY - fallbackScreenLocation.y
-        )
+        return fallback
     }
 }
 

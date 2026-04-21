@@ -21,7 +21,7 @@
   </a>
   <img src="https://img.shields.io/badge/macOS-14%2B-0A84FF?style=flat-square&logo=apple&logoColor=white" alt="macOS 14 or later">
   <img src="https://img.shields.io/badge/Swift-6.1-FA7343?style=flat-square&logo=swift&logoColor=white" alt="Swift 6.1">
-  <img src="https://img.shields.io/badge/Clients-9%2B-111827?style=flat-square" alt="Supports 9 plus client families">
+  <img src="https://img.shields.io/badge/Clients-11%2B-111827?style=flat-square" alt="Supports 11 plus client families">
   <img src="https://img.shields.io/badge/License-Apache%202.0-4F46E5?style=flat-square" alt="Apache 2.0 license">
 </p>
 

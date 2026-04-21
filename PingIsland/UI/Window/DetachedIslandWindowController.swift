@@ -70,10 +70,21 @@ final class DetachedIslandViewController: NSViewController {
     private let interactionModel: DetachedIslandInteractionModel
     private let bubbleViewState: DetachedIslandBubbleViewState
     private let onClose: () -> Void
-    var onPetTap: () -> Void = {}
-    var onPetDragStarted: () -> Void = {}
-    var onPetDragChanged: (CGSize) -> Void = { _ in }
-    var onPetDragEnded: () -> Void = {}
+    var onPetTap: () -> Void = {} {
+        didSet { refreshRootViewIfLoaded() }
+    }
+    var onPetDragStarted: () -> Void = {} {
+        didSet { refreshRootViewIfLoaded() }
+    }
+    var onPetDragChanged: (CGSize) -> Void = { _ in } {
+        didSet { refreshRootViewIfLoaded() }
+    }
+    var onPetDragEnded: () -> Void = {} {
+        didSet { refreshRootViewIfLoaded() }
+    }
+    var onAttentionActionCompleted: () -> Void = {} {
+        didSet { refreshRootViewIfLoaded() }
+    }
     private var hostingView: TransparentHostingView<AppLocalizedRootView<DetachedIslandPanelView>>!
 
     init(
@@ -112,9 +123,15 @@ final class DetachedIslandViewController: NSViewController {
                 onPetTap: onPetTap,
                 onPetDragStarted: onPetDragStarted,
                 onPetDragChanged: onPetDragChanged,
-                onPetDragEnded: onPetDragEnded
+                onPetDragEnded: onPetDragEnded,
+                onAttentionActionCompleted: onAttentionActionCompleted
             )
         }
+    }
+
+    private func refreshRootViewIfLoaded() {
+        guard hostingView != nil else { return }
+        hostingView.rootView = makeRootView()
     }
 }
 
@@ -200,9 +217,14 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         super.init(window: window)
 
         hostingController.onPetTap = { [weak interactionModel, weak sessionMonitor] in
-            interactionModel?.togglePinned(
-                canPresentBubble: DetachedIslandContentModel.canPresentBubble(
-                    from: sessionMonitor?.instances ?? [],
+            let sessions = sessionMonitor?.instances ?? []
+            interactionModel?.togglePrimaryBubble(
+                canPresentPreview: DetachedIslandContentModel.canPresentBubble(
+                    from: sessions,
+                    mode: .hoverPreview
+                ),
+                canPresentPinnedBubble: DetachedIslandContentModel.canPresentBubble(
+                    from: sessions,
                     mode: .pinnedList
                 )
             )
@@ -215,6 +237,9 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         }
         hostingController.onPetDragEnded = { [weak self] in
             self?.endFloatingDrag()
+        }
+        hostingController.onAttentionActionCompleted = { [weak self] in
+            self?.dismissAttentionBubble()
         }
         window.petMouseDownHandler = { [weak self] event in
             self?.handlePetMouseDown(event) ?? false
@@ -247,14 +272,15 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             for: viewModel,
             sessionMonitor: sessionMonitor,
             bubbleState: bubbleViewState.renderedBubbleState,
-            bubbleDirection: interactionModel.bubbleDirection
+            bubblePlacement: interactionModel.bubblePlacement,
+            measuredAttentionBubbleHeight: bubbleViewState.measuredAttentionBubbleHeight
         )
         let initialFrame = NSRect(
             origin: origin,
             size: lastAppliedLayout.containerSize
         )
         window.setFrame(initialFrame, display: false)
-        updateBubbleDirectionForCurrentWindow()
+        updateBubblePlacementForCurrentWindow()
         NSApp.activate(ignoringOtherApps: false)
         showWindow(nil)
         window.makeKeyAndOrderFront(nil)
@@ -268,7 +294,10 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             for: viewModel,
             sessionMonitor: sessionMonitor,
             bubbleState: bubbleViewState.renderedBubbleState,
-            bubbleDirection: interactionModel.bubbleDirection
+            bubblePlacement: interactionModel.bubblePlacement,
+            measuredAttentionBubbleHeight: bubbleViewState.measuredAttentionBubbleHeight,
+            petAnchorScreen: petAnchor,
+            availableFrame: availableFrame(for: petAnchor)
         )
         let origin = Self.windowOrigin(
             preservingPetAnchorAt: petAnchor,
@@ -276,7 +305,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         )
         let frame = NSRect(origin: origin, size: lastAppliedLayout.containerSize)
         window.setFrame(frame, display: false)
-        updateBubbleDirectionForCurrentWindow()
+        updateBubblePlacementForCurrentWindow()
         NSApp.activate(ignoringOtherApps: false)
         showWindow(nil)
         window.makeKeyAndOrderFront(nil)
@@ -325,7 +354,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             windowSize: contentSize
         )
         window.setFrameOrigin(origin)
-        updateBubbleDirectionForCurrentWindow()
+        updateBubblePlacementForCurrentWindow()
     }
 
     func beginFloatingDrag() {
@@ -346,10 +375,10 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         guard let startOrigin = floatingDragStartOrigin else { return }
         let origin = CGPoint(
             x: startOrigin.x + translation.width,
-            y: startOrigin.y - translation.height
+            y: startOrigin.y + translation.height
         )
         window.setFrameOrigin(origin)
-        updateBubbleDirectionForCurrentWindow()
+        updateBubblePlacementForCurrentWindow()
     }
 
     func endFloatingDrag() {
@@ -391,6 +420,10 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         syncBubblePresentation(to: interactionModel.bubbleState)
         syncOutsideClickMonitor()
         reconcileHighlightedSessionState()
+    }
+
+    func dismissAttentionBubble() {
+        interactionModel.hidePinnedBubble()
     }
 
     var renderedBubbleStateForTesting: DetachedIslandBubbleState {
@@ -444,6 +477,15 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             }
             .store(in: &cancellables)
 
+        bubbleViewState.$measuredAttentionBubbleHeight
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.scheduleWindowSizeUpdate()
+            }
+            .store(in: &cancellables)
+
         interactionModel.$bubbleState
             .dropFirst()
             .removeDuplicates()
@@ -455,7 +497,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             }
             .store(in: &cancellables)
 
-        interactionModel.$bubbleDirection
+        interactionModel.$bubblePlacement
             .dropFirst()
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -509,8 +551,12 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             for: viewModel,
             sessionMonitor: sessionMonitor,
             bubbleState: bubbleViewState.renderedBubbleState,
-            bubbleDirection: interactionModel.bubbleDirection
+            bubblePlacement: interactionModel.bubblePlacement,
+            measuredAttentionBubbleHeight: bubbleViewState.measuredAttentionBubbleHeight,
+            petAnchorScreen: petAnchorScreen,
+            availableFrame: availableFrame(for: petAnchorScreen)
         )
+        interactionModel.setBubblePlacement(newLayout.bubblePlacement)
         let newOrigin = Self.windowOrigin(
             preservingPetAnchorAt: petAnchorScreen,
             layout: newLayout
@@ -536,13 +582,19 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         for viewModel: NotchViewModel,
         sessionMonitor: SessionMonitor,
         bubbleState: DetachedIslandBubbleState = .hidden,
-        bubbleDirection: DetachedIslandBubbleDirection = .right
+        bubblePlacement: DetachedIslandBubblePlacement = .topLeft,
+        measuredAttentionBubbleHeight: CGFloat? = nil,
+        petAnchorScreen: CGPoint? = nil,
+        availableFrame: CGRect? = nil
     ) -> DetachedIslandWindowLayout {
         DetachedIslandContentModel.layout(
             for: sessionMonitor.instances,
             viewModel: viewModel,
             bubbleState: bubbleState,
-            bubbleDirection: bubbleDirection
+            bubblePlacement: bubblePlacement,
+            measuredAttentionBubbleHeight: measuredAttentionBubbleHeight,
+            petScreenAnchor: petAnchorScreen,
+            availableFrame: availableFrame
         )
     }
 
@@ -550,13 +602,19 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         for viewModel: NotchViewModel,
         sessionMonitor: SessionMonitor,
         bubbleState: DetachedIslandBubbleState = .hidden,
-        bubbleDirection: DetachedIslandBubbleDirection = .right
+        bubblePlacement: DetachedIslandBubblePlacement = .topLeft,
+        measuredAttentionBubbleHeight: CGFloat? = nil,
+        petAnchorScreen: CGPoint? = nil,
+        availableFrame: CGRect? = nil
     ) -> CGSize {
         windowLayout(
             for: viewModel,
             sessionMonitor: sessionMonitor,
             bubbleState: bubbleState,
-            bubbleDirection: bubbleDirection
+            bubblePlacement: bubblePlacement,
+            measuredAttentionBubbleHeight: measuredAttentionBubbleHeight,
+            petAnchorScreen: petAnchorScreen,
+            availableFrame: availableFrame
         ).containerSize
     }
 
@@ -683,7 +741,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     ) -> CGSize {
         CGSize(
             width: current.x - start.x,
-            height: start.y - current.y
+            height: current.y - start.y
         )
     }
 
@@ -708,16 +766,16 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         let point = event.locationInWindow
         guard isPointInsidePet(point) else { return false }
         petMouseDownPoint = point
-        petMouseDownScreenPoint = currentScreenPoint(for: event)
+        petMouseDownScreenPoint = screenPoint(for: event)
         isPetDragActive = false
         return true
     }
 
     private func handlePetMouseDragged(_ event: NSEvent) -> Bool {
-        guard let petMouseDownPoint,
+        guard petMouseDownPoint != nil,
               let petMouseDownScreenPoint else { return false }
 
-        let currentScreenPoint = currentScreenPoint(for: event)
+        let currentScreenPoint = screenPoint(for: event)
         let translation = Self.floatingDragTranslation(
             from: petMouseDownScreenPoint,
             to: currentScreenPoint
@@ -776,9 +834,12 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         Self.petInteractionFrame(for: lastAppliedLayout).contains(point)
     }
 
-    private func currentScreenPoint(for event: NSEvent) -> CGPoint {
-        guard let window else { return .zero }
-        return window.convertPoint(toScreen: event.locationInWindow)
+    private func screenPoint(for event: NSEvent) -> CGPoint {
+        // Window movement and hit-testing use AppKit screen coordinates (origin at bottom-left).
+        MouseEventReplay.appKitScreenLocation(
+            for: event,
+            fallbackScreenLocation: NSEvent.mouseLocation
+        )
     }
 
     private func syncBubblePresentation(to targetState: DetachedIslandBubbleState) {
@@ -839,10 +900,14 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         guard DetachedIslandContentModel.canPresentBubble(
             from: sessionMonitor.instances,
             mode: .hoverPreview
-        ) else { return }
+        ) else {
+            return
+        }
         guard IslandExpandedRouteResolver.highestPriorityAttentionSession(
             from: sessionMonitor.instances
-        ) != nil else { return }
+        ) != nil else {
+            return
+        }
 
         interactionModel.presentHoverPreview(canPresentBubble: true)
     }
@@ -860,12 +925,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         }
 
         updateHighlightedSessionStableID(nil)
-        interactionModel.presentHoverPreview(
-            canPresentBubble: DetachedIslandContentModel.canPresentBubble(
-                from: sessionMonitor.instances,
-                mode: .hoverPreview
-            )
-        )
+        presentExistingAttentionIfNeeded()
     }
 
     private func reconcileHighlightedSessionState() {
@@ -915,6 +975,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
 
     private func syncOutsideClickMonitor() {
         let shouldMonitorOutsideClicks = interactionModel.bubbleState == .pinned
+            || interactionModel.bubbleState == .hoverPreview
 
         if shouldMonitorOutsideClicks {
             guard outsideClickMonitor == nil else { return }
@@ -933,7 +994,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         guard interactionModel.bubbleState == .pinned,
               let window else { return }
 
-        let eventLocation = MouseEventReplay.repostLocation(
+        let eventLocation = MouseEventReplay.appKitScreenLocation(
             for: event,
             fallbackScreenLocation: NSEvent.mouseLocation
         )
@@ -942,20 +1003,37 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         interactionModel.hidePinnedBubble()
     }
 
-    private func updateBubbleDirectionForCurrentWindow() {
+    private func updateBubblePlacementForCurrentWindow() {
         guard let window else { return }
-        let petOnlyLayout = Self.windowLayout(
+        let petAnchorScreen = Self.petAnchorScreenPoint(
+            for: window.frame,
+            layout: lastAppliedLayout
+        )
+        let resolvedLayout = Self.windowLayout(
             for: viewModel,
             sessionMonitor: sessionMonitor,
             bubbleState: bubbleViewState.renderedBubbleState,
-            bubbleDirection: interactionModel.bubbleDirection
+            bubblePlacement: interactionModel.bubblePlacement,
+            measuredAttentionBubbleHeight: bubbleViewState.measuredAttentionBubbleHeight,
+            petAnchorScreen: petAnchorScreen,
+            availableFrame: availableFrame(for: petAnchorScreen)
         )
-        let petCenterX = window.frame.minX + petOnlyLayout.petAnchorInWindow.x
-        let direction = DetachedIslandContentModel.bubbleDirection(
-            for: petCenterX,
-            screenMidX: viewModel.screenRect.midX
-        )
-        interactionModel.setBubbleDirection(direction)
+        interactionModel.setBubblePlacement(resolvedLayout.bubblePlacement)
+    }
+
+    private func availableFrame(for petAnchor: CGPoint? = nil) -> CGRect {
+        if let screen = window?.screen {
+            return screen.visibleFrame
+        }
+
+        if let petAnchor,
+           let matchingScreen = NSScreen.screens.first(where: {
+               $0.frame.insetBy(dx: -1, dy: -1).contains(petAnchor)
+           }) {
+            return matchingScreen.visibleFrame
+        }
+
+        return viewModel.screenRect
     }
 }
 

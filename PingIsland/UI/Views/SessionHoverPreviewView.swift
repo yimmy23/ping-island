@@ -69,29 +69,29 @@ enum HoverPreviewDensity: Equatable {
 
     var badgeHorizontalPadding: CGFloat {
         switch self {
-        case .regular: 10
-        case .detachedCompact: 9
+        case .regular: 8
+        case .detachedCompact: 7
         }
     }
 
     var badgeVerticalPadding: CGFloat {
         switch self {
-        case .regular: 5
-        case .detachedCompact: 4
+        case .regular: 4
+        case .detachedCompact: 3
         }
     }
 
     var badgeFontSize: CGFloat {
         switch self {
-        case .regular: 10
-        case .detachedCompact: 9
+        case .regular: 9
+        case .detachedCompact: 8
         }
     }
 
     var remoteBadgeSize: CGFloat {
         switch self {
-        case .regular: 22
-        case .detachedCompact: 20
+        case .regular: 20
+        case .detachedCompact: 18
         }
     }
 }
@@ -105,10 +105,6 @@ struct SessionHoverDashboardView: View {
         Array(sessions.prefix(3))
     }
 
-    private var highlightedSessionStableID: String? {
-        displayedSessions.first?.stableId
-    }
-
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: density.containerSpacing) {
@@ -117,7 +113,7 @@ struct SessionHoverDashboardView: View {
                 }
 
                 ForEach(displayedSessions) { session in
-                    let isHighlighted = session.stableId == highlightedSessionStableID
+                    let isHighlighted = session.needsApprovalResponse
                     if session.needsApprovalResponse || session.intervention?.kind == .question {
                         HoverSessionCard(
                             session: session,
@@ -161,16 +157,18 @@ struct SessionAttentionNotificationView: View {
     let sessionMonitor: SessionMonitor
     var density: HoverPreviewDensity = .regular
     var onHoverChanged: (Bool) -> Void = { _ in }
+    var onActionCompleted: () -> Void = {}
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: density.containerSpacing) {
                 HoverSessionCard(
                     session: session,
                     sessionMonitor: sessionMonitor,
                     opensOnTap: false,
-                    isHighlighted: true,
-                    density: density
+                    isHighlighted: session.needsApprovalResponse,
+                    density: density,
+                    onActionCompleted: onActionCompleted
                 )
             }
             .padding(.horizontal, density.horizontalPadding)
@@ -307,6 +305,7 @@ struct HoverSessionCard: View {
     var opensOnTap: Bool = true
     var isHighlighted = false
     var density: HoverPreviewDensity = .regular
+    var onActionCompleted: () -> Void = {}
     @State private var isHovered = false
 
     private var snapshot: HoverConversationSnapshot {
@@ -320,7 +319,8 @@ struct HoverSessionCard: View {
 
                 HoverApprovalCard(
                     session: session,
-                    sessionMonitor: sessionMonitor
+                    sessionMonitor: sessionMonitor,
+                    onActionCompleted: onActionCompleted
                 )
             } else if let intervention = session.intervention, intervention.kind == .question {
                 HoverSessionHeader(session: session)
@@ -328,7 +328,8 @@ struct HoverSessionCard: View {
                 HoverQuestionInterventionCard(
                     session: session,
                     intervention: intervention,
-                    sessionMonitor: sessionMonitor
+                    sessionMonitor: sessionMonitor,
+                    onActionCompleted: onActionCompleted
                 )
             } else {
                 HoverSessionHeader(session: session)
@@ -429,6 +430,7 @@ private struct HoverConversationCard: View {
 private struct HoverApprovalCard: View {
     let session: SessionState
     let sessionMonitor: SessionMonitor
+    let onActionCompleted: () -> Void
 
     private var providerLabel: String {
         session.interactionDisplayName
@@ -466,19 +468,21 @@ private struct HoverApprovalCard: View {
                 Text(detailText)
                     .font(.system(size: 11, weight: .medium, design: session.pendingToolInput == nil ? .default : .monospaced))
                     .foregroundColor(.white.opacity(0.68))
-                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             HStack(spacing: 8) {
                 Button("Deny") {
                     sessionMonitor.denyPermission(sessionId: session.sessionId, reason: nil)
+                    onActionCompleted()
                 }
                 .buttonStyle(HoverApprovalButtonStyle(background: Color.white.opacity(0.1)))
 
                 if let sessionAction = session.scopedApprovalAction {
                     Button(AppLocalization.string(sessionAction.buttonTitleKey)) {
                         sessionMonitor.approvePermission(sessionId: session.sessionId, forSession: true)
+                        onActionCompleted()
                     }
                     .buttonStyle(
                         HoverApprovalButtonStyle(
@@ -490,6 +494,7 @@ private struct HoverApprovalCard: View {
 
                 Button("Allow") {
                     sessionMonitor.approvePermission(sessionId: session.sessionId)
+                    onActionCompleted()
                 }
                 .buttonStyle(HoverApprovalButtonStyle(background: Color.white.opacity(0.92), foreground: .black))
             }
@@ -504,6 +509,7 @@ private struct HoverQuestionInterventionCard: View {
     let session: SessionState
     let intervention: SessionIntervention
     let sessionMonitor: SessionMonitor
+    let onActionCompleted: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -566,6 +572,7 @@ private struct HoverQuestionInterventionCard: View {
                     submitLabel: "提交所有回答",
                     onSubmit: { payload in
                         sessionMonitor.answerIntervention(sessionId: session.sessionId, answers: payload)
+                        onActionCompleted()
                     },
                     secondaryActionTitle: secondaryActionTitle,
                     onSecondaryAction: secondaryActionTitle == nil ? nil : {
@@ -722,32 +729,46 @@ private struct HoverSessionBadges: View {
                 tint: HoverPreviewStyle.providerBadgeFill(for: session),
                 foreground: .white.opacity(0.95)
             )
-            if let codexSubagentBadgeText = session.codexSubagentBadgeText {
-                previewBadge(
-                    codexSubagentBadgeText,
-                    tint: .white.opacity(0.12),
-                    foreground: .white.opacity(0.92),
-                    fontDesign: .monospaced
-                )
-            }
-            if session.isRemoteSession {
-                remoteSessionBadge()
-            }
-            if let ideHostBadgeLabel = session.ideHostBadgeLabel {
-                previewBadge(
-                    ideHostBadgeLabel,
-                    tint: HoverPreviewStyle.ideHostBadgeFill(for: session),
-                    foreground: .white.opacity(0.92)
-                )
-            }
-            if let terminalSourceBadgeLabel = session.terminalSourceBadgeLabel {
-                previewBadge(
-                    terminalSourceBadgeLabel,
-                    tint: .white.opacity(0.08),
-                    foreground: .white.opacity(0.9)
-                )
+            if let primarySupplementaryBadge {
+                supplementaryBadgeView(primarySupplementaryBadge)
             }
         }
+    }
+
+    private enum SupplementaryBadge {
+        case text(String, tint: Color, foreground: Color, fontDesign: Font.Design)
+        case remote
+    }
+
+    private var primarySupplementaryBadge: SupplementaryBadge? {
+        if let codexSubagentBadgeText = session.codexSubagentBadgeText {
+            return .text(
+                codexSubagentBadgeText,
+                tint: .white.opacity(0.12),
+                foreground: .white.opacity(0.92),
+                fontDesign: .monospaced
+            )
+        }
+        if session.isRemoteSession {
+            return .remote
+        }
+        if let ideHostBadgeLabel = session.ideHostBadgeLabel {
+            return .text(
+                ideHostBadgeLabel,
+                tint: HoverPreviewStyle.ideHostBadgeFill(for: session),
+                foreground: .white.opacity(0.92),
+                fontDesign: .default
+            )
+        }
+        if let terminalSourceBadgeLabel = session.terminalSourceBadgeLabel {
+            return .text(
+                terminalSourceBadgeLabel,
+                tint: .white.opacity(0.08),
+                foreground: .white.opacity(0.9),
+                fontDesign: .default
+            )
+        }
+        return nil
     }
 
     private func previewBadge(
@@ -782,6 +803,21 @@ private struct HoverSessionBadges: View {
             )
             .clipShape(Circle())
             .help(AppLocalization.string("远程连接"))
+    }
+
+    @ViewBuilder
+    private func supplementaryBadgeView(_ badge: SupplementaryBadge) -> some View {
+        switch badge {
+        case .text(let text, let tint, let foreground, let fontDesign):
+            previewBadge(
+                text,
+                tint: tint,
+                foreground: foreground,
+                fontDesign: fontDesign
+            )
+        case .remote:
+            remoteSessionBadge()
+        }
     }
 }
 

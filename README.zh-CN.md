@@ -21,7 +21,7 @@
   </a>
   <img src="https://img.shields.io/badge/macOS-14%2B-0A84FF?style=flat-square&logo=apple&logoColor=white" alt="macOS 14 或更高">
   <img src="https://img.shields.io/badge/Swift-6.1-FA7343?style=flat-square&logo=swift&logoColor=white" alt="Swift 6.1">
-  <img src="https://img.shields.io/badge/Clients-9%2B-111827?style=flat-square" alt="支持 9 个以上客户端家族">
+  <img src="https://img.shields.io/badge/Clients-11%2B-111827?style=flat-square" alt="支持 11 个以上客户端">
   <img src="https://img.shields.io/badge/License-Apache%202.0-4F46E5?style=flat-square" alt="Apache 2.0 许可证">
 </p>
 

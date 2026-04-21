@@ -114,6 +114,13 @@ class NotchViewModel: ObservableObject {
     }
 
     private var narrowedClosedWidth: CGFloat {
+        if hasPhysicalNotch {
+            let systemWidth = ceil(deviceNotchRect.width)
+            if systemWidth > 0 {
+                return systemWidth
+            }
+        }
+
         let baseWidth = detectedClosedWidth
         return max(
             baseWidth * Self.detachmentLongPressNarrowedWidthScale,
@@ -224,6 +231,17 @@ class NotchViewModel: ObservableObject {
         .easeOut(duration: 0.25)
     }
 
+    var closedNotchResizeAnimation: Animation {
+        if isDetachmentNarrowingClosedNotch {
+            return .linear(duration: detachmentLongPressNarrowAnimationDuration)
+        }
+        return .spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
+    }
+
+    var isDetachmentNarrowingClosedNotch: Bool {
+        presentationMode == .docked && detachmentTracking != nil && status != .opened
+    }
+
     // MARK: - Private
 
     private var cancellables = Set<AnyCancellable>()
@@ -243,7 +261,7 @@ class NotchViewModel: ObservableObject {
     private var fullscreenPhysicalNotchCollapseWorkItem: DispatchWorkItem?
     private let detachmentLongPressDuration = IslandDetachmentGestureGate.defaultLongPressDuration
     private let detachmentLongPressNarrowAnimationDuration =
-        IslandDetachmentGestureGate.defaultLongPressDuration * 100
+        IslandDetachmentGestureGate.defaultLongPressDuration * 20
     private let detachmentLongPressResetDuration: TimeInterval = 0.18
     private let detachmentTapMovementTolerance: CGFloat = 8
     private var detachmentLongPressWorkItem: DispatchWorkItem?

@@ -450,7 +450,7 @@ struct NotchView: View {
                 alignment: .top
             )
             .animation(isOpened ? openAnimation : closeAnimation, value: viewModel.status)
-            .animation(openAnimation, value: notchSize)
+            .animation(viewModel.closedNotchResizeAnimation, value: notchSize)
             .animation(.smooth, value: activityCoordinator.expandingActivity)
             .animation(.smooth, value: hasPendingPermission)
             .animation(.smooth, value: hasHumanIntervention)
@@ -654,6 +654,7 @@ struct NotchView: View {
             trigger: triggerForCurrentPresentation,
             style: .docked,
             activeCompletionNotification: activeCompletionNotification,
+            onAttentionActionCompleted: {},
             onCompletionNotificationHoverChanged: handleCompletionNotificationHover,
             onDismissCompletionNotification: {
                 clearCompletionNotifications(keepPanelOpen: true)

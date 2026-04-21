@@ -9,6 +9,7 @@ struct IslandOpenedContentView: View {
     let activeCompletionNotification: SessionCompletionNotification?
     var highlightedSessionStableID: String? = nil
     var contentWidthOverride: CGFloat? = nil
+    let onAttentionActionCompleted: () -> Void
     let onCompletionNotificationHoverChanged: (Bool) -> Void
     let onDismissCompletionNotification: () -> Void
 
@@ -32,7 +33,8 @@ struct IslandOpenedContentView: View {
                 SessionAttentionNotificationView(
                     session: liveSession(for: session),
                     sessionMonitor: sessionMonitor,
-                    density: surface == .floating ? .detachedCompact : .regular
+                    density: surface == .floating ? .detachedCompact : .regular,
+                    onActionCompleted: onAttentionActionCompleted
                 )
             case .completionNotification(let notification):
                 SessionCompletionNotificationView(

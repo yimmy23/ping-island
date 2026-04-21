@@ -347,11 +347,33 @@ final class NotchViewModelTests: XCTestCase {
             let viewModel = makeViewModel()
             let initialWidth = viewModel.closedWidth
 
+            XCTAssertFalse(viewModel.isDetachmentNarrowingClosedNotch)
             viewModel.beginDockedDetachmentTrackingForTesting()
+
+            XCTAssertTrue(viewModel.isDetachmentNarrowingClosedNotch)
             XCTAssertLessThan(viewModel.closedWidth, initialWidth)
 
             viewModel.cancelDockedDetachmentTrackingForTesting()
+            XCTAssertFalse(viewModel.isDetachmentNarrowingClosedNotch)
             XCTAssertEqual(viewModel.closedWidth, initialWidth)
+        }
+    }
+
+    func testDockedDetachmentLongPressNarrowsToPhysicalNotchWidth() async {
+        await MainActor.run {
+            let viewModel = NotchViewModel(
+                deviceNotchRect: CGRect(x: 0, y: 0, width: 220, height: 38),
+                screenRect: CGRect(x: 0, y: 0, width: 1512, height: 982),
+                windowHeight: 320,
+                hasPhysicalNotch: true,
+                enableEventMonitoring: false,
+                observeSystemEnvironment: false,
+                fullscreenActivityProvider: { _ in false }
+            )
+
+            viewModel.beginDockedDetachmentTrackingForTesting()
+
+            XCTAssertEqual(viewModel.closedWidth, 220)
         }
     }
 
