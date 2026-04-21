@@ -109,3 +109,14 @@ struct IslandDetachedContentResolver {
         }
     }
 }
+
+enum IslandMascotResolver {
+    static func sourceSession(from sessions: [SessionState]) -> SessionState? {
+        sessions
+            .filter { $0.phase.isActive || $0.needsManualAttention }
+            .sorted(by: {
+                ($0.attentionRequestedAt ?? $0.lastActivity) > ($1.attentionRequestedAt ?? $1.lastActivity)
+            })
+            .first
+    }
+}

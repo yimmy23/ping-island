@@ -1278,7 +1278,7 @@ private struct SettingsPanelContentView: View {
 
                 SettingsInfoLine(
                     title: "默认宠物形象",
-                    subtitle: "设置展示模式和刘海示意图里使用的默认宠物。当前只影响设置内示意图。"
+                    subtitle: "设置展示模式示意图，以及没有活跃或待处理会话时刘海/悬浮宠物使用的默认形象。"
                 ) {
                     DisplayPreviewMascotPicker(kind: $settings.previewMascotKind)
                 }

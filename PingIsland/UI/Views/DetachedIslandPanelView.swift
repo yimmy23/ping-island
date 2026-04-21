@@ -530,12 +530,8 @@ struct DetachedIslandPanelView: View {
         )
     }
 
-    private var compactMascotClient: MascotClient {
-        representativeSession?.mascotClient ?? .claude
-    }
-
     private var compactMascotKind: MascotKind {
-        settings.mascotKind(for: compactMascotClient)
+        settings.mascotKind(for: IslandMascotResolver.sourceSession(from: sortedSessions)?.mascotClient)
     }
 
     private var compactMascotStatus: MascotStatus {

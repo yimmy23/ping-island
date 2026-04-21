@@ -53,7 +53,6 @@ struct NotchView: View {
     @State private var activeCompletionNotification: SessionCompletionNotification?
     @State private var completionNotificationDismissWorkItem: DispatchWorkItem?
     @State private var shouldDismissCompletionNotificationOnHoverExit: Bool = false
-    @State private var lastVisibleMascotClient: MascotClient = .claude
 
     @Namespace private var activityNamespace
 
@@ -165,18 +164,13 @@ struct NotchView: View {
         representativeClosedSession ?? latestHookMessageSession
     }
 
-    /// The compact-notch mascot should follow the freshest visible activity source first,
-    /// instead of being pinned to whichever session currently owns the warning state.
-    private var closedMascotClient: MascotClient {
-        latestMascotSourceSession(from: sessionMonitor.instances)?.mascotClient ?? lastVisibleMascotClient
-    }
-
     private var closedMascotKind: MascotKind {
-        settings.mascotKind(for: closedMascotClient)
+        settings.mascotKind(for: latestMascotSourceSession(from: sessionMonitor.instances)?.mascotClient)
     }
 
     private var completionNotificationMascotKind: MascotKind {
-        let client = activeCompletionNotification?.session.mascotClient ?? closedMascotClient
+        let client = activeCompletionNotification?.session.mascotClient
+            ?? latestMascotSourceSession(from: sessionMonitor.instances)?.mascotClient
         return settings.mascotKind(for: client)
     }
 
@@ -212,19 +206,7 @@ struct NotchView: View {
     }
 
     private func latestMascotSourceSession(from instances: [SessionState]) -> SessionState? {
-        latestHookMessageSession(from: instances)
-            ?? instances
-                .filter { $0.phase.isActive }
-                .sorted(by: { $0.lastActivity > $1.lastActivity })
-                .first
-            ?? instances
-                .sorted(by: { $0.lastActivity > $1.lastActivity })
-                .first
-    }
-
-    private func refreshLastVisibleMascotClient(from instances: [SessionState]) {
-        guard let latest = latestMascotSourceSession(from: instances) else { return }
-        lastVisibleMascotClient = latest.mascotClient
+        IslandMascotResolver.sourceSession(from: instances)
     }
 
     private func formattedTemporaryMuteTime(_ date: Date) -> String {
@@ -305,7 +287,6 @@ struct NotchView: View {
                 viewModel.updateIdleAutoHiddenState(hasVisibleSessionActivity: !shouldHideForIdleState)
                 isVisible = !viewModel.shouldHideWindowPresentation
                 viewModel.setManualAttentionActive(hasManualAttentionIndicator)
-                refreshLastVisibleMascotClient(from: sessionMonitor.instances)
                 handleProcessingChange()
                 handleManualAttentionChange(sessionMonitor.instances)
                 primeCompletionNotificationTracking(sessionMonitor.instances)
@@ -361,7 +342,6 @@ struct NotchView: View {
                 viewModel.setManualAttentionActive(
                     instances.contains { $0.needsApprovalResponse || $0.intervention != nil }
                 )
-                refreshLastVisibleMascotClient(from: instances)
                 handleProcessingChange()
                 handleSessionSoundTransitions(instances)
                 handleManualAttentionChange(instances)

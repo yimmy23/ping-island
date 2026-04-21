@@ -630,6 +630,13 @@ final class AppSettingsStore: ObservableObject {
         mascotOverride(for: client) ?? client.defaultMascotKind
     }
 
+    func mascotKind(for client: MascotClient?) -> MascotKind {
+        guard let client else {
+            return previewMascotKind
+        }
+        return mascotKind(for: client)
+    }
+
     func hasCustomMascot(for client: MascotClient) -> Bool {
         mascotOverride(for: client) != nil
     }
@@ -1191,6 +1198,10 @@ enum AppSettings {
     }
 
     static func mascotKind(for client: MascotClient) -> MascotKind {
+        shared.mascotKind(for: client)
+    }
+
+    static func mascotKind(for client: MascotClient?) -> MascotKind {
         shared.mascotKind(for: client)
     }
 

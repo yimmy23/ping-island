@@ -143,6 +143,16 @@ final class AppSettingsPersistenceTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "previewMascotKind"), MascotKind.codex.rawValue)
     }
 
+    func testOptionalMascotClientFallsBackToPreviewMascotKind() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+        let client: MascotClient? = nil
+
+        store.previewMascotKind = .qwen
+
+        XCTAssertEqual(store.mascotKind(for: client), .qwen)
+    }
+
     func testFloatingPetAnchorPersists() {
         let defaults = makeDefaults()
         let store = makeStore(defaults: defaults)

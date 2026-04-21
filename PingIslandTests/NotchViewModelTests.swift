@@ -508,6 +508,44 @@ final class NotchViewModelTests: XCTestCase {
         XCTAssertEqual(resolved, .chat(target))
     }
 
+    func testIslandMascotResolverFallsBackToDefaultWhenOnlyIdleHistoryRemains() {
+        let idle = SessionState(
+            sessionId: "idle",
+            cwd: "/tmp/idle",
+            phase: .idle,
+            lastActivity: Date()
+        )
+
+        XCTAssertNil(IslandMascotResolver.sourceSession(from: [idle]))
+    }
+
+    func testIslandMascotResolverPrefersFreshAttentionOrActiveSessions() {
+        let now = Date()
+        let idle = SessionState(
+            sessionId: "idle",
+            cwd: "/tmp/idle",
+            phase: .idle,
+            lastActivity: now
+        )
+        let active = SessionState(
+            sessionId: "active",
+            cwd: "/tmp/active",
+            phase: .processing,
+            lastActivity: now.addingTimeInterval(-20)
+        )
+        let attention = SessionState(
+            sessionId: "attention",
+            cwd: "/tmp/attention",
+            phase: .waitingForInput,
+            lastActivity: now.addingTimeInterval(-5)
+        )
+
+        XCTAssertEqual(
+            IslandMascotResolver.sourceSession(from: [idle, active, attention])?.sessionId,
+            "attention"
+        )
+    }
+
     func testRedockAfterDetachedRestoresClosedDockedStateAndResetsDetailSelection() async {
         await MainActor.run {
             let viewModel = makeViewModel()
