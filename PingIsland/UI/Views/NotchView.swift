@@ -31,7 +31,7 @@ struct NotchView: View {
     private static let temporaryReminderMuteDuration: TimeInterval = 10 * 60
 
     @ObservedObject var viewModel: NotchViewModel
-    @StateObject private var sessionMonitor = SessionMonitor()
+    @ObservedObject var sessionMonitor: SessionMonitor
     @StateObject private var activityCoordinator = NotchActivityCoordinator.shared
     @ObservedObject private var updateManager = UpdateManager.shared
     @ObservedObject private var settings = AppSettings.shared
@@ -478,11 +478,6 @@ struct NotchView: View {
         activityCoordinator.expandingActivity.show && activityCoordinator.expandingActivity.type == .claude
     }
 
-    private var sortedHoverSessions: [SessionState] {
-        activeSessions
-            .sorted { $0.shouldSortBeforeInQueue($1) }
-    }
-
     /// Whether to show the expanded closed state (processing, pending permission, or waiting for input)
     private var showClosedActivity: Bool {
         isProcessing || hasPendingPermission || hasHumanIntervention || hasCompletedReadyState
@@ -619,80 +614,52 @@ struct NotchView: View {
 
     @ViewBuilder
     private var openedHeaderContent: some View {
-        HStack(spacing: 12) {
-            if viewModel.openReason == .notification,
-               activeCompletionNotification != nil {
-                MascotView(
-                    kind: completionNotificationMascotKind,
-                    status: .idle,
-                    size: petIconSize
+        ZStack {
+            IslandDragHandleVisual()
+
+            HStack(spacing: 10) {
+                if viewModel.openReason == .notification,
+                   activeCompletionNotification != nil {
+                    MascotView(
+                        kind: completionNotificationMascotKind,
+                        status: .idle,
+                        size: petIconSize
+                    )
+                    .padding(.leading, 14)
+                }
+
+                Spacer()
+
+                NotchTemporaryMuteButton(
+                    isActive: areReminderNotificationsSuppressed,
+                    action: activateTemporaryReminderMute,
+                    helpText: temporaryMuteButtonHelpText
                 )
-                .padding(.leading, 14)
+
+                NotchSettingsButton(
+                    hasUnseenUpdate: updateManager.hasUnseenUpdate,
+                    action: openSettingsWindow
+                )
             }
-
-            Spacer()
-
-            NotchTemporaryMuteButton(
-                isActive: areReminderNotificationsSuppressed,
-                action: activateTemporaryReminderMute,
-                helpText: temporaryMuteButtonHelpText
-            )
-
-            NotchSettingsButton(
-                hasUnseenUpdate: updateManager.hasUnseenUpdate,
-                action: openSettingsWindow
-            )
+            .padding(.trailing, 12)
         }
         .frame(maxWidth: .infinity)
-        .padding(.trailing, 12)
     }
 
     // MARK: - Content View (Opened State)
 
     @ViewBuilder
     private var contentView: some View {
-        Group {
-            switch viewModel.contentType {
-            case .instances:
-                if viewModel.openReason == .notification,
-                   let notification = activeCompletionNotification {
-                    SessionCompletionNotificationView(
-                        notification: notification,
-                        onHoverChanged: handleCompletionNotificationHover,
-                        onDismiss: {
-                            clearCompletionNotifications(keepPanelOpen: true)
-                        }
-                    )
-                } else if viewModel.openReason == .hover {
-                    SessionHoverDashboardView(
-                        sessions: sortedHoverSessions,
-                        sessionMonitor: sessionMonitor
-                    )
-                } else {
-                    SessionListView(
-                        sessionMonitor: sessionMonitor,
-                        viewModel: viewModel
-                    )
-                }
-            case .chat(let session):
-                let liveSession = sessionMonitor.instances.first(where: { $0.sessionId == session.sessionId }) ?? session
-
-                if liveSession.provider == .claude {
-                    ChatView(
-                        sessionId: liveSession.sessionId,
-                        initialSession: liveSession,
-                        sessionMonitor: sessionMonitor,
-                        viewModel: viewModel
-                    )
-                } else {
-                    CodexSessionView(
-                        session: liveSession,
-                        sessionMonitor: sessionMonitor,
-                        viewModel: viewModel
-                    )
-                }
+        IslandOpenedContentView(
+            sessionMonitor: sessionMonitor,
+            viewModel: viewModel,
+            style: .docked,
+            activeCompletionNotification: activeCompletionNotification,
+            onCompletionNotificationHoverChanged: handleCompletionNotificationHover,
+            onDismissCompletionNotification: {
+                clearCompletionNotifications(keepPanelOpen: true)
             }
-        }
+        )
         .frame(width: notchSize.width - 24) // Fixed width to prevent text reflow
         // Removed .id() - was causing view recreation and performance issues
     }

@@ -19,11 +19,13 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 
 - Product overview: `README.md`
 - App entry: `PingIsland/App/PingIslandApp.swift`, `PingIsland/App/AppDelegate.swift`
+- Docked/detached presentation orchestration: `PingIsland/App/IslandPresentationCoordinator.swift`, `PingIsland/App/WindowManager.swift`
 - Main state hub: `PingIsland/Services/State/SessionStore.swift`
 - Session association cache: `PingIsland/Services/State/SessionAssociationStore.swift`
 - Native runtime rollout scaffold: `PingIsland/Services/Runtime/`, `PingIsland/Core/FeatureFlags.swift`
 - Session bridge for UI: `PingIsland/Services/Session/SessionMonitor.swift`
 - Notch state and layout: `PingIsland/Core/NotchViewModel.swift`, `PingIsland/UI/Views/NotchView.swift`
+- Detached floating capsule: `PingIsland/UI/Window/DetachedIslandWindowController.swift`, `PingIsland/UI/Views/DetachedIslandPanelView.swift`, `PingIsland/UI/Views/IslandOpenedContentView.swift`
 - Global shortcuts and shortcut persistence: `PingIsland/Services/Shared/GlobalShortcutManager.swift`, `PingIsland/Utilities/GlobalShortcut.swift`, `PingIsland/Core/Settings.swift`, `PingIsland/UI/Views/SettingsWindowView.swift`
 - Claude hook ingress: `Prototype/Sources/IslandBridge/`, `PingIsland/Services/Hooks/HookInstaller.swift`, `PingIsland/Services/Hooks/HookSocketServer.swift`
   - `PingIslandBridge` is the unified Claude/Codex hook entrypoint and is responsible for terminal, tmux, SSH-remote, and IDE terminal context capture before envelopes hit Swift code
@@ -83,6 +85,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
   - Current rule: provider-originated end events should preserve the session in `.ended` so it stays visible in the list; only explicit user archive/removal should delete it from `SessionStore`.
   - Primary list rule: sessions with no new activity for 30 minutes should auto-hide from the primary list until fresh hook/file/app-server activity updates `lastActivity`; sessions that need manual attention should stay visible.
 - If you change notch sizing, opening behavior, or visibility, inspect both `NotchViewModel` and `NotchView`.
+- If you change docked/detached Island transitions or drag-to-detach behavior, trace through `IslandPresentationCoordinator`, `WindowManager`, `NotchViewModel`, `NotchWindowController`, and `DetachedIslandWindowController` together so gesture gating, content resolution, and re-docking stay aligned.
 - If you change global shortcuts, shortcut persistence, or shortcut hints, trace through `PingIsland/Services/Shared/GlobalShortcutManager.swift`, `PingIsland/Utilities/GlobalShortcut.swift`, `PingIsland/Core/Settings.swift`, `PingIsland/UI/Views/SettingsWindowView.swift`, `PingIsland/UI/Components/GlobalShortcutHintView.swift`, and the relevant notch/chat/session-list views together so registration, customization, and visible hints stay aligned.
 - If you change built-in notification sounds or startup audio, inspect `PingIsland/Core/Settings.swift`, `PingIsland/Core/SoundPackCatalog.swift`, `PingIsland/UI/Views/SettingsWindowView.swift`, `PingIsland/App/AppDelegate.swift`, and `PingIsland/Resources/Sounds/` together so mode selection, fixed mappings, previews, and bundled assets stay aligned.
 - If you change client mascot selection or mascot animations, trace through `PingIsland/Models/ClientProfile.swift`, `PingIsland/Core/Settings.swift`, `PingIsland/UI/Components/MascotView.swift`, and the mascot callsites in `NotchView`, `SessionListView`, `SessionHoverPreviewView`, and `MascotSettingsView` so runtime overrides and previews stay aligned.
@@ -148,6 +151,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - If session ingestion changed, do both Claude and Codex sessions still appear and update?
 - If session lifecycle changed, do ended sessions remain visible until the user archives them, and do final Claude/Codex messages still land before the row settles into `.ended`?
 - If idle-session visibility changed, do sessions auto-hide after 30 minutes of inactivity and reappear when a new message or hook/app-server event arrives?
+- If detached Island behavior changed, can the docked notch still click-open normally, drag-detach from closed/opened states, and re-dock cleanly without duplicate windows?
 - If approval or intervention flows changed, do approve, deny, and answer paths still resolve cleanly?
 - If focus logic changed, does tmux and non-tmux behavior still degrade safely?
 - If release tooling changed, avoid running notarization or signing steps unless the task explicitly requires them.

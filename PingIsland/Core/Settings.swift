@@ -1171,6 +1171,11 @@ enum AppSettings {
         playBundledSound(named: Island8BitSound.releaseNotesSuccess.rawValue)
     }
 
+    static func playDetachedCapsuleSound() {
+        guard soundEnabled else { return }
+        playBundledSound(named: "bubbles_pop")
+    }
+
     static func playSound(for event: NotificationEvent) {
         guard soundEnabled, isSoundEnabled(for: event) else { return }
         guard !areReminderNotificationsSuppressed else { return }

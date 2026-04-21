@@ -11,15 +11,18 @@ import SwiftUI
 
 class NotchWindowController: NSWindowController {
     let viewModel: NotchViewModel
-    private let screen: NSScreen
     private let fullWindowFrame: NSRect
     private var cancellables = Set<AnyCancellable>()
 
-    init(screen: NSScreen) {
-        self.screen = screen
+    init(
+        screen: NSScreen,
+        viewModel: NotchViewModel,
+        sessionMonitor: SessionMonitor,
+        performBootAnimation: Bool
+    ) {
+        self.viewModel = viewModel
 
         let screenFrame = screen.frame
-        let notchSize = screen.notchSize
 
         // Window covers full width at top, tall enough for largest content (chat view)
         let windowHeight: CGFloat = 750
@@ -30,22 +33,6 @@ class NotchWindowController: NSWindowController {
             height: windowHeight
         )
         self.fullWindowFrame = windowFrame
-
-        // Device notch rect - positioned at center
-        let deviceNotchRect = CGRect(
-            x: (screenFrame.width - notchSize.width) / 2,
-            y: 0,
-            width: notchSize.width,
-            height: notchSize.height
-        )
-
-        // Create view model
-        self.viewModel = NotchViewModel(
-            deviceNotchRect: deviceNotchRect,
-            screenRect: screenFrame,
-            windowHeight: windowHeight,
-            hasPhysicalNotch: screen.hasPhysicalNotch
-        )
 
         // Create the window
         let notchWindow = NotchPanel(
@@ -58,7 +45,10 @@ class NotchWindowController: NSWindowController {
         super.init(window: notchWindow)
 
         // Create the SwiftUI view with pass-through hosting
-        let hostingController = NotchViewController(viewModel: viewModel)
+        let hostingController = NotchViewController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor
+        )
         notchWindow.contentViewController = hostingController
 
         notchWindow.setFrame(windowFrame, display: true)
@@ -106,13 +96,39 @@ class NotchWindowController: NSWindowController {
             }
             .store(in: &cancellables)
 
+        viewModel.$presentationMode
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak notchWindow, weak viewModel] _ in
+                guard let self, let notchWindow, let viewModel else { return }
+                self.updateWindowPresentation(window: notchWindow, viewModel: viewModel)
+            }
+            .store(in: &cancellables)
+
+        viewModel.$isFullscreenBrowserHiddenActive
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak notchWindow, weak viewModel] _ in
+                guard let self, let notchWindow, let viewModel else { return }
+                self.updateWindowPresentation(window: notchWindow, viewModel: viewModel)
+            }
+            .store(in: &cancellables)
+
+        viewModel.$isIdleAutoHiddenActive
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak notchWindow, weak viewModel] _ in
+                guard let self, let notchWindow, let viewModel else { return }
+                self.updateWindowPresentation(window: notchWindow, viewModel: viewModel)
+            }
+            .store(in: &cancellables)
+
         // Start with ignoring mouse events (closed state)
         notchWindow.ignoresMouseEvents = true
         updateWindowPresentation(window: notchWindow, viewModel: viewModel)
 
         // Perform boot animation after a brief delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.viewModel.performBootAnimation()
+        if performBootAnimation {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.viewModel.performBootAnimation()
+            }
         }
     }
 

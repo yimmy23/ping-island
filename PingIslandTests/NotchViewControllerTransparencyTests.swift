@@ -14,8 +14,12 @@ final class NotchViewControllerTransparencyTests: XCTestCase {
             observeSystemEnvironment: false,
             fullscreenActivityProvider: { _ in false }
         )
+        let sessionMonitor = SessionMonitor()
 
-        let controller = NotchViewController(viewModel: viewModel)
+        let controller = NotchViewController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor
+        )
         controller.loadViewIfNeeded()
 
         XCTAssertFalse(controller.view.isOpaque)

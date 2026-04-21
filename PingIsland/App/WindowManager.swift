@@ -13,7 +13,7 @@ private let logger = Logger(subsystem: "com.wudanwu.pingisland", category: "Wind
 
 @MainActor
 class WindowManager {
-    private(set) var windowController: NotchWindowController?
+    private(set) var presentationCoordinator: IslandPresentationCoordinator?
 
     /// Set up or recreate the notch window
     func setupNotchWindow() -> NotchWindowController? {
@@ -26,15 +26,13 @@ class WindowManager {
             return nil
         }
 
-        if let existingController = windowController {
-            existingController.window?.orderOut(nil)
-            existingController.window?.close()
-            windowController = nil
+        if let presentationCoordinator {
+            presentationCoordinator.updateScreen(screen)
+            return nil
         }
 
-        windowController = NotchWindowController(screen: screen)
-        windowController?.showWindow(nil)
-
-        return windowController
+        let presentationCoordinator = IslandPresentationCoordinator(screen: screen)
+        self.presentationCoordinator = presentationCoordinator
+        return nil
     }
 }

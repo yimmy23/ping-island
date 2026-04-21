@@ -40,6 +40,8 @@ class NotchViewModel: ObservableObject {
     // MARK: - Published State
 
     @Published var status: NotchStatus = .closed
+    @Published private(set) var presentationMode: IslandPresentationMode = .docked
+    @Published private(set) var detachedDisplayMode: DetachedIslandDisplayMode = .compact
     @Published var openReason: NotchOpenReason = .unknown
     @Published var contentType: NotchContentType = .instances
     @Published var isHovering: Bool = false
@@ -111,25 +113,76 @@ class NotchViewModel: ObservableObject {
 
     /// Dynamic opened size based on content type
     var openedSize: CGSize {
+        panelSize(for: .docked)
+    }
+
+    var detachedSize: CGSize {
+        switch detachedDisplayMode {
+        case .compact:
+            return compactDetachedSize
+        case .hoverExpanded:
+            return expandedDetachedSize
+        }
+    }
+
+    func panelSize(for style: IslandOpenedPresentationStyle) -> CGSize {
         let maxAllowedHeight = maximumOpenedHeight
 
         switch contentType {
         case .chat:
-            // Large size for chat view
-            return CGSize(
-                width: min(screenRect.width - 64, 600),
-                height: maxAllowedHeight
-            )
+            switch style {
+            case .docked:
+                return CGSize(
+                    width: min(screenRect.width - 64, 600),
+                    height: maxAllowedHeight
+                )
+            case .detached:
+                return CGSize(
+                    width: min(screenRect.width - 96, 500),
+                    height: min(maxAllowedHeight, screenRect.height - 180)
+                )
+            }
         case .instances:
             let fallbackHeight: CGFloat = openReason == .hover ? 180 : 200
             let measuredHeight = openedMeasuredHeight ?? fallbackHeight
-            return CGSize(
-                width: openReason == .hover
-                    ? min(screenRect.width - 64, 600)
-                    : min(screenRect.width * 0.4, 480),
-                height: min(maxAllowedHeight, max(closedHeight + 24, measuredHeight))
-            )
+
+            switch style {
+            case .docked:
+                return CGSize(
+                    width: openReason == .hover
+                        ? min(screenRect.width - 64, 600)
+                        : min(screenRect.width * 0.4, 480),
+                    height: min(maxAllowedHeight, max(closedHeight + 24, measuredHeight))
+                )
+            case .detached:
+                return CGSize(
+                    width: min(screenRect.width - 112, 400),
+                    height: min(
+                        maxAllowedHeight,
+                        max(closedHeight + 24, min(measuredHeight, 300))
+                    )
+                )
+            }
         }
+    }
+
+    private var compactDetachedSize: CGSize {
+        if AppSettings.notchDisplayMode == .detailed {
+            return closedSize
+        }
+
+        let orbEdge = max(closedSize.height, 40)
+        return CGSize(width: orbEdge, height: orbEdge)
+    }
+
+    private var expandedDetachedSize: CGSize {
+        let maxAllowedHeight = maximumOpenedHeight
+        let fallbackHeight: CGFloat = 220
+
+        return CGSize(
+            width: min(screenRect.width - 112, 400),
+            height: min(maxAllowedHeight, max(closedHeight + 24, fallbackHeight))
+        )
     }
 
     private var maximumOpenedHeight: CGFloat {
@@ -171,6 +224,24 @@ class NotchViewModel: ObservableObject {
     private let fullscreenRevealZoneHorizontalInset: CGFloat = 36
     private let fullscreenStateSettleDelay: TimeInterval
     private var fullscreenPhysicalNotchCollapseWorkItem: DispatchWorkItem?
+    private let detachmentLongPressDuration = IslandDetachmentGestureGate.defaultLongPressDuration
+    private let detachmentTapMovementTolerance: CGFloat = 8
+    private var detachmentLongPressWorkItem: DispatchWorkItem?
+
+    var onDetachmentRequested: ((IslandDetachmentRequest) -> Void)?
+    var onDetachmentUpdated: ((CGPoint) -> Void)?
+    var onDetachmentFinished: ((CGPoint?) -> Void)?
+
+    private struct DockedDetachmentTracking {
+        let id: UUID
+        let source: IslandDetachmentSource
+        let startLocation: CGPoint
+        var isLongPressSatisfied: Bool
+        var hasExceededTapMovementTolerance: Bool
+        var hasTriggeredDetachment: Bool
+    }
+
+    private var detachmentTracking: DockedDetachmentTracking?
 
     // MARK: - Initialization
 
@@ -340,18 +411,34 @@ class NotchViewModel: ObservableObject {
                 self?.handleMouseDown(event)
             }
             .store(in: &cancellables)
+
+        events.mouseDragged
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleMouseDragged(event)
+            }
+            .store(in: &cancellables)
+
+        events.mouseUp
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleMouseUp(event)
+            }
+            .store(in: &cancellables)
     }
 
-    /// Whether we're in chat mode (sticky behavior)
+    /// Whether we're in chat mode.
     private var isInChatMode: Bool {
         if case .chat = contentType { return true }
         return false
     }
 
-    /// The chat session we're viewing (persists across close/open)
+    /// The chat session we're currently presenting while the island stays open.
     private var currentChatSession: SessionState?
 
     private func handleMouseMove(_ location: CGPoint) {
+        guard presentationMode == .docked else { return }
+
         let inNotch = isPointInHoverTrigger(location)
         let inOpened = status == .opened && geometry.isPointInOpenedPanel(location, size: openedSize)
 
@@ -385,6 +472,8 @@ class NotchViewModel: ObservableObject {
     }
 
     private func handleMouseDown(_ event: NSEvent) {
+        guard presentationMode == .docked else { return }
+
         if isSettingsPopoverPresented {
             return
         }
@@ -397,20 +486,120 @@ class NotchViewModel: ObservableObject {
 
         switch status {
         case .opened:
-            if geometry.isPointOutsidePanel(location, size: openedSize) {
+            if detachmentTriggerScreenRect.contains(location) {
+                beginDockedDetachmentTracking(source: .opened, startLocation: location)
+            } else if geometry.isPointOutsidePanel(location, size: openedSize) {
                 // The panel window already handles click-through replay for intercepted clicks.
                 notchClose()
-            } else if geometry.notchScreenRect.contains(location) {
-                // Clicking notch while opened - only close if NOT in chat mode
-                if !isInChatMode {
-                    notchClose()
-                }
             }
         case .closed, .popping:
-            if isPointInHoverTrigger(location) {
+            if detachmentTriggerScreenRect.contains(location) {
+                beginDockedDetachmentTracking(source: .closed, startLocation: location)
+            } else if isPointInHoverTrigger(location) {
                 notchOpen(reason: .click)
             }
         }
+    }
+
+    private func handleMouseDragged(_ event: NSEvent) {
+        guard presentationMode == .docked || detachmentTracking?.hasTriggeredDetachment == true else { return }
+        guard var tracking = detachmentTracking else { return }
+
+        let location = NSEvent.mouseLocation
+
+        if !tracking.isLongPressSatisfied {
+            let horizontalDistance = abs(location.x - tracking.startLocation.x)
+            let verticalDistance = abs(location.y - tracking.startLocation.y)
+            if max(horizontalDistance, verticalDistance) > detachmentTapMovementTolerance {
+                tracking.hasExceededTapMovementTolerance = true
+            }
+            detachmentTracking = tracking
+            return
+        }
+
+        guard IslandDetachmentGestureGate.qualifies(
+            start: tracking.startLocation,
+            current: location,
+            hasSatisfiedLongPress: tracking.isLongPressSatisfied
+        ) else {
+            detachmentTracking = tracking
+            return
+        }
+
+        if tracking.hasTriggeredDetachment {
+            onDetachmentUpdated?(location)
+        } else {
+            tracking.hasTriggeredDetachment = true
+            onDetachmentRequested?(
+                IslandDetachmentRequest(
+                    source: tracking.source,
+                    dragStartScreenLocation: tracking.startLocation,
+                    currentScreenLocation: location
+                )
+            )
+        }
+
+        detachmentTracking = tracking
+    }
+
+    private func handleMouseUp(_ event: NSEvent) {
+        guard presentationMode == .docked || detachmentTracking?.hasTriggeredDetachment == true else { return }
+        guard let tracking = detachmentTracking else { return }
+
+        let location = NSEvent.mouseLocation
+        if tracking.hasTriggeredDetachment {
+            onDetachmentFinished?(location)
+        } else if tracking.source == .closed,
+                  !tracking.isLongPressSatisfied,
+                  !tracking.hasExceededTapMovementTolerance,
+                  detachmentTriggerScreenRect.contains(location) {
+            notchOpen(reason: .click)
+        } else if tracking.source == .opened,
+                  !tracking.isLongPressSatisfied,
+                  !tracking.hasExceededTapMovementTolerance,
+                  detachmentTriggerScreenRect.contains(location),
+                  !isInChatMode {
+            notchClose()
+        }
+
+        cancelDockedDetachmentTracking()
+    }
+
+    private func beginDockedDetachmentTracking(
+        source: IslandDetachmentSource,
+        startLocation: CGPoint
+    ) {
+        hoverTimer?.cancel()
+        hoverTimer = nil
+        cancelDockedDetachmentTracking()
+
+        let trackingID = UUID()
+        detachmentTracking = DockedDetachmentTracking(
+            id: trackingID,
+            source: source,
+            startLocation: startLocation,
+            isLongPressSatisfied: false,
+            hasExceededTapMovementTolerance: false,
+            hasTriggeredDetachment: false
+        )
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, var tracking = self.detachmentTracking, tracking.id == trackingID else { return }
+            tracking.isLongPressSatisfied = true
+            self.detachmentTracking = tracking
+            self.detachmentLongPressWorkItem = nil
+            if tracking.source == .opened {
+                self.notchClose()
+            }
+        }
+        detachmentLongPressWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + detachmentLongPressDuration, execute: workItem)
+    }
+
+    private func cancelDockedDetachmentTracking() {
+        detachmentLongPressWorkItem?.cancel()
+        detachmentLongPressWorkItem = nil
+        detachmentTracking = nil
     }
 
     private var hoverActivationDelay: TimeInterval {
@@ -418,6 +607,9 @@ class NotchViewModel: ObservableObject {
     }
 
     var shouldHideWindowPresentation: Bool {
+        if presentationMode == .detached {
+            return true
+        }
         if isFullscreenBrowserHiddenActive {
             return true
         }
@@ -435,7 +627,9 @@ class NotchViewModel: ObservableObject {
     }
 
     var shouldSuppressAutomaticPresentation: Bool {
-        isFullscreenBrowserHiddenActive || (isFullscreenEdgeRevealActive && status != .opened)
+        presentationMode == .detached
+            || isFullscreenBrowserHiddenActive
+            || (isFullscreenEdgeRevealActive && status != .opened)
     }
 
     var closedPresentationOffsetY: CGFloat {
@@ -468,6 +662,10 @@ class NotchViewModel: ObservableObject {
             width: width,
             height: fullscreenRevealZoneHeight
         )
+    }
+
+    var detachmentTriggerScreenRect: CGRect {
+        geometry.notchScreenRect
     }
 
     // MARK: - Actions
@@ -518,6 +716,45 @@ class NotchViewModel: ObservableObject {
         currentChatSession = nil
         contentType = .instances
         openedMeasuredHeight = nil
+    }
+
+    func beginDetachedPresentation(contentType: NotchContentType) {
+        hoverTimer?.cancel()
+        hoverTimer = nil
+        detachmentLongPressWorkItem?.cancel()
+        detachmentLongPressWorkItem = nil
+        isHovering = false
+        detachedDisplayMode = .compact
+        openedMeasuredHeight = nil
+
+        switch contentType {
+        case .chat(let session):
+            currentChatSession = session
+        case .instances:
+            currentChatSession = nil
+        }
+
+        self.contentType = .instances
+        openReason = .click
+        status = .opened
+        presentationMode = .detached
+        AppSettings.playDetachedCapsuleSound()
+    }
+
+    func setDetachedDisplayMode(_ mode: DetachedIslandDisplayMode) {
+        guard presentationMode == .detached else { return }
+        guard detachedDisplayMode != mode else { return }
+        detachedDisplayMode = mode
+        if mode == .compact {
+            openedMeasuredHeight = nil
+        }
+    }
+
+    func redockAfterDetached() {
+        cancelDockedDetachmentTracking()
+        detachedDisplayMode = .compact
+        notchClose()
+        presentationMode = .docked
     }
 
     func notchPop() {
