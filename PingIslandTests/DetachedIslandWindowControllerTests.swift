@@ -790,7 +790,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         )
     }
 
-    func testBubbleHideKeepsRenderedLayoutUntilFadeCompletes() {
+    func testBubbleHideImmediatelyCollapsesRenderedLayout() {
         let viewModel = makeViewModel()
         let sessionMonitor = SessionMonitor()
         sessionMonitor.instances = [
@@ -809,17 +809,8 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         XCTAssertTrue(controller.isBubbleVisibleForTesting)
 
         controller.hideBubbleForTesting()
-        XCTAssertEqual(controller.renderedBubbleStateForTesting, .hoverPreview)
+        XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
         XCTAssertFalse(controller.isBubbleVisibleForTesting)
-
-        let collapseExpectation = expectation(description: "bubble collapses after fade")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
-            XCTAssertFalse(controller.isBubbleVisibleForTesting)
-            collapseExpectation.fulfill()
-        }
-
-        wait(for: [collapseExpectation], timeout: 1.0)
     }
 
     private func makeViewModel() -> NotchViewModel {

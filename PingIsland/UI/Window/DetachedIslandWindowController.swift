@@ -871,23 +871,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func hideBubblePresentation() {
-        let collapseBubble = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.bubbleVisibilityWorkItem = nil
-            guard self.interactionModel.bubbleState == .hidden else { return }
-            self.bubbleViewState.prepareLayout(for: .hidden)
-            self.applyWindowSizeUpdateImmediately()
-        }
-
-        withAnimation(.easeInOut(duration: bubbleViewState.bubbleFadeDuration)) {
-            bubbleViewState.setBubbleVisible(false)
-        }
-
-        bubbleVisibilityWorkItem = collapseBubble
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + bubbleViewState.bubbleFadeDuration,
-            execute: collapseBubble
-        )
+        hideBubbleRenderingImmediately()
     }
 
     private func applyWindowSizeUpdateImmediately() {
