@@ -13,6 +13,8 @@ import SwiftUI
 struct SessionListView: View {
     @ObservedObject var sessionMonitor: SessionMonitor
     @ObservedObject var viewModel: NotchViewModel
+    var enableKeyboardNavigation = true
+    var highlightedSessionStableID: String? = nil
     @State private var expandedSessionStableID: String?
     @State private var selectedSessionStableID: String?
     @State private var keyEventMonitor: Any?
@@ -96,6 +98,7 @@ struct SessionListView: View {
                     session: session,
                     isExpanded: expandedSessionStableID == session.stableId,
                     isSelected: selectedSessionStableID == session.stableId,
+                    isHighlighted: highlightedSessionStableID == session.stableId,
                     onSelect: { selectSession(session) },
                     onActivate: { activateSession(session) },
                     onToggleExpanded: { toggleExpanded(session) },
@@ -136,7 +139,9 @@ struct SessionListView: View {
             }
             .onAppear {
                 selectedSessionStableID = nil
-                installKeyEventMonitorIfNeeded()
+                if enableKeyboardNavigation {
+                    installKeyEventMonitorIfNeeded()
+                }
             }
             .onDisappear {
                 removeKeyEventMonitor()
@@ -148,6 +153,12 @@ struct SessionListView: View {
                 syncSelection(with: sortedInstances)
             }
             .onChange(of: selectedSessionStableID) { _, stableID in
+                guard let stableID else { return }
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    proxy.scrollTo(stableID, anchor: .center)
+                }
+            }
+            .onChange(of: highlightedSessionStableID) { _, stableID in
                 guard let stableID else { return }
                 withAnimation(.easeInOut(duration: 0.16)) {
                     proxy.scrollTo(stableID, anchor: .center)
@@ -241,6 +252,7 @@ struct SessionListView: View {
     }
 
     private func installKeyEventMonitorIfNeeded() {
+        guard enableKeyboardNavigation else { return }
         guard keyEventMonitor == nil else { return }
 
         keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
@@ -352,6 +364,7 @@ struct InstanceRow: View {
     let session: SessionState
     let isExpanded: Bool
     let isSelected: Bool
+    let isHighlighted: Bool
     let onSelect: () -> Void
     let onActivate: () -> Void
     let onToggleExpanded: () -> Void
@@ -712,6 +725,15 @@ struct InstanceRow: View {
             }
             return Color.white.opacity(isHovered ? 0.14 : 0.11)
         }
+        if isHighlighted {
+            if session.needsQuestionResponse {
+                return TerminalColors.blue.opacity(isHovered ? 0.2 : 0.16)
+            }
+            if isWaitingForApproval {
+                return TerminalColors.amber.opacity(isHovered ? 0.2 : 0.15)
+            }
+            return Color.white.opacity(isHovered ? 0.11 : 0.08)
+        }
         if isExpanded {
             if session.needsQuestionResponse {
                 return TerminalColors.blue.opacity(isHovered ? 0.2 : 0.16)
@@ -742,6 +764,15 @@ struct InstanceRow: View {
                 return TerminalColors.amber.opacity(0.32)
             }
             return TerminalColors.green.opacity(isHovered ? 0.34 : 0.28)
+        }
+        if isHighlighted {
+            if session.needsQuestionResponse {
+                return TerminalColors.blue.opacity(0.32)
+            }
+            if isWaitingForApproval {
+                return TerminalColors.amber.opacity(0.3)
+            }
+            return Color.white.opacity(isHovered ? 0.2 : 0.16)
         }
         if isExpanded {
             if session.needsQuestionResponse {

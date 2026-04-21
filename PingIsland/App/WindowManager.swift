@@ -14,6 +14,7 @@ private let logger = Logger(subsystem: "com.wudanwu.pingisland", category: "Wind
 @MainActor
 class WindowManager {
     private(set) var presentationCoordinator: IslandPresentationCoordinator?
+    private var activeScreenNumber: NSNumber?
 
     /// Set up or recreate the notch window
     func setupNotchWindow() -> NotchWindowController? {
@@ -26,13 +27,17 @@ class WindowManager {
             return nil
         }
 
-        if let presentationCoordinator {
+        let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        if let presentationCoordinator,
+           activeScreenNumber == screenNumber {
             presentationCoordinator.updateScreen(screen)
             return nil
         }
 
+        presentationCoordinator?.invalidate()
         let presentationCoordinator = IslandPresentationCoordinator(screen: screen)
         self.presentationCoordinator = presentationCoordinator
+        activeScreenNumber = screenNumber
         return nil
     }
 }

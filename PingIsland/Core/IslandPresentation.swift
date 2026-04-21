@@ -16,6 +16,12 @@ enum DetachedIslandDisplayMode: Equatable {
     case hoverExpanded
 }
 
+enum DetachedIslandBubbleState: Equatable {
+    case hidden
+    case hoverPreview
+    case pinned
+}
+
 enum IslandDetachmentSource: Equatable {
     case closed
     case opened

@@ -1,29 +1,137 @@
 import SwiftUI
 
+enum HoverPreviewDensity: Equatable {
+    case regular
+    case detachedCompact
+
+    var containerSpacing: CGFloat {
+        switch self {
+        case .regular: 18
+        case .detachedCompact: 12
+        }
+    }
+
+    var horizontalPadding: CGFloat {
+        switch self {
+        case .regular: 16
+        case .detachedCompact: 12
+        }
+    }
+
+    var topPadding: CGFloat {
+        switch self {
+        case .regular: 12
+        case .detachedCompact: 10
+        }
+    }
+
+    var bottomPadding: CGFloat {
+        switch self {
+        case .regular: 18
+        case .detachedCompact: 12
+        }
+    }
+
+    var itemHorizontalPadding: CGFloat {
+        switch self {
+        case .regular: 14
+        case .detachedCompact: 12
+        }
+    }
+
+    var itemVerticalPadding: CGFloat {
+        switch self {
+        case .regular: 12
+        case .detachedCompact: 10
+        }
+    }
+
+    var rowSpacing: CGFloat {
+        switch self {
+        case .regular: 12
+        case .detachedCompact: 10
+        }
+    }
+
+    var rowDetailSpacing: CGFloat {
+        switch self {
+        case .regular: 6
+        case .detachedCompact: 4
+        }
+    }
+
+    var badgeSpacing: CGFloat {
+        switch self {
+        case .regular: 8
+        case .detachedCompact: 6
+        }
+    }
+
+    var badgeHorizontalPadding: CGFloat {
+        switch self {
+        case .regular: 10
+        case .detachedCompact: 9
+        }
+    }
+
+    var badgeVerticalPadding: CGFloat {
+        switch self {
+        case .regular: 5
+        case .detachedCompact: 4
+        }
+    }
+
+    var badgeFontSize: CGFloat {
+        switch self {
+        case .regular: 10
+        case .detachedCompact: 9
+        }
+    }
+
+    var remoteBadgeSize: CGFloat {
+        switch self {
+        case .regular: 22
+        case .detachedCompact: 20
+        }
+    }
+}
+
 struct SessionHoverDashboardView: View {
     let sessions: [SessionState]
     let sessionMonitor: SessionMonitor
+    var density: HoverPreviewDensity = .regular
 
     private var displayedSessions: [SessionState] {
         Array(sessions.prefix(3))
     }
 
+    private var highlightedSessionStableID: String? {
+        displayedSessions.first?.stableId
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: density.containerSpacing) {
                 if displayedSessions.isEmpty {
                     HoverEmptyPreviewView()
                 }
 
                 ForEach(displayedSessions) { session in
+                    let isHighlighted = session.stableId == highlightedSessionStableID
                     if session.needsApprovalResponse || session.intervention?.kind == .question {
                         HoverSessionCard(
                             session: session,
                             sessionMonitor: sessionMonitor,
-                            opensOnTap: false
+                            opensOnTap: false,
+                            isHighlighted: isHighlighted,
+                            density: density
                         )
                     } else {
-                        SessionHoverCompactRow(session: session) {
+                        SessionHoverCompactRow(
+                            session: session,
+                            isHighlighted: isHighlighted,
+                            density: density
+                        ) {
                             guard !session.clientInfo.suppressesActivationNavigation else { return }
                             Task {
                                 _ = await SessionLauncher.shared.activate(session)
@@ -32,9 +140,9 @@ struct SessionHoverDashboardView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 18)
+            .padding(.horizontal, density.horizontalPadding)
+            .padding(.top, density.topPadding)
+            .padding(.bottom, density.bottomPadding)
             .background(
                 GeometryReader { geometry in
                     Color.clear.preference(
@@ -45,6 +153,40 @@ struct SessionHoverDashboardView: View {
             )
         }
         .scrollBounceBehavior(.basedOnSize)
+    }
+}
+
+struct SessionAttentionNotificationView: View {
+    let session: SessionState
+    let sessionMonitor: SessionMonitor
+    var density: HoverPreviewDensity = .regular
+    var onHoverChanged: (Bool) -> Void = { _ in }
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: density.containerSpacing) {
+                HoverSessionCard(
+                    session: session,
+                    sessionMonitor: sessionMonitor,
+                    opensOnTap: false,
+                    isHighlighted: true,
+                    density: density
+                )
+            }
+            .padding(.horizontal, density.horizontalPadding)
+            .padding(.top, density.topPadding)
+            .padding(.bottom, density.bottomPadding)
+            .background(
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: OpenedPanelContentHeightPreferenceKey.self,
+                        value: geometry.size.height
+                    )
+                }
+            )
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .onHover(perform: onHoverChanged)
     }
 }
 
@@ -81,8 +223,11 @@ private struct HoverConversationSnapshot {
 
 private struct SessionHoverCompactRow: View {
     let session: SessionState
+    var isHighlighted = false
+    var density: HoverPreviewDensity = .regular
     let onOpen: () -> Void
     @ObservedObject private var settings = AppSettings.shared
+    @State private var isHovered = false
 
     private var usesTitleOnlySubagentPresentation: Bool {
         session.usesTitleOnlySubagentPresentation
@@ -91,22 +236,38 @@ private struct SessionHoverCompactRow: View {
     var body: some View {
         Group {
             if session.clientInfo.suppressesActivationNavigation {
-                rowContent
+                cardContent
             } else {
                 Button(action: onOpen) {
-                    rowContent
+                    cardContent
                 }
                 .buttonStyle(.plain)
             }
         }
+        .onHover { isHovered = $0 }
+    }
+
+    private var cardContent: some View {
+        rowContent
+            .padding(.horizontal, density.itemHorizontalPadding)
+            .padding(.vertical, density.itemVerticalPadding)
+            .background(
+                HoverPreviewRowBackground(
+                    accentColor: HoverPreviewStyle.emphasisColor(for: session),
+                    isHighlighted: isHighlighted,
+                    isHovered: isHovered,
+                    density: density
+                )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: density == .detachedCompact ? 18 : 20, style: .continuous))
     }
 
     private var rowContent: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: density.rowSpacing) {
             HoverProviderGlyph(session: session)
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: density.rowDetailSpacing) {
+                HStack(alignment: .firstTextBaseline, spacing: density.badgeSpacing) {
                     if !usesTitleOnlySubagentPresentation && !session.shouldHideProjectContextInUI {
                         Text(session.projectName)
                             .font(.system(size: max(12, settings.contentFontSize), weight: .semibold))
@@ -131,20 +292,22 @@ private struct SessionHoverCompactRow: View {
             Spacer(minLength: 0)
 
             if usesTitleOnlySubagentPresentation {
-                HoverSubagentBadges(session: session)
+                HoverSubagentBadges(session: session, density: density)
             } else {
-                HoverSessionBadges(session: session)
+                HoverSessionBadges(session: session, density: density)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
     }
 }
 
-private struct HoverSessionCard: View {
+struct HoverSessionCard: View {
     let session: SessionState
     let sessionMonitor: SessionMonitor
     var opensOnTap: Bool = true
+    var isHighlighted = false
+    var density: HoverPreviewDensity = .regular
+    @State private var isHovered = false
 
     private var snapshot: HoverConversationSnapshot {
         HoverConversationSnapshotBuilder.snapshot(for: session)
@@ -173,12 +336,23 @@ private struct HoverSessionCard: View {
                 HoverConversationCard(session: session, snapshot: snapshot)
             }
         }
+        .padding(.horizontal, density.itemHorizontalPadding)
+        .padding(.vertical, density.itemVerticalPadding)
+        .background(
+            HoverPreviewRowBackground(
+                accentColor: HoverPreviewStyle.emphasisColor(for: session),
+                isHighlighted: isHighlighted,
+                isHovered: isHovered,
+                density: density
+            )
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: density == .detachedCompact ? 18 : 20, style: .continuous))
         .onTapGesture {
             guard opensOnTap else { return }
             activateSession()
         }
+        .onHover { isHovered = $0 }
     }
 
     private func activateSession() {
@@ -529,13 +703,14 @@ private struct HoverSessionPreviewLines: View {
 
 private struct HoverSessionBadges: View {
     let session: SessionState
+    var density: HoverPreviewDensity = .regular
 
     private var timeLabel: String {
         SessionPhaseHelpers.timeBadgeLabel(for: session.lastActivity)
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: density.badgeSpacing) {
             previewBadge(
                 timeLabel,
                 tint: .white.opacity(0.08),
@@ -582,11 +757,11 @@ private struct HoverSessionBadges: View {
         fontDesign: Font.Design = .default
     ) -> some View {
         Text(text)
-            .font(.system(size: 10, weight: .semibold, design: fontDesign))
+            .font(.system(size: density.badgeFontSize, weight: .semibold, design: fontDesign))
             .monospacedDigit()
             .foregroundColor(foreground)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, density.badgeHorizontalPadding)
+            .padding(.vertical, density.badgeVerticalPadding)
             .background(tint)
             .overlay(
                 Capsule()
@@ -597,9 +772,9 @@ private struct HoverSessionBadges: View {
 
     private func remoteSessionBadge() -> some View {
         Image(systemName: "cloud.fill")
-            .font(.system(size: 10, weight: .semibold))
+            .font(.system(size: density.badgeFontSize, weight: .semibold))
             .foregroundColor(.white.opacity(0.92))
-            .frame(width: 22, height: 22)
+            .frame(width: density.remoteBadgeSize, height: density.remoteBadgeSize)
             .background(Color(red: 0.42, green: 0.70, blue: 0.98).opacity(0.26))
             .overlay(
                 Circle()
@@ -612,9 +787,10 @@ private struct HoverSessionBadges: View {
 
 private struct HoverSubagentBadges: View {
     let session: SessionState
+    var density: HoverPreviewDensity = .regular
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: density.badgeSpacing) {
             if let subagentClientTypeBadgeText = session.subagentClientTypeBadgeText {
                 previewBadge(
                     subagentClientTypeBadgeText,
@@ -641,11 +817,11 @@ private struct HoverSubagentBadges: View {
         fontDesign: Font.Design = .default
     ) -> some View {
         Text(text)
-            .font(.system(size: 10, weight: .semibold, design: fontDesign))
+            .font(.system(size: density.badgeFontSize, weight: .semibold, design: fontDesign))
             .monospacedDigit()
             .foregroundColor(foreground)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, density.badgeHorizontalPadding)
+            .padding(.vertical, density.badgeVerticalPadding)
             .background(tint)
             .overlay(
                 Capsule()
@@ -716,6 +892,46 @@ private struct HoverConversationLine: View {
     }
 }
 
+private struct HoverPreviewRowBackground: View {
+    let accentColor: Color
+    let isHighlighted: Bool
+    let isHovered: Bool
+    let density: HoverPreviewDensity
+
+    private var cornerRadius: CGFloat {
+        density == .detachedCompact ? 18 : 20
+    }
+
+    private var fillColor: Color {
+        if isHighlighted {
+            return accentColor.opacity(isHovered ? 0.24 : 0.18)
+        }
+        if isHovered {
+            return Color.white.opacity(0.08)
+        }
+        return Color.white.opacity(0.04)
+    }
+
+    private var borderColor: Color {
+        if isHighlighted {
+            return accentColor.opacity(isHovered ? 0.34 : 0.26)
+        }
+        if isHovered {
+            return Color.white.opacity(0.12)
+        }
+        return Color.white.opacity(0.05)
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(fillColor)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(borderColor, lineWidth: 1)
+            )
+    }
+}
+
 private enum HoverPreviewStyle {
     static func providerLabel(for session: SessionState) -> String {
         session.messageBadgeDisplayName
@@ -750,6 +966,16 @@ private enum HoverPreviewStyle {
             return TerminalColors.qoder.opacity(0.24)
         }
         return .white.opacity(0.08)
+    }
+
+    static func emphasisColor(for session: SessionState) -> Color {
+        if session.needsQuestionResponse {
+            return TerminalColors.blue
+        }
+        if session.needsApprovalResponse {
+            return TerminalColors.amber
+        }
+        return providerColor(for: session)
     }
 
     static func assistantPrefixColor(for session: SessionState) -> Color {
@@ -865,52 +1091,11 @@ private enum HoverPreviewLineBuilder {
 @MainActor
 private enum HoverConversationSnapshotBuilder {
     static func snapshot(for session: SessionState) -> HoverConversationSnapshot {
-        HoverConversationSnapshot(
-            userText: latestUserText(for: session),
-            assistantText: latestAssistantText(for: session)
+        let snapshot = SessionConversationPreviewBuilder.snapshot(for: session)
+        return HoverConversationSnapshot(
+            userText: snapshot.userText,
+            assistantText: snapshot.assistantText
         )
-    }
-
-    private static func latestUserText(for session: SessionState) -> String? {
-        for item in session.chatItems.reversed() {
-            if case .user(let text) = item.type {
-                return sanitized(text)
-            }
-        }
-        return sanitized(session.firstUserMessage)
-    }
-
-    private static func latestAssistantText(for session: SessionState) -> String? {
-        for item in session.chatItems.reversed() {
-            switch item.type {
-            case .assistant(let text):
-                return session.codexSubagentSummaryText(for: sanitized(text))
-            case .thinking(let text):
-                return session.codexSubagentSummaryText(for: sanitized(text))
-            case .toolCall(let tool):
-                let preview = sanitized(tool.inputPreview)
-                let label = MCPToolFormatter.formatToolName(tool.name)
-                return session.codexSubagentSummaryText(for: preview.map { "\(label) \($0)" } ?? label)
-            case .interrupted:
-                return session.codexSubagentSummaryText(for: AppLocalization.string("已中断"))
-            case .user:
-                continue
-            }
-        }
-
-        if let intervention = session.intervention {
-            return session.codexSubagentSummaryText(for: sanitized(intervention.summaryText))
-        }
-
-        return session.codexSubagentSummaryText(
-            for: sanitized(session.previewText) ?? sanitized(session.lastMessage)
-        )
-    }
-
-    private static func sanitized(_ text: String?) -> String? {
-        guard let text else { return nil }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 }
 

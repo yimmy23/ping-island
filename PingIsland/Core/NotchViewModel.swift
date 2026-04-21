@@ -60,6 +60,8 @@ class NotchViewModel: ObservableObject {
 
     private static let defaultClosedHeight = ScreenNotchMetrics.fallbackClosedHeight
     private static let defaultClosedWidth: CGFloat = 266
+    private static let detachmentLongPressNarrowedWidthScale: CGFloat = 0.82
+    private static let detachmentLongPressMaximumShrink: CGFloat = 56
     @Published private(set) var closedWidth: CGFloat
 
     var deviceNotchRect: CGRect { geometry.deviceNotchRect }
@@ -109,6 +111,21 @@ class NotchViewModel: ObservableObject {
         let systemWidth = ceil(deviceNotchRect.width)
         guard systemWidth > 0 else { return defaultClosedWidth }
         return max(defaultClosedWidth, systemWidth)
+    }
+
+    private var narrowedClosedWidth: CGFloat {
+        let baseWidth = detectedClosedWidth
+        return max(
+            baseWidth * Self.detachmentLongPressNarrowedWidthScale,
+            baseWidth - Self.detachmentLongPressMaximumShrink
+        )
+    }
+
+    private var dockedClosedWidthTarget: CGFloat {
+        guard presentationMode == .docked, detachmentTracking != nil else {
+            return detectedClosedWidth
+        }
+        return narrowedClosedWidth
     }
 
     /// Dynamic opened size based on content type
@@ -225,6 +242,9 @@ class NotchViewModel: ObservableObject {
     private let fullscreenStateSettleDelay: TimeInterval
     private var fullscreenPhysicalNotchCollapseWorkItem: DispatchWorkItem?
     private let detachmentLongPressDuration = IslandDetachmentGestureGate.defaultLongPressDuration
+    private let detachmentLongPressNarrowAnimationDuration =
+        IslandDetachmentGestureGate.defaultLongPressDuration * 100
+    private let detachmentLongPressResetDuration: TimeInterval = 0.18
     private let detachmentTapMovementTolerance: CGFloat = 8
     private var detachmentLongPressWorkItem: DispatchWorkItem?
 
@@ -582,6 +602,10 @@ class NotchViewModel: ObservableObject {
             hasExceededTapMovementTolerance: false,
             hasTriggeredDetachment: false
         )
+        syncClosedWidth(
+            animated: true,
+            animation: .linear(duration: detachmentLongPressNarrowAnimationDuration)
+        )
 
         let workItem = DispatchWorkItem { [weak self] in
             guard let self, var tracking = self.detachmentTracking, tracking.id == trackingID else { return }
@@ -600,6 +624,10 @@ class NotchViewModel: ObservableObject {
         detachmentLongPressWorkItem?.cancel()
         detachmentLongPressWorkItem = nil
         detachmentTracking = nil
+        syncClosedWidth(
+            animated: true,
+            animation: .easeOut(duration: detachmentLongPressResetDuration)
+        )
     }
 
     private var hoverActivationDelay: TimeInterval {
@@ -718,11 +746,13 @@ class NotchViewModel: ObservableObject {
         openedMeasuredHeight = nil
     }
 
-    func beginDetachedPresentation(contentType: NotchContentType) {
+    func beginDetachedPresentation(contentType: NotchContentType, playSound: Bool = true) {
         hoverTimer?.cancel()
         hoverTimer = nil
         detachmentLongPressWorkItem?.cancel()
         detachmentLongPressWorkItem = nil
+        detachmentTracking = nil
+        syncClosedWidth(animated: false)
         isHovering = false
         detachedDisplayMode = .compact
         openedMeasuredHeight = nil
@@ -738,7 +768,9 @@ class NotchViewModel: ObservableObject {
         openReason = .click
         status = .opened
         presentationMode = .detached
-        AppSettings.playDetachedCapsuleSound()
+        if playSound {
+            AppSettings.playDetachedCapsuleSound()
+        }
     }
 
     func setDetachedDisplayMode(_ mode: DetachedIslandDisplayMode) {
@@ -837,9 +869,7 @@ class NotchViewModel: ObservableObject {
     }
 
     func setManualAttentionActive(_ isActive: Bool) {
-        let targetWidth = detectedClosedWidth
-        guard closedWidth != targetWidth else { return }
-        closedWidth = targetWidth
+        syncClosedWidth(animated: false)
     }
 
     /// Perform boot animation: expand briefly then collapse
@@ -851,4 +881,33 @@ class NotchViewModel: ObservableObject {
             self.notchClose()
         }
     }
+
+    private func syncClosedWidth(
+        animated: Bool,
+        animation: Animation? = nil
+    ) {
+        let targetWidth = dockedClosedWidthTarget
+        guard closedWidth != targetWidth else { return }
+
+        if animated, let animation {
+            withAnimation(animation) {
+                closedWidth = targetWidth
+            }
+        } else {
+            closedWidth = targetWidth
+        }
+    }
+
+#if DEBUG
+    func beginDockedDetachmentTrackingForTesting(
+        source: IslandDetachmentSource = .closed,
+        startLocation: CGPoint = .zero
+    ) {
+        beginDockedDetachmentTracking(source: source, startLocation: startLocation)
+    }
+
+    func cancelDockedDetachmentTrackingForTesting() {
+        cancelDockedDetachmentTracking()
+    }
+#endif
 }

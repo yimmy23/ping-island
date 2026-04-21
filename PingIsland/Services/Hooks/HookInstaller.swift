@@ -240,6 +240,7 @@ struct HookInstaller {
 
         // First launch - mark it
         defaults.set(true, forKey: firstLaunchDefaultsKey)
+        defaults.set(true, forKey: AppSettingsDefaultKeys.presentationModeOnboardingPending)
         return true
     }
 

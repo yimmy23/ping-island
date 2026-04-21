@@ -36,9 +36,7 @@ struct NotchView: View {
     @ObservedObject private var updateManager = UpdateManager.shared
     @ObservedObject private var settings = AppSettings.shared
     @State private var previousPendingIds: Set<String> = []
-    @State private var previousApprovalIds: Set<String> = []
-    @State private var previousQuestionIds: Set<String> = []
-    @State private var previousQuestionInterventionIDs: [String: String] = [:]
+    @State private var manualAttentionTracker = SessionManualAttentionTracker()
     @State private var previousWaitingForInputIds: Set<String> = []
     @State private var waitingForInputTimestamps: [String: Date] = [:]  // sessionId -> when it entered waitingForInput
     @State private var isVisible: Bool = false
@@ -309,7 +307,7 @@ struct NotchView: View {
                 viewModel.setManualAttentionActive(hasManualAttentionIndicator)
                 refreshLastVisibleMascotClient(from: sessionMonitor.instances)
                 handleProcessingChange()
-                handleApprovalSessionsChange(sessionMonitor.instances)
+                handleManualAttentionChange(sessionMonitor.instances)
                 primeCompletionNotificationTracking(sessionMonitor.instances)
             }
             .onChange(of: viewModel.status) { oldStatus, newStatus in
@@ -366,8 +364,7 @@ struct NotchView: View {
                 refreshLastVisibleMascotClient(from: instances)
                 handleProcessingChange()
                 handleSessionSoundTransitions(instances)
-                handleApprovalSessionsChange(instances)
-                handleQuestionInterventionChange(instances)
+                handleManualAttentionChange(instances)
                 handleWaitingForInputChange(instances)
                 handleCompletionNotificationChange(instances)
             }
@@ -653,6 +650,8 @@ struct NotchView: View {
         IslandOpenedContentView(
             sessionMonitor: sessionMonitor,
             viewModel: viewModel,
+            surface: .docked,
+            trigger: triggerForCurrentPresentation,
             style: .docked,
             activeCompletionNotification: activeCompletionNotification,
             onCompletionNotificationHoverChanged: handleCompletionNotificationHover,
@@ -662,6 +661,17 @@ struct NotchView: View {
         )
         .frame(width: notchSize.width - 24) // Fixed width to prevent text reflow
         // Removed .id() - was causing view recreation and performance issues
+    }
+
+    private var triggerForCurrentPresentation: IslandExpandedTrigger {
+        switch viewModel.openReason {
+        case .hover:
+            return .hover
+        case .notification:
+            return .notification
+        case .click, .boot, .unknown:
+            return .click
+        }
     }
 
     // MARK: - Event Handlers
@@ -730,112 +740,30 @@ struct NotchView: View {
         previousPendingIds = currentIds
     }
 
-    private func handleApprovalSessionsChange(_ instances: [SessionState]) {
-        let approvalSessions = instances.filter { $0.needsApprovalResponse }
-        let currentApprovalIds = Set(approvalSessions.map(\.stableId))
-        let newApprovalIds = currentApprovalIds.subtracting(previousApprovalIds)
-
-        guard !newApprovalIds.isEmpty else {
-            previousApprovalIds = currentApprovalIds
+    private func handleManualAttentionChange(_ instances: [SessionState]) {
+        guard let targetSession = manualAttentionTracker.consumeNewAttentionSession(from: instances) else {
             return
         }
 
         if areReminderNotificationsSuppressed {
-            previousApprovalIds = currentApprovalIds
             return
         }
 
         clearCompletionNotifications(keepPanelOpen: true)
 
         if viewModel.shouldSuppressAutomaticPresentation {
-            previousApprovalIds = currentApprovalIds
             return
         }
 
-        let targetSession = approvalSessions
-            .filter { newApprovalIds.contains($0.stableId) }
-            .sorted {
-                let dateA = $0.attentionRequestedAt ?? $0.lastActivity
-                let dateB = $1.attentionRequestedAt ?? $1.lastActivity
-                return dateA > dateB
+        if targetSession.needsQuestionResponse, viewModel.status == .opened {
+            viewModel.notchClose()
+            DispatchQueue.main.async {
+                viewModel.presentNotificationChat(for: targetSession)
             }
-            .first
-
-        if let targetSession {
-            if viewModel.status != .opened {
-                viewModel.notchOpen(reason: .notification)
-            }
-            viewModel.showChat(for: targetSession)
-        }
-
-        previousApprovalIds = currentApprovalIds
-    }
-
-    private func handleQuestionInterventionChange(_ instances: [SessionState]) {
-        let questionSessions = instances.filter { $0.needsQuestionResponse }
-        let currentQuestionIds = Set(questionSessions.map(\.stableId))
-        let currentQuestionInterventionIDs = Dictionary(
-            uniqueKeysWithValues: questionSessions.map { session in
-                (session.stableId, session.intervention?.id ?? "")
-            }
-        )
-        let newQuestionIds = currentQuestionIds.subtracting(previousQuestionIds)
-        let refreshedQuestionIds = Set<String>(
-            currentQuestionInterventionIDs.compactMap { sessionId, interventionId in
-                guard let previousInterventionId = previousQuestionInterventionIDs[sessionId],
-                      !previousInterventionId.isEmpty,
-                      previousInterventionId != interventionId else {
-                    return nil
-                }
-                return sessionId
-            }
-        )
-        let attentionQuestionIds = newQuestionIds.union(refreshedQuestionIds)
-
-        guard !attentionQuestionIds.isEmpty else {
-            previousQuestionIds = currentQuestionIds
-            previousQuestionInterventionIDs = currentQuestionInterventionIDs
             return
         }
 
-        if areReminderNotificationsSuppressed {
-            previousQuestionIds = currentQuestionIds
-            previousQuestionInterventionIDs = currentQuestionInterventionIDs
-            return
-        }
-
-        clearCompletionNotifications(keepPanelOpen: true)
-
-        if viewModel.shouldSuppressAutomaticPresentation {
-            previousQuestionIds = currentQuestionIds
-            previousQuestionInterventionIDs = currentQuestionInterventionIDs
-            return
-        }
-
-        let targetSession = questionSessions
-            .filter { attentionQuestionIds.contains($0.stableId) }
-            .sorted {
-                let dateA = $0.lastUserMessageDate ?? $0.lastActivity
-                let dateB = $1.lastUserMessageDate ?? $1.lastActivity
-                return dateA > dateB
-            }
-            .first
-
-        if let targetSession {
-            if viewModel.status == .opened {
-                viewModel.notchClose()
-                DispatchQueue.main.async {
-                    viewModel.notchOpen(reason: .notification)
-                    viewModel.showChat(for: targetSession)
-                }
-            } else {
-                viewModel.notchOpen(reason: .notification)
-                viewModel.showChat(for: targetSession)
-            }
-        }
-
-        previousQuestionIds = currentQuestionIds
-        previousQuestionInterventionIDs = currentQuestionInterventionIDs
+        viewModel.presentNotificationChat(for: targetSession)
     }
 
     private func handleWaitingForInputChange(_ instances: [SessionState]) {

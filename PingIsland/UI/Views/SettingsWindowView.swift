@@ -4201,7 +4201,7 @@ private struct FloatingPetPlacementInfoCard: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
 
-            Text(appLocalized: "独立悬浮宠物默认贴近当前激活窗口右下角显示。拖动后会记住新位置，双击宠物可再次打开设置。")
+            Text(appLocalized: "独立悬浮宠物默认贴近当前激活窗口右下角显示。拖动后会记住新位置，右键宠物形象可重新打开设置面板。")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.white.opacity(0.58))
                 .fixedSize(horizontal: false, vertical: true)

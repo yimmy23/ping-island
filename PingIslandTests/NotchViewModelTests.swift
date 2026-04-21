@@ -342,6 +342,32 @@ final class NotchViewModelTests: XCTestCase {
         }
     }
 
+    func testDockedDetachmentLongPressNarrowsClosedWidthUntilCancelled() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+            let initialWidth = viewModel.closedWidth
+
+            viewModel.beginDockedDetachmentTrackingForTesting()
+            XCTAssertLessThan(viewModel.closedWidth, initialWidth)
+
+            viewModel.cancelDockedDetachmentTrackingForTesting()
+            XCTAssertEqual(viewModel.closedWidth, initialWidth)
+        }
+    }
+
+    func testBeginDetachedPresentationResetsLongPressNarrowedWidth() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+            let initialWidth = viewModel.closedWidth
+
+            viewModel.beginDockedDetachmentTrackingForTesting()
+            XCTAssertLessThan(viewModel.closedWidth, initialWidth)
+
+            viewModel.beginDetachedPresentation(contentType: .instances, playSound: false)
+            XCTAssertEqual(viewModel.closedWidth, initialWidth)
+        }
+    }
+
     func testDetachedSizeShrinksComparedToDockedOpenedSize() async {
         await MainActor.run {
             let viewModel = makeViewModel()

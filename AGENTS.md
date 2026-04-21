@@ -20,12 +20,15 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - Product overview: `README.md`
 - App entry: `PingIsland/App/PingIslandApp.swift`, `PingIsland/App/AppDelegate.swift`
 - Docked/detached presentation orchestration: `PingIsland/App/IslandPresentationCoordinator.swift`, `PingIsland/App/WindowManager.swift`
+- First-run surface-mode onboarding and mode-switch UI: `PingIsland/App/AppDelegate.swift`, `PingIsland/UI/Window/SettingsWindowController.swift`, `PingIsland/UI/Views/SettingsWindowView.swift`
 - Main state hub: `PingIsland/Services/State/SessionStore.swift`
 - Session association cache: `PingIsland/Services/State/SessionAssociationStore.swift`
 - Native runtime rollout scaffold: `PingIsland/Services/Runtime/`, `PingIsland/Core/FeatureFlags.swift`
 - Session bridge for UI: `PingIsland/Services/Session/SessionMonitor.swift`
 - Notch state and layout: `PingIsland/Core/NotchViewModel.swift`, `PingIsland/UI/Views/NotchView.swift`
 - Detached floating capsule: `PingIsland/UI/Window/DetachedIslandWindowController.swift`, `PingIsland/UI/Views/DetachedIslandPanelView.swift`, `PingIsland/UI/Views/IslandOpenedContentView.swift`
+  - Detached pet interactions now keep the pet anchored in place while hover/click previews expand sideways as message-bubble lists; trace both the panel layout and window-anchor math together when changing this flow
+  - Expanded content routing is shared with the docked notch through `IslandOpenedContentView` + `IslandExpandedRouteResolver`; keep hover/click/notification semantics aligned instead of reintroducing detached-only content priorities
 - Global shortcuts and shortcut persistence: `PingIsland/Services/Shared/GlobalShortcutManager.swift`, `PingIsland/Utilities/GlobalShortcut.swift`, `PingIsland/Core/Settings.swift`, `PingIsland/UI/Views/SettingsWindowView.swift`
 - Claude hook ingress: `Prototype/Sources/IslandBridge/`, `PingIsland/Services/Hooks/HookInstaller.swift`, `PingIsland/Services/Hooks/HookSocketServer.swift`
   - `PingIslandBridge` is the unified Claude/Codex hook entrypoint and is responsible for terminal, tmux, SSH-remote, and IDE terminal context capture before envelopes hit Swift code
@@ -86,6 +89,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
   - Primary list rule: sessions with no new activity for 30 minutes should auto-hide from the primary list until fresh hook/file/app-server activity updates `lastActivity`; sessions that need manual attention should stay visible.
 - If you change notch sizing, opening behavior, or visibility, inspect both `NotchViewModel` and `NotchView`.
 - If you change docked/detached Island transitions or drag-to-detach behavior, trace through `IslandPresentationCoordinator`, `WindowManager`, `NotchViewModel`, `NotchWindowController`, and `DetachedIslandWindowController` together so gesture gating, content resolution, and re-docking stay aligned.
+- If you change the persisted surface mode or first-run onboarding, trace through `AppDelegate`, `WindowManager`, `IslandPresentationCoordinator`, `SettingsWindowController`, `SettingsWindowView`, and `Settings.swift` together so launch-time routing and in-app switching stay aligned.
 - If you change global shortcuts, shortcut persistence, or shortcut hints, trace through `PingIsland/Services/Shared/GlobalShortcutManager.swift`, `PingIsland/Utilities/GlobalShortcut.swift`, `PingIsland/Core/Settings.swift`, `PingIsland/UI/Views/SettingsWindowView.swift`, `PingIsland/UI/Components/GlobalShortcutHintView.swift`, and the relevant notch/chat/session-list views together so registration, customization, and visible hints stay aligned.
 - If you change built-in notification sounds or startup audio, inspect `PingIsland/Core/Settings.swift`, `PingIsland/Core/SoundPackCatalog.swift`, `PingIsland/UI/Views/SettingsWindowView.swift`, `PingIsland/App/AppDelegate.swift`, and `PingIsland/Resources/Sounds/` together so mode selection, fixed mappings, previews, and bundled assets stay aligned.
 - If you change client mascot selection or mascot animations, trace through `PingIsland/Models/ClientProfile.swift`, `PingIsland/Core/Settings.swift`, `PingIsland/UI/Components/MascotView.swift`, and the mascot callsites in `NotchView`, `SessionListView`, `SessionHoverPreviewView`, and `MascotSettingsView` so runtime overrides and previews stay aligned.

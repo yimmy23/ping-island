@@ -120,4 +120,41 @@ final class AppSettingsPersistenceTests: XCTestCase {
         XCTAssertFalse(reloadedStore.autoOpenCompactedNotificationPanel)
         XCTAssertEqual(defaults.object(forKey: "autoOpenCompactedNotificationPanel") as? Bool, false)
     }
+
+    func testSurfaceModePersists() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+
+        store.surfaceMode = .floatingPet
+
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertEqual(reloadedStore.surfaceMode, .floatingPet)
+        XCTAssertEqual(defaults.string(forKey: AppSettingsDefaultKeys.surfaceMode), IslandSurfaceMode.floatingPet.rawValue)
+    }
+
+    func testFloatingPetAnchorPersists() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+        let anchor = FloatingPetAnchor(xRatio: 0.82, yRatio: 0.14)
+
+        store.floatingPetAnchor = anchor
+
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertEqual(reloadedStore.floatingPetAnchor, anchor)
+        XCTAssertNotNil(defaults.data(forKey: AppSettingsDefaultKeys.floatingPetAnchor))
+    }
+
+    func testPresentationModeOnboardingPendingPersistsAndClears() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+
+        store.presentationModeOnboardingPending = true
+        XCTAssertEqual(defaults.object(forKey: AppSettingsDefaultKeys.presentationModeOnboardingPending) as? Bool, true)
+
+        store.presentationModeOnboardingPending = false
+
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertFalse(reloadedStore.presentationModeOnboardingPending)
+        XCTAssertEqual(defaults.object(forKey: AppSettingsDefaultKeys.presentationModeOnboardingPending) as? Bool, false)
+    }
 }
