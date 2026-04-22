@@ -137,7 +137,7 @@ final class AppSettingsPersistenceTests: XCTestCase {
         let defaults = makeDefaults()
         let store = makeStore(defaults: defaults)
 
-        XCTAssertEqual(store.usageValueMode, .used)
+        XCTAssertEqual(store.usageValueMode, .remaining)
 
         store.usageValueMode = .remaining
         let reloadedStore = makeStore(defaults: defaults)
