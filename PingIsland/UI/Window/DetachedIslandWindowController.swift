@@ -82,6 +82,9 @@ final class DetachedIslandViewController: NSViewController {
     var onPetDragEnded: () -> Void = {} {
         didSet { refreshRootViewIfLoaded() }
     }
+    var onBubbleHoverChanged: (Bool) -> Void = { _ in } {
+        didSet { refreshRootViewIfLoaded() }
+    }
     var onAttentionActionCompleted: () -> Void = {} {
         didSet { refreshRootViewIfLoaded() }
     }
@@ -130,6 +133,7 @@ final class DetachedIslandViewController: NSViewController {
                 onPetDragStarted: onPetDragStarted,
                 onPetDragChanged: onPetDragChanged,
                 onPetDragEnded: onPetDragEnded,
+                onBubbleHoverChanged: onBubbleHoverChanged,
                 onAttentionActionCompleted: onAttentionActionCompleted,
                 onCompletionNotificationHoverChanged: onCompletionNotificationHoverChanged,
                 onDismissCompletionNotification: onDismissCompletionNotification
@@ -164,6 +168,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     private var hasPendingWindowSizeUpdate = false
     private var interactionActivationWorkItem: DispatchWorkItem?
     private var bubbleVisibilityWorkItem: DispatchWorkItem?
+    private var bubbleHoverGraceWorkItem: DispatchWorkItem?
     private var completionNotificationDismissWorkItem: DispatchWorkItem?
     private var outsideClickMonitor: EventMonitor?
     private var floatingDragStartOrigin: CGPoint?
@@ -179,6 +184,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     private var previousResourceLimitIds = Set<String>()
     private var previousCompletionNotificationPhases: [String: SessionPhase] = [:]
     private var completionNotificationQueue: [SessionCompletionNotification] = []
+    var bubbleHoverGraceDelay: TimeInterval = 3
     var completionNotificationDismissDelay: TimeInterval = 5
     private var activeCompletionNotification: SessionCompletionNotification? {
         didSet {
@@ -250,6 +256,9 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         }
         hostingController.onPetDragEnded = { [weak self] in
             self?.endFloatingDrag()
+        }
+        hostingController.onBubbleHoverChanged = { [weak self] isHovering in
+            self?.handleBubbleHoverChanged(isHovering)
         }
         hostingController.onAttentionActionCompleted = { [weak self] in
             self?.dismissAttentionBubble()
@@ -447,6 +456,18 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         }
     }
 
+    func simulatePetTapForTesting() {
+        handlePetTap()
+    }
+
+    func simulateBubbleHoverForTesting(_ isHovering: Bool) {
+        handleBubbleHoverChanged(isHovering)
+    }
+
+    func simulateOutsideBubbleClickForTesting(screenLocation: CGPoint) {
+        handlePotentialOutsideClick(screenLocation: screenLocation)
+    }
+
     func dismissAttentionBubble() {
         applyBubbleStateChange {
             interactionModel.hidePinnedBubble()
@@ -494,6 +515,8 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         interactionActivationWorkItem = nil
         bubbleVisibilityWorkItem?.cancel()
         bubbleVisibilityWorkItem = nil
+        bubbleHoverGraceWorkItem?.cancel()
+        bubbleHoverGraceWorkItem = nil
         completionNotificationDismissWorkItem?.cancel()
         completionNotificationDismissWorkItem = nil
         outsideClickMonitor?.stop()
@@ -951,6 +974,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
 
         switch targetState {
         case .hidden:
+            cancelBubbleHoverGraceTimer()
             hideBubblePresentation()
         case .hoverPreview, .pinned:
             showBubblePresentation(targetState)
@@ -968,13 +992,35 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     private func hideBubbleRenderingImmediately() {
         bubbleVisibilityWorkItem?.cancel()
         bubbleVisibilityWorkItem = nil
+        cancelBubbleHoverGraceTimer()
         bubbleViewState.setBubbleVisible(false)
         bubbleViewState.prepareLayout(for: .hidden)
         applyWindowSizeUpdateImmediately()
     }
 
     private func hideBubblePresentation() {
-        hideBubbleRenderingImmediately()
+        guard bubbleViewState.renderedBubbleState != .hidden else {
+            hideBubbleRenderingImmediately()
+            return
+        }
+
+        withAnimation(.easeInOut(duration: bubbleViewState.bubbleFadeDuration)) {
+            bubbleViewState.setBubbleVisible(false)
+        }
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.bubbleVisibilityWorkItem = nil
+            guard self.interactionModel.bubbleState == .hidden else { return }
+            self.bubbleViewState.prepareLayout(for: .hidden)
+            self.applyWindowSizeUpdateImmediately()
+        }
+
+        bubbleVisibilityWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + bubbleViewState.bubbleFadeDuration,
+            execute: workItem
+        )
     }
 
     private func applyWindowSizeUpdateImmediately() {
@@ -999,6 +1045,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             from: sessionMonitor.instances,
             mode: .pinnedList
         )
+        let previousBubbleState = interactionModel.bubbleState
 
         applyBubbleStateChange {
             interactionModel.togglePrimaryBubble(
@@ -1006,6 +1053,11 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
                 canPresentPinnedBubble: canPresentPinnedBubble
             )
         }
+
+        handlePrimaryBubbleTapTransition(
+            from: previousBubbleState,
+            to: interactionModel.bubbleState
+        )
     }
 
     private func presentExistingAttentionIfNeeded() {
@@ -1114,18 +1166,95 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func handlePotentialOutsideClick(_ event: NSEvent) {
-        guard interactionModel.bubbleState == .pinned,
-              let window else { return }
-
         let eventLocation = MouseEventReplay.appKitScreenLocation(
             for: event,
             fallbackScreenLocation: NSEvent.mouseLocation
         )
+        handlePotentialOutsideClick(screenLocation: eventLocation)
+    }
 
-        guard !window.frame.contains(eventLocation) else { return }
+    private func handlePotentialOutsideClick(screenLocation eventLocation: CGPoint) {
+        guard interactionModel.bubbleState != .hidden,
+              let window else { return }
+
+        if screenBubbleFrame(for: window).contains(eventLocation) {
+            return
+        }
+
+        if screenPetInteractionFrame(for: window).contains(eventLocation) {
+            return
+        }
+
         applyBubbleStateChange {
             interactionModel.hidePinnedBubble()
         }
+    }
+
+    private func handlePrimaryBubbleTapTransition(
+        from previousState: DetachedIslandBubbleState,
+        to currentState: DetachedIslandBubbleState
+    ) {
+        guard previousState == .hidden else {
+            cancelBubbleHoverGraceTimer()
+            return
+        }
+
+        guard currentState != .hidden else {
+            cancelBubbleHoverGraceTimer()
+            return
+        }
+
+        scheduleBubbleHoverGraceTimer()
+    }
+
+    private func handleBubbleHoverChanged(_ isHovering: Bool) {
+        guard isHovering else { return }
+        cancelBubbleHoverGraceTimer()
+    }
+
+    private func scheduleBubbleHoverGraceTimer() {
+        cancelBubbleHoverGraceTimer()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.bubbleHoverGraceWorkItem = nil
+            guard self.interactionModel.bubbleState != .hidden else { return }
+            self.applyBubbleStateChange {
+                self.interactionModel.hidePinnedBubble()
+            }
+        }
+
+        bubbleHoverGraceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + bubbleHoverGraceDelay,
+            execute: workItem
+        )
+    }
+
+    private func cancelBubbleHoverGraceTimer() {
+        bubbleHoverGraceWorkItem?.cancel()
+        bubbleHoverGraceWorkItem = nil
+    }
+
+    private func screenBubbleFrame(for window: NSWindow) -> CGRect {
+        guard let bubbleFrame = lastAppliedLayout.bubbleFrame else { return .null }
+        let bubbleWindowFrame = CGRect(
+            x: bubbleFrame.minX,
+            y: lastAppliedLayout.containerSize.height - bubbleFrame.maxY,
+            width: bubbleFrame.width,
+            height: bubbleFrame.height
+        )
+        return bubbleWindowFrame.offsetBy(
+            dx: window.frame.origin.x,
+            dy: window.frame.origin.y
+        )
+    }
+
+    private func screenPetInteractionFrame(for window: NSWindow) -> CGRect {
+        Self.petInteractionFrame(for: lastAppliedLayout).offsetBy(
+            dx: window.frame.origin.x,
+            dy: window.frame.origin.y
+        )
     }
 
     private func updateBubblePlacementForCurrentWindow() {

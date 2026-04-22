@@ -742,11 +742,123 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
         controller.dismissAttentionBubble()
 
-        XCTAssertFalse(controller.isBubbleVisibleForTesting)
-
         let bubbleDismissed = expectation(description: "attention bubble fully dismisses")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            XCTAssertFalse(controller.isBubbleVisibleForTesting)
             XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
+            bubbleDismissed.fulfill()
+        }
+
+        wait(for: [bubbleDismissed], timeout: 1.0)
+    }
+
+    func testClickedBubbleAutoHidesWhenNotHoveredWithinGraceDelay() {
+        let viewModel = makeViewModel()
+        let sessionMonitor = makeSessionMonitor()
+        sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        controller.bubbleHoverGraceDelay = 0.1
+        defer { controller.dismiss() }
+
+        controller.present(atPetAnchor: CGPoint(x: 1200, y: 220))
+        controller.simulatePetTapForTesting()
+
+        let bubbleDismissed = expectation(description: "clicked bubble auto hides")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
+            XCTAssertFalse(controller.isBubbleVisibleForTesting)
+            bubbleDismissed.fulfill()
+        }
+
+        wait(for: [bubbleDismissed], timeout: 1.0)
+    }
+
+    func testClickedBubbleStaysVisibleAfterBubbleHover() {
+        let viewModel = makeViewModel()
+        let sessionMonitor = makeSessionMonitor()
+        sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        controller.bubbleHoverGraceDelay = 0.1
+        defer { controller.dismiss() }
+
+        controller.present(atPetAnchor: CGPoint(x: 1200, y: 220))
+        controller.simulatePetTapForTesting()
+        controller.simulateBubbleHoverForTesting(true)
+
+        let bubbleRemainsVisible = expectation(description: "hover cancels auto hide")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            XCTAssertEqual(controller.renderedBubbleStateForTesting, .hoverPreview)
+            XCTAssertTrue(controller.isBubbleVisibleForTesting)
+            bubbleRemainsVisible.fulfill()
+        }
+
+        wait(for: [bubbleRemainsVisible], timeout: 1.0)
+    }
+
+    func testOutsideBubbleClickHidesPinnedBubble() {
+        let viewModel = makeViewModel()
+        let sessionMonitor = makeSessionMonitor()
+        sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        defer { controller.dismiss() }
+
+        controller.present(atPetAnchor: CGPoint(x: 1200, y: 220))
+        controller.togglePinnedBubbleForTesting()
+
+        XCTAssertEqual(controller.renderedBubbleStateForTesting, .pinned)
+        XCTAssertTrue(controller.isBubbleVisibleForTesting)
+
+        controller.simulateOutsideBubbleClickForTesting(screenLocation: CGPoint(x: 32, y: 32))
+
+        let bubbleDismissed = expectation(description: "outside click hides pinned bubble")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
+            XCTAssertFalse(controller.isBubbleVisibleForTesting)
+            bubbleDismissed.fulfill()
+        }
+
+        wait(for: [bubbleDismissed], timeout: 1.0)
+    }
+
+    func testOutsideBubbleClickHidesHoverPreviewBubble() {
+        let viewModel = makeViewModel()
+        let sessionMonitor = makeSessionMonitor()
+        sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        defer { controller.dismiss() }
+
+        controller.present(atPetAnchor: CGPoint(x: 1200, y: 220))
+        controller.presentHoverBubbleForTesting()
+
+        XCTAssertEqual(controller.renderedBubbleStateForTesting, .hoverPreview)
+        XCTAssertTrue(controller.isBubbleVisibleForTesting)
+
+        controller.simulateOutsideBubbleClickForTesting(screenLocation: CGPoint(x: 32, y: 32))
+
+        let bubbleDismissed = expectation(description: "outside click hides hover bubble")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
+            XCTAssertFalse(controller.isBubbleVisibleForTesting)
             bubbleDismissed.fulfill()
         }
 
@@ -924,7 +1036,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         )
     }
 
-    func testBubbleHideImmediatelyCollapsesRenderedLayout() {
+    func testBubbleHideFadesBeforeCollapsingRenderedLayout() {
         let viewModel = makeViewModel()
         let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = [
@@ -943,8 +1055,15 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         XCTAssertTrue(controller.isBubbleVisibleForTesting)
 
         controller.hideBubbleForTesting()
-        XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
-        XCTAssertFalse(controller.isBubbleVisibleForTesting)
+
+        let bubbleDismissed = expectation(description: "bubble fade completes before layout collapse")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
+            XCTAssertFalse(controller.isBubbleVisibleForTesting)
+            bubbleDismissed.fulfill()
+        }
+
+        wait(for: [bubbleDismissed], timeout: 1.0)
     }
 
     private func makeViewModel() -> NotchViewModel {

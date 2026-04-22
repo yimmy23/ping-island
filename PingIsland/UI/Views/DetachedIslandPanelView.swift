@@ -526,6 +526,7 @@ struct DetachedIslandPanelView: View {
     let onPetDragStarted: () -> Void
     let onPetDragChanged: (CGSize) -> Void
     let onPetDragEnded: () -> Void
+    let onBubbleHoverChanged: (Bool) -> Void
     let onAttentionActionCompleted: () -> Void
     let onCompletionNotificationHoverChanged: (Bool) -> Void
     let onDismissCompletionNotification: () -> Void
@@ -592,6 +593,10 @@ struct DetachedIslandPanelView: View {
                     route: bubbleRoute,
                     contentWidth: DetachedIslandContentModel.contentWidth(for: bubbleFrame.width)
                 )
+                    .onHover(perform: onBubbleHoverChanged)
+                    .onDisappear {
+                        onBubbleHoverChanged(false)
+                    }
                     .opacity(bubbleViewState.isBubbleVisible ? 1 : 0)
                     .allowsHitTesting(bubbleViewState.isBubbleVisible)
                     .frame(width: bubbleFrame.width, height: bubbleFrame.height)
