@@ -3,6 +3,7 @@ import SwiftUI
 struct IslandOpenedContentView: View {
     let sessionMonitor: SessionMonitor
     @ObservedObject var viewModel: NotchViewModel
+    @ObservedObject private var settings = AppSettings.shared
     let surface: IslandExpandedSurface
     let trigger: IslandExpandedTrigger
     let style: IslandOpenedPresentationStyle
@@ -14,55 +15,17 @@ struct IslandOpenedContentView: View {
     let onDismissCompletionNotification: () -> Void
 
     var body: some View {
-        Group {
-            switch route {
-            case .sessionList:
-                SessionListView(
-                    sessionMonitor: sessionMonitor,
-                    viewModel: viewModel,
-                    enableKeyboardNavigation: surface == .docked,
-                    highlightedSessionStableID: highlightedSessionStableID
-                )
-            case .hoverDashboard:
-                SessionHoverDashboardView(
-                    sessions: hoverPreviewSessions,
-                    sessionMonitor: sessionMonitor,
-                    density: surface == .floating ? .detachedCompact : .regular
-                )
-            case .attentionNotification(let session):
-                SessionAttentionNotificationView(
-                    session: liveSession(for: session),
-                    sessionMonitor: sessionMonitor,
-                    density: surface == .floating ? .detachedCompact : .regular,
-                    onActionCompleted: onAttentionActionCompleted
-                )
-            case .completionNotification(let notification):
-                SessionCompletionNotificationView(
-                    notification: liveNotification(notification),
-                    presentationStyle: style == .detached ? .bubble : .panel,
-                    onHoverChanged: onCompletionNotificationHoverChanged,
-                    onDismiss: onDismissCompletionNotification
-                )
-            case .chat(let session):
-                let liveSession = liveSession(for: session)
-
-                if liveSession.provider == .claude {
-                    ChatView(
-                        sessionId: liveSession.sessionId,
-                        initialSession: liveSession,
-                        sessionMonitor: sessionMonitor,
-                        viewModel: viewModel
-                    )
-                } else {
-                    CodexSessionView(
-                        session: liveSession,
-                        sessionMonitor: sessionMonitor,
-                        viewModel: viewModel
-                    )
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            if shouldShowUsageSummary {
+                UsageSummaryStripView(providers: usageProviders)
             }
+
+            routeContent
         }
         .frame(width: contentWidth)
+        .onAppear {
+            sessionMonitor.refreshUsageState()
+        }
     }
 
     private var route: IslandExpandedRoute {
@@ -77,6 +40,73 @@ struct IslandOpenedContentView: View {
 
     private var hoverPreviewSessions: [SessionState] {
         IslandExpandedRouteResolver.activePreviewSessions(from: sessionMonitor.instances)
+    }
+
+    @ViewBuilder
+    private var routeContent: some View {
+        switch route {
+        case .sessionList:
+            SessionListView(
+                sessionMonitor: sessionMonitor,
+                viewModel: viewModel,
+                enableKeyboardNavigation: surface == .docked,
+                highlightedSessionStableID: highlightedSessionStableID
+            )
+        case .hoverDashboard:
+            SessionHoverDashboardView(
+                sessions: hoverPreviewSessions,
+                sessionMonitor: sessionMonitor,
+                density: surface == .floating ? .detachedCompact : .regular
+            )
+        case .attentionNotification(let session):
+            SessionAttentionNotificationView(
+                session: liveSession(for: session),
+                sessionMonitor: sessionMonitor,
+                density: surface == .floating ? .detachedCompact : .regular,
+                onActionCompleted: onAttentionActionCompleted
+            )
+        case .completionNotification(let notification):
+            SessionCompletionNotificationView(
+                notification: liveNotification(notification),
+                presentationStyle: style == .detached ? .bubble : .panel,
+                onHoverChanged: onCompletionNotificationHoverChanged,
+                onDismiss: onDismissCompletionNotification
+            )
+        case .chat(let session):
+            let liveSession = liveSession(for: session)
+
+            if liveSession.provider == .claude {
+                ChatView(
+                    sessionId: liveSession.sessionId,
+                    initialSession: liveSession,
+                    sessionMonitor: sessionMonitor,
+                    viewModel: viewModel
+                )
+            } else {
+                CodexSessionView(
+                    session: liveSession,
+                    sessionMonitor: sessionMonitor,
+                    viewModel: viewModel
+                )
+            }
+        }
+    }
+
+    private var usageProviders: [UsageSummaryProvider] {
+        UsageSummaryPresenter.providers(
+            claudeSnapshot: sessionMonitor.claudeUsageSnapshot,
+            codexSnapshot: sessionMonitor.codexUsageSnapshot,
+            mode: settings.usageValueMode,
+            locale: settings.locale
+        )
+    }
+
+    private var shouldShowUsageSummary: Bool {
+        UsageSummaryPresenter.shouldShowSummary(
+            for: route,
+            showUsage: settings.showUsage,
+            providers: usageProviders
+        )
     }
 
     private func liveSession(for session: SessionState) -> SessionState {

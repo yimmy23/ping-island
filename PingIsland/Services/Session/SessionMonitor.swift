@@ -14,6 +14,8 @@ import Foundation
 class SessionMonitor: ObservableObject {
     @Published var instances: [SessionState] = []
     @Published var pendingInstances: [SessionState] = []
+    @Published private(set) var claudeUsageSnapshot: ClaudeUsageSnapshot?
+    @Published private(set) var codexUsageSnapshot: CodexUsageSnapshot?
 
     nonisolated static var isRunningUnderXCTest: Bool {
         Foundation.ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
@@ -23,6 +25,7 @@ class SessionMonitor: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var hasStarted = false
     private var allSessions: [SessionState] = []
+    private var usageRefreshTask: Task<Void, Never>?
 
     init(
         runtimeCoordinator: any RuntimeCoordinating = RuntimeCoordinator.shared,
@@ -42,6 +45,7 @@ class SessionMonitor: ObservableObject {
             .autoconnect()
             .sink { [weak self] _ in
                 self?.refreshVisibleSessions()
+                self?.refreshUsageState()
                 Task {
                     await SessionStore.shared.process(
                         .pruneTimedOutExternalContinuations(now: Date())
@@ -58,6 +62,8 @@ class SessionMonitor: ObservableObject {
                 self?.refreshVisibleSessions()
             }
             .store(in: &cancellables)
+
+        refreshUsageState()
     }
 
     // MARK: - Monitoring Lifecycle
@@ -195,6 +201,8 @@ class SessionMonitor: ObservableObject {
 
     func stopMonitoring() {
         hasStarted = false
+        usageRefreshTask?.cancel()
+        usageRefreshTask = nil
         HookSocketServer.shared.stop()
         RemoteConnectorManager.shared.stop()
         Task {
@@ -202,6 +210,25 @@ class SessionMonitor: ObservableObject {
         }
         Task {
             await runtimeCoordinator.stop()
+        }
+    }
+
+    func refreshUsageState() {
+        usageRefreshTask?.cancel()
+        usageRefreshTask = Task { [weak self] in
+            guard let self else { return }
+
+            let claudeSnapshot = await Task.detached(priority: .utility) {
+                try? ClaudeUsageLoader.load()
+            }.value
+
+            let codexSnapshot = await Task.detached(priority: .utility) {
+                try? CodexUsageLoader.load()
+            }.value
+
+            guard !Task.isCancelled else { return }
+            self.claudeUsageSnapshot = claudeSnapshot
+            self.codexUsageSnapshot = codexSnapshot
         }
     }
 

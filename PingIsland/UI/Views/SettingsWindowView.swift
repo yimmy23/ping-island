@@ -1240,6 +1240,27 @@ private struct SettingsPanelContentView: View {
                 )
                 SettingsLineDivider()
 
+                SettingsToggleLine(
+                    title: "显示用量",
+                    subtitle: "在展开面板顶部显示 Claude 与 Codex 的限额占用率和重置时间",
+                    isOn: $settings.showUsage
+                )
+                SettingsLineDivider()
+
+                SettingsInfoLine(
+                    title: "用量显示方式",
+                    subtitle: "切换显示已用量或剩余量；Claude 与 Codex 共用这组设置"
+                ) {
+                    UsageValueModePicker(
+                        mode: Binding(
+                            get: { settings.usageValueMode },
+                            set: { settings.usageValueMode = $0 }
+                        )
+                    )
+                    .disabled(!settings.showUsage)
+                }
+                SettingsLineDivider()
+
                 SettingsInfoLine(
                     title: "子 Agent 显示",
                     subtitle: "控制主列表里是否展示子 Agent 消息项；当前会影响 Codex、Qoder 等带子会话的客户端"
@@ -3940,6 +3961,21 @@ private struct SubagentVisibilityPicker: View {
         }
         .labelsHidden()
         .accessibilityLabel(Text(appLocalized: "子 Agent 显示"))
+        .settingsMenuPicker(width: 168)
+    }
+}
+
+private struct UsageValueModePicker: View {
+    @Binding var mode: UsageValueMode
+
+    var body: some View {
+        Picker("", selection: $mode) {
+            ForEach(UsageValueMode.allCases) { candidate in
+                Text(appLocalized: candidate.title).tag(candidate)
+            }
+        }
+        .labelsHidden()
+        .accessibilityLabel(Text(appLocalized: "用量显示方式"))
         .settingsMenuPicker(width: 168)
     }
 }

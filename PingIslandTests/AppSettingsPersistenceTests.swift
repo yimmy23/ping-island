@@ -121,6 +121,30 @@ final class AppSettingsPersistenceTests: XCTestCase {
         XCTAssertEqual(defaults.object(forKey: "autoOpenCompactedNotificationPanel") as? Bool, false)
     }
 
+    func testUsageVisibilityPersists() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+
+        XCTAssertFalse(store.showUsage)
+
+        store.showUsage = true
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertTrue(reloadedStore.showUsage)
+        XCTAssertEqual(defaults.object(forKey: "showUsage") as? Bool, true)
+    }
+
+    func testUsageValueModePersists() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+
+        XCTAssertEqual(store.usageValueMode, .used)
+
+        store.usageValueMode = .remaining
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertEqual(reloadedStore.usageValueMode, .remaining)
+        XCTAssertEqual(defaults.string(forKey: "usageValueMode"), UsageValueMode.remaining.rawValue)
+    }
+
     func testSurfaceModePersists() {
         let defaults = makeDefaults()
         let store = makeStore(defaults: defaults)

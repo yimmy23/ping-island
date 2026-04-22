@@ -1,0 +1,170 @@
+import Foundation
+
+struct UsageSummaryWindow: Equatable {
+    let id: String
+    let label: String
+    let valueText: String
+    let resetText: String?
+}
+
+struct UsageSummaryProvider: Equatable, Identifiable {
+    let id: String
+    let title: String
+    let windows: [UsageSummaryWindow]
+}
+
+enum UsageSummaryPresenter {
+    nonisolated static func providers(
+        claudeSnapshot: ClaudeUsageSnapshot?,
+        codexSnapshot: CodexUsageSnapshot?,
+        mode: UsageValueMode,
+        now: Date = .now,
+        locale: Locale = .current
+    ) -> [UsageSummaryProvider] {
+        var providers: [UsageSummaryProvider] = []
+
+        if let snapshot = claudeSnapshot, snapshot.isEmpty == false {
+            var windows: [UsageSummaryWindow] = []
+            if let fiveHour = snapshot.fiveHour {
+                windows.append(
+                    UsageSummaryWindow(
+                        id: "claude-5h",
+                        label: "5h",
+                        valueText: valueText(for: fiveHour.usedPercentage, mode: mode, locale: locale),
+                        resetText: resetText(for: fiveHour.resetsAt, now: now, locale: locale)
+                    )
+                )
+            }
+            if let sevenDay = snapshot.sevenDay {
+                windows.append(
+                    UsageSummaryWindow(
+                        id: "claude-7d",
+                        label: "7d",
+                        valueText: valueText(for: sevenDay.usedPercentage, mode: mode, locale: locale),
+                        resetText: resetText(for: sevenDay.resetsAt, now: now, locale: locale)
+                    )
+                )
+            }
+            if !windows.isEmpty {
+                providers.append(
+                    UsageSummaryProvider(
+                        id: "claude",
+                        title: "Claude",
+                        windows: windows
+                    )
+                )
+            }
+        }
+
+        if let snapshot = codexSnapshot, snapshot.isEmpty == false {
+            let windows = snapshot.windows.map { window in
+                UsageSummaryWindow(
+                    id: "codex-\(window.key)",
+                    label: window.label,
+                    valueText: valueText(for: window.usedPercentage, mode: mode, locale: locale),
+                    resetText: resetText(for: window.resetsAt, now: now, locale: locale)
+                )
+            }
+
+            if !windows.isEmpty {
+                providers.append(
+                    UsageSummaryProvider(
+                        id: "codex",
+                        title: "Codex",
+                        windows: windows
+                    )
+                )
+            }
+        }
+
+        return providers
+    }
+
+    nonisolated static func shouldShowSummary(
+        for route: IslandExpandedRoute,
+        showUsage: Bool,
+        providers: [UsageSummaryProvider]
+    ) -> Bool {
+        guard showUsage, !providers.isEmpty else {
+            return false
+        }
+
+        switch route {
+        case .sessionList, .hoverDashboard, .chat:
+            return true
+        case .attentionNotification, .completionNotification:
+            return false
+        }
+    }
+
+    nonisolated static func valueText(
+        for usedPercentage: Double,
+        mode: UsageValueMode,
+        locale: Locale = .current
+    ) -> String {
+        switch mode {
+        case .used:
+            return "\(Int(usedPercentage.rounded()))%"
+        case .remaining:
+            let remaining = max(0, 100 - usedPercentage)
+            return "\(Int(remaining.rounded()))% \(localizedRemainingLabel(locale: locale))"
+        }
+    }
+
+    nonisolated static func resetText(
+        for date: Date?,
+        now: Date = .now,
+        locale: Locale = .current
+    ) -> String? {
+        guard let date,
+              let duration = remainingDurationString(until: date, now: now) else {
+            return nil
+        }
+
+        switch locale.language.languageCode?.identifier {
+        case "zh":
+            return "\(duration) 后重置"
+        default:
+            return "Resets in \(duration)"
+        }
+    }
+
+    nonisolated static func remainingDurationString(until date: Date, now: Date = .now) -> String? {
+        let seconds = Int(date.timeIntervalSince(now))
+        guard seconds > 0 else {
+            return nil
+        }
+
+        let totalMinutes = seconds / 60
+        let days = totalMinutes / 1_440
+        let remainingMinutesAfterDays = totalMinutes % 1_440
+        let hours = remainingMinutesAfterDays / 60
+        let minutes = remainingMinutesAfterDays % 60
+
+        if days > 0, hours > 0 {
+            return "\(days)d \(hours)h"
+        }
+        if days > 0 {
+            return "\(days)d"
+        }
+        if hours > 0, minutes > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        if hours > 0 {
+            return "\(hours)h"
+        }
+        if minutes > 0 {
+            return "\(minutes)m"
+        }
+        return "<1m"
+    }
+
+    private nonisolated static func localizedRemainingLabel(locale: Locale) -> String {
+        switch locale.language.languageCode?.identifier {
+        case "zh":
+            return "剩余"
+        default:
+            return "left"
+        }
+    }
+}
