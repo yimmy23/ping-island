@@ -712,10 +712,15 @@ struct DetachedIslandPanelView: View {
                 )
 
                 if shouldShowPinnedUsageFooter {
-                    UsageSummaryStripView(
-                        providers: usageSummaryProviders,
-                        inline: true
-                    )
+                    HStack {
+                        Spacer(minLength: 0)
+                        UsageSummaryStripView(
+                            providers: usageSummaryProviders,
+                            inline: true,
+                            alignment: .trailing,
+                            displayStyle: .battery
+                        )
+                    }
                 }
             }
         }

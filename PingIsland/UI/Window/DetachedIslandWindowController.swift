@@ -392,12 +392,11 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
 
     func beginFloatingDrag() {
         guard floatingDragStartOrigin == nil else { return }
-        let startOrigin = window?.frame.origin
         cancelInteractionActivation()
         interactionModel.resetForDragSuppression()
         interactionModel.setPetDragging(true)
         hideBubbleRenderingImmediately()
-        floatingDragStartOrigin = startOrigin ?? window?.frame.origin
+        floatingDragStartOrigin = window?.frame.origin
     }
 
     func updateFloatingDrag(translation: CGSize) {
