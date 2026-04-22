@@ -695,7 +695,7 @@ struct DetachedIslandPanelView: View {
         contentWidth: CGFloat
     ) -> some View {
         DetachedIslandBubbleChrome(placement: layout.bubblePlacement) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: shouldShowFloatingUsageFooter ? 4 : 8) {
                 IslandOpenedContentView(
                     sessionMonitor: sessionMonitor,
                     viewModel: viewModel,
@@ -724,6 +724,7 @@ struct DetachedIslandPanelView: View {
                             displayStyle: .battery
                         )
                     }
+                    .padding(.top, -2)
                 }
             }
         }
