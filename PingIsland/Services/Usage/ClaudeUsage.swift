@@ -1,6 +1,6 @@
 import Foundation
 
-struct ClaudeUsageWindow: Equatable, Sendable {
+struct ClaudeUsageWindow: Equatable, Codable, Sendable {
     let usedPercentage: Double
     let resetsAt: Date?
 
@@ -9,7 +9,7 @@ struct ClaudeUsageWindow: Equatable, Sendable {
     }
 }
 
-struct ClaudeUsageSnapshot: Equatable, Sendable {
+struct ClaudeUsageSnapshot: Equatable, Codable, Sendable {
     let fiveHour: ClaudeUsageWindow?
     let sevenDay: ClaudeUsageWindow?
     let cachedAt: Date?

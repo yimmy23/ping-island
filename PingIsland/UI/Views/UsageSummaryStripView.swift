@@ -7,11 +7,12 @@ struct UsageSummaryStripView: View {
     var body: some View {
         Group {
             if inline {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     ForEach(providers) { provider in
                         providerSection(provider)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 10) {
@@ -39,24 +40,24 @@ struct UsageSummaryStripView: View {
     @ViewBuilder
     private func providerSection(_ provider: UsageSummaryProvider) -> some View {
         if inline {
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .center, spacing: 6) {
                 Text(provider.title)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.66))
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.62))
 
                 ForEach(provider.windows, id: \.id) { window in
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Text(window.label)
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.42))
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.4))
 
                         Text(window.valueText)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white.opacity(0.84))
                             .lineLimit(1)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
                     .background(
                         Capsule(style: .continuous)
                             .fill(Color.white.opacity(0.05))
@@ -64,6 +65,7 @@ struct UsageSummaryStripView: View {
                     .help(window.resetText ?? "")
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
         } else {
             HStack(alignment: .center, spacing: 10) {
                 Text(provider.title)

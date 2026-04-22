@@ -33,6 +33,8 @@ class SessionMonitor: ObservableObject {
     ) {
         self.runtimeCoordinator = runtimeCoordinator
         guard observeSharedState else { return }
+        claudeUsageSnapshot = UsageSnapshotCacheStore.loadClaude()
+        codexUsageSnapshot = UsageSnapshotCacheStore.loadCodex()
 
         SessionStore.shared.sessionsPublisher
             .receive(on: DispatchQueue.main)
@@ -218,6 +220,9 @@ class SessionMonitor: ObservableObject {
         usageRefreshTask = Task { [weak self] in
             guard let self else { return }
 
+            let cachedClaudeSnapshot = UsageSnapshotCacheStore.loadClaude()
+            let cachedCodexSnapshot = UsageSnapshotCacheStore.loadCodex()
+
             let claudeSnapshot = await Task.detached(priority: .utility) {
                 try? ClaudeUsageLoader.load()
             }.value
@@ -227,8 +232,16 @@ class SessionMonitor: ObservableObject {
             }.value
 
             guard !Task.isCancelled else { return }
-            self.claudeUsageSnapshot = claudeSnapshot
-            self.codexUsageSnapshot = codexSnapshot
+
+            if let claudeSnapshot {
+                UsageSnapshotCacheStore.saveClaude(claudeSnapshot)
+            }
+            if let codexSnapshot {
+                UsageSnapshotCacheStore.saveCodex(codexSnapshot)
+            }
+
+            self.claudeUsageSnapshot = claudeSnapshot ?? cachedClaudeSnapshot
+            self.codexUsageSnapshot = codexSnapshot ?? cachedCodexSnapshot
         }
     }
 

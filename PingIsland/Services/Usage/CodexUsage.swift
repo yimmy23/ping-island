@@ -1,6 +1,6 @@
 import Foundation
 
-struct CodexUsageWindow: Equatable, Sendable, Identifiable {
+struct CodexUsageWindow: Equatable, Codable, Sendable, Identifiable {
     let key: String
     let label: String
     let usedPercentage: Double
@@ -15,7 +15,7 @@ struct CodexUsageWindow: Equatable, Sendable, Identifiable {
     }
 }
 
-struct CodexUsageSnapshot: Equatable, Sendable {
+struct CodexUsageSnapshot: Equatable, Codable, Sendable {
     let sourceFilePath: String
     let capturedAt: Date?
     let planType: String?

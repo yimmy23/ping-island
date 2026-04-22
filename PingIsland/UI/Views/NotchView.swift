@@ -639,7 +639,7 @@ struct NotchView: View {
         ZStack {
             IslandDragHandleVisual()
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 if viewModel.openReason == .notification,
                    activeCompletionNotification != nil {
                     MascotView(
@@ -655,7 +655,8 @@ struct NotchView: View {
                         providers: usageSummaryProviders,
                         inline: true
                     )
-                    .padding(.leading, 14)
+                    .padding(.leading, viewModel.openReason == .notification && activeCompletionNotification != nil ? 6 : 4)
+                    .layoutPriority(1)
                 }
 
                 Spacer(minLength: 0)
