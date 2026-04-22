@@ -698,7 +698,10 @@ struct DetachedIslandPanelView: View {
                 if settings.showUsage,
                    mode == .pinnedList,
                    !usageSummaryProviders.isEmpty {
-                    UsageSummaryStripView(providers: usageSummaryProviders)
+                    UsageSummaryStripView(
+                        providers: usageSummaryProviders,
+                        inline: true
+                    )
                 }
             }
         }
