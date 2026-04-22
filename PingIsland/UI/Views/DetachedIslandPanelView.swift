@@ -568,6 +568,15 @@ struct DetachedIslandPanelView: View {
         )
     }
 
+    private var usageSummaryProviders: [UsageSummaryProvider] {
+        UsageSummaryPresenter.providers(
+            claudeSnapshot: sessionMonitor.claudeUsageSnapshot,
+            codexSnapshot: sessionMonitor.codexUsageSnapshot,
+            mode: settings.usageValueMode,
+            locale: settings.locale
+        )
+    }
+
     private var compactMascotKind: MascotKind {
         settings.mascotKind(for: IslandMascotResolver.sourceSession(from: sortedSessions)?.mascotClient)
     }
@@ -667,23 +676,31 @@ struct DetachedIslandPanelView: View {
         contentWidth: CGFloat
     ) -> some View {
         DetachedIslandBubbleChrome(placement: layout.bubblePlacement) {
-            IslandOpenedContentView(
-                sessionMonitor: sessionMonitor,
-                viewModel: viewModel,
-                surface: .floating,
-                trigger: mode == .pinnedList
-                    ? .pinnedList
-                    : (bubbleViewState.activeCompletionNotification == nil ? .hover : .notification),
-                style: .detached,
-                activeCompletionNotification: bubbleViewState.activeCompletionNotification,
-                highlightedSessionStableID: route == .sessionList
-                    ? bubbleViewState.highlightedSessionStableID
-                    : nil,
-                contentWidthOverride: contentWidth,
-                onAttentionActionCompleted: onAttentionActionCompleted,
-                onCompletionNotificationHoverChanged: onCompletionNotificationHoverChanged,
-                onDismissCompletionNotification: onDismissCompletionNotification
-            )
+            VStack(alignment: .leading, spacing: 8) {
+                IslandOpenedContentView(
+                    sessionMonitor: sessionMonitor,
+                    viewModel: viewModel,
+                    surface: .floating,
+                    trigger: mode == .pinnedList
+                        ? .pinnedList
+                        : (bubbleViewState.activeCompletionNotification == nil ? .hover : .notification),
+                    style: .detached,
+                    activeCompletionNotification: bubbleViewState.activeCompletionNotification,
+                    highlightedSessionStableID: route == .sessionList
+                        ? bubbleViewState.highlightedSessionStableID
+                        : nil,
+                    contentWidthOverride: contentWidth,
+                    onAttentionActionCompleted: onAttentionActionCompleted,
+                    onCompletionNotificationHoverChanged: onCompletionNotificationHoverChanged,
+                    onDismissCompletionNotification: onDismissCompletionNotification
+                )
+
+                if settings.showUsage,
+                   mode == .pinnedList,
+                   !usageSummaryProviders.isEmpty {
+                    UsageSummaryStripView(providers: usageSummaryProviders)
+                }
+            }
         }
     }
 }
