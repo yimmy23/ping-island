@@ -98,6 +98,31 @@ struct NotchView: View {
         countedClosedSessions.count
     }
 
+    private var usageSummaryProviders: [UsageSummaryProvider] {
+        UsageSummaryPresenter.providers(
+            claudeSnapshot: sessionMonitor.claudeUsageSnapshot,
+            codexSnapshot: sessionMonitor.codexUsageSnapshot,
+            mode: settings.usageValueMode,
+            locale: settings.locale
+        )
+    }
+
+    private var shouldShowOpenedHeaderUsage: Bool {
+        let route = IslandExpandedRouteResolver.resolve(
+            surface: .docked,
+            trigger: triggerForCurrentPresentation,
+            contentType: viewModel.contentType,
+            sessions: sessionMonitor.instances,
+            activeCompletionNotification: activeCompletionNotification
+        )
+
+        return UsageSummaryPresenter.shouldShowSummary(
+            for: route,
+            showUsage: settings.showUsage,
+            providers: usageSummaryProviders
+        )
+    }
+
     private var shouldHideForIdleState: Bool {
         settings.autoHideWhenIdle
             && activeSessions.isEmpty
@@ -625,7 +650,15 @@ struct NotchView: View {
                     .padding(.leading, 14)
                 }
 
-                Spacer()
+                if shouldShowOpenedHeaderUsage {
+                    UsageSummaryStripView(
+                        providers: usageSummaryProviders,
+                        inline: true
+                    )
+                    .padding(.leading, 14)
+                }
+
+                Spacer(minLength: 0)
 
                 NotchTemporaryMuteButton(
                     isActive: areReminderNotificationsSuppressed,

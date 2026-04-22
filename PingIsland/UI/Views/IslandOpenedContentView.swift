@@ -3,7 +3,6 @@ import SwiftUI
 struct IslandOpenedContentView: View {
     let sessionMonitor: SessionMonitor
     @ObservedObject var viewModel: NotchViewModel
-    @ObservedObject private var settings = AppSettings.shared
     let surface: IslandExpandedSurface
     let trigger: IslandExpandedTrigger
     let style: IslandOpenedPresentationStyle
@@ -15,13 +14,7 @@ struct IslandOpenedContentView: View {
     let onDismissCompletionNotification: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if shouldShowUsageSummary {
-                UsageSummaryStripView(providers: usageProviders)
-            }
-
-            routeContent
-        }
+        routeContent
         .frame(width: contentWidth)
         .onAppear {
             sessionMonitor.refreshUsageState()
@@ -90,23 +83,6 @@ struct IslandOpenedContentView: View {
                 )
             }
         }
-    }
-
-    private var usageProviders: [UsageSummaryProvider] {
-        UsageSummaryPresenter.providers(
-            claudeSnapshot: sessionMonitor.claudeUsageSnapshot,
-            codexSnapshot: sessionMonitor.codexUsageSnapshot,
-            mode: settings.usageValueMode,
-            locale: settings.locale
-        )
-    }
-
-    private var shouldShowUsageSummary: Bool {
-        UsageSummaryPresenter.shouldShowSummary(
-            for: route,
-            showUsage: settings.showUsage,
-            providers: usageProviders
-        )
     }
 
     private func liveSession(for session: SessionState) -> SessionState {
