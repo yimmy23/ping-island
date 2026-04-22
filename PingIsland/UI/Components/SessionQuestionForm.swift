@@ -135,6 +135,7 @@ struct SessionQuestionForm: View {
     @ViewBuilder
     private func questionInput(_ question: SessionInterventionQuestion) -> some View {
         if !question.options.isEmpty {
+            let reservesDetailSpace = question.options.contains { optionDetail(for: $0) != nil }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
                 ForEach(question.options) { option in
                     Button {
@@ -152,11 +153,16 @@ struct SessionQuestionForm: View {
                                 Text(option.title)
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.white)
-                                if let detail = option.detail {
+                                if let detail = optionDetail(for: option) {
                                     Text(detail)
                                         .font(.system(size: 10))
                                         .foregroundColor(.white.opacity(0.55))
                                         .lineLimit(2)
+                                } else if reservesDetailSpace {
+                                    Text(" ")
+                                        .font(.system(size: 10))
+                                        .lineLimit(2)
+                                        .hidden()
                                 }
                             }
 
@@ -273,6 +279,11 @@ struct SessionQuestionForm: View {
     private func normalizedAnswers(from value: String) -> [String] {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? [] : [trimmed]
+    }
+
+    private func optionDetail(for option: SessionInterventionOption) -> String? {
+        let trimmed = option.detail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
