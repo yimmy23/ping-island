@@ -185,7 +185,6 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             bubbleViewState.setActiveCompletionNotification(activeCompletionNotification)
         }
     }
-    private var shouldDismissCompletionNotificationOnHoverExit = false
 
     init(
         viewModel: NotchViewModel,
@@ -480,6 +479,14 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
 
     func simulateCompletionNotificationHoverForTesting(_ isHovering: Bool) {
         handleCompletionNotificationHover(isHovering)
+    }
+
+    func presentCompletionNotificationForTesting(_ notification: SessionCompletionNotification) {
+        activeCompletionNotification = notification
+        applyBubbleStateChange {
+            interactionModel.presentHoverPreview(canPresentBubble: true)
+        }
+        scheduleCompletionNotificationDismissal(for: notification.id)
     }
 
     func dismiss() {

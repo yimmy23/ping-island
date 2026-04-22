@@ -610,6 +610,10 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
     }
 
     func testCompletedSessionAutoOpensCompletionBubbleInFloatingMode() {
+        let originalAutoOpenCompletionPanel = AppSettings.autoOpenCompletionPanel
+        AppSettings.autoOpenCompletionPanel = true
+        defer { AppSettings.autoOpenCompletionPanel = originalAutoOpenCompletionPanel }
+
         let viewModel = makeViewModel()
         let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
@@ -652,7 +656,8 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
     func testCompletionBubbleAutoDismissesEvenWhileHoveredInFloatingMode() {
         let viewModel = makeViewModel()
         let sessionMonitor = makeSessionMonitor()
-        sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
+        let completed = makeCompletedSession(id: "completed")
+        sessionMonitor.instances = [completed]
 
         let controller = DetachedIslandWindowController(
             viewModel: viewModel,
@@ -663,10 +668,12 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         defer { controller.dismiss() }
 
         controller.present(atPetAnchor: CGPoint(x: 1200, y: 220))
-        controller.applySessionSnapshotForTesting([makeCompletedSession(id: "completed")])
+        controller.presentCompletionNotificationForTesting(
+            SessionCompletionNotification(session: completed, kind: .completed)
+        )
 
         let bubblePresented = expectation(description: "completion bubble becomes active")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             XCTAssertNotNil(controller.currentActiveCompletionNotificationForTesting)
             controller.simulateCompletionNotificationHoverForTesting(true)
             bubblePresented.fulfill()
