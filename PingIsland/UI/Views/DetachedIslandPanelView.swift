@@ -17,6 +17,7 @@ enum DetachedIslandPanelMetrics {
     static let bubbleCornerRadius: CGFloat = 22
     static let bubbleHorizontalPadding: CGFloat = 6
     static let bubbleVerticalPadding: CGFloat = 4
+    static let usageFooterReservedHeight: CGFloat = 34
 }
 
 enum DetachedIslandBubbleCorner: Equatable {
@@ -190,7 +191,8 @@ enum DetachedIslandContentModel {
         for route: IslandExpandedRoute,
         sessions: [SessionState],
         viewModel: NotchViewModel,
-        measuredAttentionBubbleHeight: CGFloat? = nil
+        measuredAttentionBubbleHeight: CGFloat? = nil,
+        additionalFooterHeight: CGFloat = 0
     ) -> CGSize {
         let widthLimit = viewModel.screenRect.width - 132
 
@@ -199,7 +201,10 @@ enum DetachedIslandContentModel {
             let width = min(widthLimit, 448)
             let sorted = sortedSessions(from: sessions)
             let estimatedHeight = sessionListEstimatedHeight(for: sorted)
-            let height = min(viewModel.screenRect.height - 160, max(96, estimatedHeight))
+            let height = min(
+                viewModel.screenRect.height - 160,
+                max(96, estimatedHeight + additionalFooterHeight)
+            )
             return CGSize(width: width, height: height)
         case .hoverDashboard:
             let width = min(widthLimit, 392)
@@ -270,6 +275,7 @@ enum DetachedIslandContentModel {
         bubbleState: DetachedIslandBubbleState,
         bubblePlacement: DetachedIslandBubblePlacement,
         measuredAttentionBubbleHeight: CGFloat? = nil,
+        additionalFooterHeight: CGFloat = 0,
         activeCompletionNotification: SessionCompletionNotification? = nil,
         petScreenAnchor: CGPoint? = nil,
         availableFrame: CGRect? = nil
@@ -306,7 +312,8 @@ enum DetachedIslandContentModel {
             for: route,
             sessions: sessions,
             viewModel: viewModel,
-            measuredAttentionBubbleHeight: measuredAttentionBubbleHeight
+            measuredAttentionBubbleHeight: measuredAttentionBubbleHeight,
+            additionalFooterHeight: additionalFooterHeight
         )
         let resolvedPlacement: DetachedIslandBubblePlacement
         if let petScreenAnchor, let availableFrame {
@@ -564,6 +571,9 @@ struct DetachedIslandPanelView: View {
             bubbleState: bubbleViewState.renderedBubbleState,
             bubblePlacement: interactionModel.bubblePlacement,
             measuredAttentionBubbleHeight: bubbleViewState.measuredAttentionBubbleHeight,
+            additionalFooterHeight: shouldShowPinnedUsageFooter
+                ? DetachedIslandPanelMetrics.usageFooterReservedHeight
+                : 0,
             activeCompletionNotification: bubbleViewState.activeCompletionNotification
         )
     }
@@ -575,6 +585,12 @@ struct DetachedIslandPanelView: View {
             mode: settings.usageValueMode,
             locale: settings.locale
         )
+    }
+
+    private var shouldShowPinnedUsageFooter: Bool {
+        settings.showUsage
+            && bubbleContentMode == .pinnedList
+            && !usageSummaryProviders.isEmpty
     }
 
     private var compactMascotKind: MascotKind {
@@ -695,9 +711,7 @@ struct DetachedIslandPanelView: View {
                     onDismissCompletionNotification: onDismissCompletionNotification
                 )
 
-                if settings.showUsage,
-                   mode == .pinnedList,
-                   !usageSummaryProviders.isEmpty {
+                if shouldShowPinnedUsageFooter {
                     UsageSummaryStripView(
                         providers: usageSummaryProviders,
                         inline: true
