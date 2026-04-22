@@ -23,6 +23,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if launchConfiguration.shouldInstallIntegrations {
             HookInstaller.installIfNeeded()
             IDEExtensionInstaller.cleanupLegacyTraeExtension()
+            NotchDetachmentHintExperience.prepareForLaunch(
+                previousVersion: HookInstaller.getVersionMetadata()?["previousVersion"] as? String
+            )
         }
 
         NSApplication.shared.setActivationPolicy(launchConfiguration.activationPolicy)

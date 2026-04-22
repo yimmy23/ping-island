@@ -69,6 +69,9 @@
 "设置展示模式和刘海示意图里使用的默认宠物。当前只影响设置内示意图。" = "Choose the mascot used in the presentation-mode and notch previews. This currently only affects Settings previews.";
 "刘海显示模式" = "Notch display mode";
 "直接预览刘海闭合态效果。简约模式只显示宠物和数量，详细模式会额外显示中间过程信息。" = "Preview the closed-notch appearance directly. Compact mode only shows the mascot and count, while detailed mode also shows in-progress context.";
+"刘海拖拽引导" = "Notch drag guidance";
+"重新演示老用户首次打开新版本时看到的刘海拖拽提示。" = "Replay the notch drag hint that returning users see the first time they open the new version.";
+"重新演示" = "Replay";
 "简约" = "Compact";
 "只显示图标和会话数量" = "Show only the icon and session count";
 "详细" = "Detailed";
@@ -81,7 +84,9 @@
 "进入独立悬浮宠物模式后，右键宠物形象可重新打开设置面板。" = "After entering floating pet mode, right-click the mascot to reopen the Settings panel.";
 "首次使用，选择展示方式" = "Choose your default presentation";
 "你可以把 Ping Island 放在屏幕顶部，也可以让宠物默认贴近当前激活窗口右下角显示。之后都能在设置里随时切换。" = "You can keep Ping Island at the top of the screen or let the pet appear near the bottom-right corner of the active window by default. You can switch later in Settings anytime.";
-"拖动宠物，让 Island 离岛工作" = "Drag the mascot to undock the Island.";
+"拖动宠物，让宠物离岛工作" = "Drag the mascot to let the pet work away from the Island.";
+"最后一步：右键宠物形象" = "Last step: right-click the mascot";
+"需要重新打开设置面板时，直接右键宠物形象就可以。" = "When you need the Settings panel again, just right-click the mascot.";
 "稍后可在 设置 -> 显示 中重新切换" = "You can change this later in Settings -> Display.";
 "开始使用" = "Get started";
 

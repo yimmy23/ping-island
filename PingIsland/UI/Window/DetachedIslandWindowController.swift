@@ -169,6 +169,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     private var interactionActivationWorkItem: DispatchWorkItem?
     private var bubbleVisibilityWorkItem: DispatchWorkItem?
     private var bubbleHoverGraceWorkItem: DispatchWorkItem?
+    private var floatingSettingsHintDismissWorkItem: DispatchWorkItem?
     private var completionNotificationDismissWorkItem: DispatchWorkItem?
     private var outsideClickMonitor: EventMonitor?
     private var floatingDragStartOrigin: CGPoint?
@@ -190,6 +191,10 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         didSet {
             bubbleViewState.setActiveCompletionNotification(activeCompletionNotification)
         }
+    }
+
+    private var currentGuideBubbleSize: CGSize? {
+        interactionModel.isSettingsHintVisible ? DetachedIslandPanelMetrics.settingsHintBubbleSize : nil
     }
 
     init(
@@ -304,7 +309,8 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             bubbleState: bubbleViewState.renderedBubbleState,
             bubblePlacement: interactionModel.bubblePlacement,
             measuredAttentionBubbleHeight: bubbleViewState.measuredAttentionBubbleHeight,
-            activeCompletionNotification: activeCompletionNotification
+            activeCompletionNotification: activeCompletionNotification,
+            guideBubbleSize: currentGuideBubbleSize
         )
         let initialFrame = NSRect(
             origin: origin,
@@ -316,6 +322,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         showWindow(nil)
         window.makeKeyAndOrderFront(nil)
         presentExistingAttentionIfNeeded()
+        presentFloatingSettingsHintIfNeeded()
     }
 
     func present(atPetAnchor petAnchor: CGPoint) {
@@ -328,6 +335,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             bubblePlacement: interactionModel.bubblePlacement,
             measuredAttentionBubbleHeight: bubbleViewState.measuredAttentionBubbleHeight,
             activeCompletionNotification: activeCompletionNotification,
+            guideBubbleSize: currentGuideBubbleSize,
             petAnchorScreen: petAnchor,
             availableFrame: availableFrame(for: petAnchor)
         )
@@ -342,6 +350,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         showWindow(nil)
         window.makeKeyAndOrderFront(nil)
         presentExistingAttentionIfNeeded()
+        presentFloatingSettingsHintIfNeeded()
     }
 
     var currentPetAnchor: CGPoint? {
@@ -425,6 +434,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     }
 
     func handlePetSecondaryClick() {
+        dismissFloatingSettingsHint()
         SettingsWindowController.shared.present()
     }
 
@@ -516,6 +526,8 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         bubbleVisibilityWorkItem = nil
         bubbleHoverGraceWorkItem?.cancel()
         bubbleHoverGraceWorkItem = nil
+        floatingSettingsHintDismissWorkItem?.cancel()
+        floatingSettingsHintDismissWorkItem = nil
         completionNotificationDismissWorkItem?.cancel()
         completionNotificationDismissWorkItem = nil
         outsideClickMonitor?.stop()
@@ -674,6 +686,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             bubblePlacement: interactionModel.bubblePlacement,
             measuredAttentionBubbleHeight: bubbleViewState.measuredAttentionBubbleHeight,
             activeCompletionNotification: activeCompletionNotification,
+            guideBubbleSize: currentGuideBubbleSize,
             petAnchorScreen: petAnchorScreen,
             availableFrame: availableFrame(for: petAnchorScreen)
         )
@@ -706,6 +719,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         bubblePlacement: DetachedIslandBubblePlacement = .topLeft,
         measuredAttentionBubbleHeight: CGFloat? = nil,
         activeCompletionNotification: SessionCompletionNotification? = nil,
+        guideBubbleSize: CGSize? = nil,
         petAnchorScreen: CGPoint? = nil,
         availableFrame: CGRect? = nil
     ) -> DetachedIslandWindowLayout {
@@ -743,6 +757,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             measuredAttentionBubbleHeight: measuredAttentionBubbleHeight,
             additionalFooterHeight: additionalFooterHeight,
             activeCompletionNotification: activeCompletionNotification,
+            guideBubbleSize: guideBubbleSize,
             petScreenAnchor: petAnchorScreen,
             availableFrame: availableFrame
         )
@@ -755,6 +770,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         bubblePlacement: DetachedIslandBubblePlacement = .topLeft,
         measuredAttentionBubbleHeight: CGFloat? = nil,
         activeCompletionNotification: SessionCompletionNotification? = nil,
+        guideBubbleSize: CGSize? = nil,
         petAnchorScreen: CGPoint? = nil,
         availableFrame: CGRect? = nil
     ) -> CGSize {
@@ -765,6 +781,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             bubblePlacement: bubblePlacement,
             measuredAttentionBubbleHeight: measuredAttentionBubbleHeight,
             activeCompletionNotification: activeCompletionNotification,
+            guideBubbleSize: guideBubbleSize,
             petAnchorScreen: petAnchorScreen,
             availableFrame: availableFrame
         ).containerSize
@@ -936,6 +953,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         if !isPetDragActive,
            hypot(translation.width, translation.height) >= 3 {
             isPetDragActive = true
+            dismissFloatingSettingsHint()
             beginFloatingDrag()
         }
 
@@ -959,6 +977,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         }
 
         guard isPointInsidePet(event.locationInWindow) else { return true }
+        dismissFloatingSettingsHint()
         detachedViewController.onPetTap()
         return true
     }
@@ -1220,6 +1239,10 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         from previousState: DetachedIslandBubbleState,
         to currentState: DetachedIslandBubbleState
     ) {
+        if currentState != .hidden {
+            dismissFloatingSettingsHint()
+        }
+
         guard previousState == .hidden else {
             cancelBubbleHoverGraceTimer()
             return
@@ -1262,6 +1285,29 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         bubbleHoverGraceWorkItem = nil
     }
 
+    private func presentFloatingSettingsHintIfNeeded() {
+        guard AppSettings.floatingPetSettingsHintPending else { return }
+
+        AppSettings.floatingPetSettingsHintPending = false
+        floatingSettingsHintDismissWorkItem?.cancel()
+        interactionModel.setSettingsHintVisible(true)
+        scheduleWindowSizeUpdate()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.dismissFloatingSettingsHint()
+        }
+        floatingSettingsHintDismissWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6, execute: workItem)
+    }
+
+    private func dismissFloatingSettingsHint() {
+        floatingSettingsHintDismissWorkItem?.cancel()
+        floatingSettingsHintDismissWorkItem = nil
+        guard interactionModel.isSettingsHintVisible else { return }
+        interactionModel.setSettingsHintVisible(false)
+        scheduleWindowSizeUpdate()
+    }
+
     private func screenBubbleFrame(for window: NSWindow) -> CGRect {
         guard let bubbleFrame = lastAppliedLayout.bubbleFrame else { return .null }
         let bubbleWindowFrame = CGRect(
@@ -1296,6 +1342,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             bubblePlacement: interactionModel.bubblePlacement,
             measuredAttentionBubbleHeight: bubbleViewState.measuredAttentionBubbleHeight,
             activeCompletionNotification: activeCompletionNotification,
+            guideBubbleSize: currentGuideBubbleSize,
             petAnchorScreen: petAnchorScreen,
             availableFrame: availableFrame(for: petAnchorScreen)
         )

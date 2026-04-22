@@ -3,6 +3,13 @@ import XCTest
 @testable import Ping_Island
 
 final class AppLaunchConfigurationTests: XCTestCase {
+    private func makeDefaults(testName: String = #function) -> UserDefaults {
+        let suiteName = "PingIslandTests.AppLaunchConfiguration.\(testName)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
+    }
+
     func testDefaultLaunchConfigurationMatchesProductionBehavior() {
         let configuration = AppLaunchConfiguration(environment: [:], isDebuggerAttached: false)
 
@@ -108,6 +115,48 @@ final class AppLaunchConfigurationTests: XCTestCase {
         XCTAssertFalse(flow.shouldStartMonitoringImmediately)
         XCTAssertFalse(flow.shouldPresentSurfaceModeOnboarding)
         XCTAssertFalse(flow.shouldCreateInitialIslandWindow)
+    }
+
+    func testNotchDetachmentHintExperienceSchedulesHintForUpgradingUsers() {
+        let defaults = makeDefaults()
+        defaults.set(false, forKey: AppSettingsDefaultKeys.notchDetachmentHintPending)
+        defaults.set(false, forKey: AppSettingsDefaultKeys.floatingPetSettingsHintPending)
+
+        NotchDetachmentHintExperience.prepareForLaunch(
+            defaults: defaults,
+            previousVersion: "0.9.0"
+        )
+
+        XCTAssertTrue(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
+        XCTAssertTrue(defaults.bool(forKey: AppSettingsDefaultKeys.floatingPetSettingsHintPending))
+    }
+
+    func testNotchDetachmentHintExperienceDoesNotScheduleHintForFreshInstall() {
+        let defaults = makeDefaults()
+
+        NotchDetachmentHintExperience.prepareForLaunch(
+            defaults: defaults,
+            previousVersion: nil
+        )
+
+        XCTAssertFalse(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
+    }
+
+    func testNotchDetachmentHintExperienceOnlyAppliesUpgradePromptOncePerRevision() {
+        let defaults = makeDefaults()
+
+        NotchDetachmentHintExperience.prepareForLaunch(
+            defaults: defaults,
+            previousVersion: "0.9.0"
+        )
+        defaults.set(false, forKey: AppSettingsDefaultKeys.notchDetachmentHintPending)
+
+        NotchDetachmentHintExperience.prepareForLaunch(
+            defaults: defaults,
+            previousVersion: "1.0.0"
+        )
+
+        XCTAssertFalse(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
     }
 
     func testMouseEventReplayMarkerDistinguishesSyntheticEvents() {

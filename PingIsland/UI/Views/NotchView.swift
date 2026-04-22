@@ -408,6 +408,9 @@ struct NotchView: View {
             .onReceive(NotificationCenter.default.publisher(for: .pingIslandOpenSessionListShortcut)) { _ in
                 handleOpenSessionListShortcut()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .pingIslandPresentNotchDetachmentHint)) { _ in
+                presentDetachmentHintIfNeeded(force: true)
+            }
             .onPreferenceChange(OpenedPanelContentHeightPreferenceKey.self) { height in
                 guard viewModel.status == .opened else {
                     viewModel.updateOpenedMeasuredHeight(nil)
@@ -437,10 +440,10 @@ struct NotchView: View {
 
             if isShowingDetachmentHint {
                 NotchDetachmentHintView()
-                    .offset(x: -64, y: -72)
+                    .offset(x: -22, y: 28)
                     .transition(
                         .asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.92, anchor: .bottomTrailing)),
+                            insertion: .opacity.combined(with: .scale(scale: 0.92, anchor: .topTrailing)),
                             removal: .opacity.animation(.easeOut(duration: 0.18))
                         )
                     )
@@ -776,8 +779,8 @@ struct NotchView: View {
         previousPendingIds = currentIds
     }
 
-    private func presentDetachmentHintIfNeeded() {
-        guard settings.notchDetachmentHintPending else { return }
+    private func presentDetachmentHintIfNeeded(force: Bool = false) {
+        guard force || settings.notchDetachmentHintPending else { return }
         guard settings.surfaceMode == .notch else { return }
         guard viewModel.presentationMode == .docked else { return }
         guard viewModel.status == .closed else { return }
@@ -786,8 +789,10 @@ struct NotchView: View {
         settings.notchDetachmentHintPending = false
         detachmentHintDismissWorkItem?.cancel()
 
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-            isShowingDetachmentHint = true
+        if !isShowingDetachmentHint {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                isShowingDetachmentHint = true
+            }
         }
 
         let workItem = DispatchWorkItem {
@@ -1258,9 +1263,31 @@ struct NotchView: View {
 }
 
 private struct NotchDetachmentHintView: View {
+    @State private var isArrowNudging = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(appLocalized: "拖动宠物，让 Island 离岛工作")
+        ZStack(alignment: .topTrailing) {
+            StraightDetachHintArrow()
+                .stroke(
+                    Color.white.opacity(0.86),
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
+                )
+                .frame(width: 76, height: 40)
+                .offset(
+                    x: -36 + (isArrowNudging ? -4 : 4),
+                    y: 2 + (isArrowNudging ? -3 : 3)
+                )
+                .onAppear {
+                    isArrowNudging = false
+                    withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                        isArrowNudging = true
+                    }
+                }
+                .onDisappear {
+                    isArrowNudging = false
+                }
+
+            Text(appLocalized: "拖动宠物，让宠物离岛工作")
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.96))
                 .padding(.horizontal, 12)
@@ -1273,43 +1300,32 @@ private struct NotchDetachmentHintView: View {
                                 .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
                         )
                 )
-
-            CurvedDetachHintArrow()
-                .stroke(
-                    Color.white.opacity(0.86),
-                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
-                )
-                .frame(width: 120, height: 48)
-                .offset(x: 10)
+                .offset(y: 62)
         }
+        .frame(width: 242, height: 118, alignment: .topTrailing)
         .shadow(color: Color.black.opacity(0.22), radius: 14, y: 8)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(AppLocalization.string("拖动宠物，让 Island 离岛工作")))
+        .accessibilityLabel(Text(AppLocalization.string("拖动宠物，让宠物离岛工作")))
     }
 }
 
-private struct CurvedDetachHintArrow: Shape {
+private struct StraightDetachHintArrow: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let start = CGPoint(x: rect.maxX - 10, y: rect.minY + 6)
-        let mid = CGPoint(x: rect.midX + 8, y: rect.midY - 2)
-        let end = CGPoint(x: rect.minX + 14, y: rect.maxY - 8)
+        let start = CGPoint(x: rect.maxX - 14, y: rect.maxY - 14)
+        let end = CGPoint(x: rect.minX + 14, y: rect.minY + 16)
 
         path.move(to: start)
         path.addQuadCurve(
-            to: mid,
-            control: CGPoint(x: rect.maxX - 34, y: rect.midY - 12)
-        )
-        path.addQuadCurve(
             to: end,
-            control: CGPoint(x: rect.midX - 26, y: rect.maxY - 4)
+            control: CGPoint(x: rect.midX + 4, y: rect.midY + 6)
         )
 
         path.move(to: end)
-        path.addLine(to: CGPoint(x: end.x + 13, y: end.y - 2))
+        path.addLine(to: CGPoint(x: end.x + 12, y: end.y - 2))
 
         path.move(to: end)
-        path.addLine(to: CGPoint(x: end.x + 7, y: end.y - 12))
+        path.addLine(to: CGPoint(x: end.x + 6, y: end.y + 11))
 
         return path
     }

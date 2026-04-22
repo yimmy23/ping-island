@@ -1306,6 +1306,17 @@ private struct SettingsPanelContentView: View {
 
                 if settings.surfaceMode == .notch {
                     SettingsLineDivider()
+                    SettingsInfoLine(
+                        title: "刘海拖拽引导",
+                        subtitle: "重新演示老用户首次打开新版本时看到的刘海拖拽提示。"
+                    ) {
+                        HookManagementButton(
+                            title: "重新演示",
+                            tint: SettingsCategory.display.tint,
+                            action: replayNotchDetachmentHint
+                        )
+                    }
+                    SettingsLineDivider()
                     NotchDisplayModeSelector(mode: $settings.notchDisplayMode)
                 } else {
                     SettingsLineDivider()
@@ -1336,6 +1347,16 @@ private struct SettingsPanelContentView: View {
                         .foregroundColor(.white.opacity(0.72))
                 }
             }
+        }
+    }
+
+    private func replayNotchDetachmentHint() {
+        AppSettings.notchDetachmentHintPending = true
+        AppSettings.floatingPetSettingsHintPending = true
+        onClose?()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            NotificationCenter.default.post(name: .pingIslandPresentNotchDetachmentHint, object: nil)
         }
     }
 

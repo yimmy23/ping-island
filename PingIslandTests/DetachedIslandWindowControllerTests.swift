@@ -261,6 +261,27 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         XCTAssertFalse(window.isMiniaturized)
     }
 
+    func testPresentConsumesFloatingPetSettingsHintPending() {
+        let previousValue = AppSettings.floatingPetSettingsHintPending
+        AppSettings.floatingPetSettingsHintPending = true
+        defer { AppSettings.floatingPetSettingsHintPending = previousValue }
+
+        let viewModel = makeViewModel()
+        let sessionMonitor = makeSessionMonitor()
+        sessionMonitor.instances = []
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        defer { controller.dismiss() }
+
+        controller.present(atPetAnchor: CGPoint(x: 1100, y: 180))
+
+        XCTAssertFalse(AppSettings.floatingPetSettingsHintPending)
+    }
+
     func testDefaultPetAnchorUsesBottomTrailingVisibleFrameInsets() {
         let visibleFrame = CGRect(x: 100, y: 60, width: 960, height: 640)
 

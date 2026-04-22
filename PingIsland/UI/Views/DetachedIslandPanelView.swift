@@ -18,6 +18,7 @@ enum DetachedIslandPanelMetrics {
     static let bubbleHorizontalPadding: CGFloat = 6
     static let bubbleVerticalPadding: CGFloat = 4
     static let usageFooterReservedHeight: CGFloat = 34
+    static let settingsHintBubbleSize = CGSize(width: 248, height: 92)
 }
 
 enum DetachedIslandBubbleCorner: Equatable {
@@ -277,6 +278,7 @@ enum DetachedIslandContentModel {
         measuredAttentionBubbleHeight: CGFloat? = nil,
         additionalFooterHeight: CGFloat = 0,
         activeCompletionNotification: SessionCompletionNotification? = nil,
+        guideBubbleSize: CGSize? = nil,
         petScreenAnchor: CGPoint? = nil,
         availableFrame: CGRect? = nil
     ) -> DetachedIslandWindowLayout {
@@ -292,6 +294,17 @@ enum DetachedIslandContentModel {
                 mode: mode,
                 activeCompletionNotification: activeCompletionNotification
               ) else {
+            if let guideBubbleSize {
+                return bubbleLayout(
+                    petSize: petSize,
+                    bubbleSize: guideBubbleSize,
+                    bubblePlacement: bubblePlacement,
+                    bubbleContentMode: nil,
+                    petScreenAnchor: petScreenAnchor,
+                    availableFrame: availableFrame
+                )
+            }
+
             return DetachedIslandWindowLayout(
                 containerSize: petSize,
                 petFrame: CGRect(origin: .zero, size: petSize),
@@ -315,6 +328,24 @@ enum DetachedIslandContentModel {
             measuredAttentionBubbleHeight: measuredAttentionBubbleHeight,
             additionalFooterHeight: additionalFooterHeight
         )
+        return bubbleLayout(
+            petSize: petSize,
+            bubbleSize: bubbleSize,
+            bubblePlacement: bubblePlacement,
+            bubbleContentMode: mode,
+            petScreenAnchor: petScreenAnchor,
+            availableFrame: availableFrame
+        )
+    }
+
+    private static func bubbleLayout(
+        petSize: CGSize,
+        bubbleSize: CGSize,
+        bubblePlacement: DetachedIslandBubblePlacement,
+        bubbleContentMode: DetachedIslandBubbleContentMode?,
+        petScreenAnchor: CGPoint?,
+        availableFrame: CGRect?
+    ) -> DetachedIslandWindowLayout {
         let resolvedPlacement: DetachedIslandBubblePlacement
         if let petScreenAnchor, let availableFrame {
             resolvedPlacement = preferredBubblePlacement(
@@ -386,7 +417,7 @@ enum DetachedIslandContentModel {
             bubbleFrame: bubbleFrame,
             bubblePlacement: resolvedPlacement,
             petAnchorInWindow: CGPoint(x: petFrame.midX, y: petFrame.midY),
-            bubbleContentMode: mode
+            bubbleContentMode: bubbleContentMode
         )
     }
 
@@ -428,6 +459,7 @@ final class DetachedIslandInteractionModel: ObservableObject {
     @Published private(set) var bubbleState: DetachedIslandBubbleState = .hidden
     @Published private(set) var bubblePlacement: DetachedIslandBubblePlacement = .topLeft
     @Published private(set) var isPetDragging = false
+    @Published private(set) var isSettingsHintVisible = false
 
     var bubbleContentMode: DetachedIslandBubbleContentMode? {
         DetachedIslandBubbleContentMode(bubbleState: bubbleState)
@@ -485,6 +517,11 @@ final class DetachedIslandInteractionModel: ObservableObject {
     func setPetDragging(_ isDragging: Bool) {
         guard isPetDragging != isDragging else { return }
         isPetDragging = isDragging
+    }
+
+    func setSettingsHintVisible(_ visible: Bool) {
+        guard isSettingsHintVisible != visible else { return }
+        isSettingsHintVisible = visible
     }
 }
 
@@ -574,7 +611,10 @@ struct DetachedIslandPanelView: View {
             additionalFooterHeight: shouldShowFloatingUsageFooter
                 ? DetachedIslandPanelMetrics.usageFooterReservedHeight
                 : 0,
-            activeCompletionNotification: bubbleViewState.activeCompletionNotification
+            activeCompletionNotification: bubbleViewState.activeCompletionNotification,
+            guideBubbleSize: interactionModel.isSettingsHintVisible
+                ? DetachedIslandPanelMetrics.settingsHintBubbleSize
+                : nil
         )
     }
 
@@ -627,6 +667,12 @@ struct DetachedIslandPanelView: View {
                     }
                     .opacity(bubbleViewState.isBubbleVisible ? 1 : 0)
                     .allowsHitTesting(bubbleViewState.isBubbleVisible)
+                    .frame(width: bubbleFrame.width, height: bubbleFrame.height)
+                    .offset(x: bubbleFrame.minX, y: bubbleFrame.minY)
+            } else if let bubbleFrame = layout.bubbleFrame,
+                      interactionModel.isSettingsHintVisible {
+                DetachedFloatingPetSettingsHintView(placement: layout.bubblePlacement)
+                    .allowsHitTesting(false)
                     .frame(width: bubbleFrame.width, height: bubbleFrame.height)
                     .offset(x: bubbleFrame.minX, y: bubbleFrame.minY)
             }
@@ -728,6 +774,35 @@ struct DetachedIslandPanelView: View {
                 }
             }
         }
+    }
+}
+
+private struct DetachedFloatingPetSettingsHintView: View {
+    let placement: DetachedIslandBubblePlacement
+
+    var body: some View {
+        DetachedIslandBubbleChrome(placement: placement) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(appLocalized: "最后一步：右键宠物形象")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+
+                Text(appLocalized: "需要重新打开设置面板时，直接右键宠物形象就可以。")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.72))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            Text(
+                AppLocalization.string("最后一步：右键宠物形象")
+                + " "
+                + AppLocalization.string("需要重新打开设置面板时，直接右键宠物形象就可以。")
+            )
+        )
     }
 }
 

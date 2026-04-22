@@ -65,3 +65,30 @@ struct AppLaunchFlow: Equatable {
         self.shouldPresentSettingsWindowAfterOnboarding = configuration.shouldPresentSettingsWindowOnLaunch && shouldPresentOnboarding
     }
 }
+
+struct NotchDetachmentHintExperience {
+    static let currentRevision = 1
+
+    private static let revisionDefaultsKey = "notchDetachmentHintExperienceRevision"
+
+    static func prepareForLaunch(
+        defaults: UserDefaults = .standard,
+        previousVersion: String?
+    ) {
+        guard defaults.integer(forKey: revisionDefaultsKey) < currentRevision else {
+            return
+        }
+
+        let normalizedPreviousVersion = previousVersion?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if normalizedPreviousVersion.isEmpty {
+            defaults.set(currentRevision, forKey: revisionDefaultsKey)
+            return
+        }
+
+        defaults.set(true, forKey: AppSettingsDefaultKeys.notchDetachmentHintPending)
+        defaults.set(true, forKey: AppSettingsDefaultKeys.floatingPetSettingsHintPending)
+        defaults.set(currentRevision, forKey: revisionDefaultsKey)
+    }
+}

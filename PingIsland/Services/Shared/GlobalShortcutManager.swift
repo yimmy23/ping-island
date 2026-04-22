@@ -5,6 +5,7 @@ import Combine
 extension Notification.Name {
     static let pingIslandOpenActiveSessionShortcut = Notification.Name("pingIslandOpenActiveSessionShortcut")
     static let pingIslandOpenSessionListShortcut = Notification.Name("pingIslandOpenSessionListShortcut")
+    static let pingIslandPresentNotchDetachmentHint = Notification.Name("pingIslandPresentNotchDetachmentHint")
 }
 
 @MainActor
