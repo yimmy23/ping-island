@@ -1,10 +1,17 @@
 import Foundation
 
+enum UsageSummarySeverity: Equatable {
+    case healthy
+    case warning
+    case critical
+}
+
 struct UsageSummaryWindow: Equatable {
     let id: String
     let label: String
     let valueText: String
     let resetText: String?
+    let severity: UsageSummarySeverity
 }
 
 struct UsageSummaryProvider: Equatable, Identifiable {
@@ -31,7 +38,8 @@ enum UsageSummaryPresenter {
                         id: "claude-5h",
                         label: "5h",
                         valueText: valueText(for: fiveHour.usedPercentage, mode: mode, locale: locale),
-                        resetText: resetText(for: fiveHour.resetsAt, now: now, locale: locale)
+                        resetText: resetText(for: fiveHour.resetsAt, now: now, locale: locale),
+                        severity: severity(forUsedPercentage: fiveHour.usedPercentage)
                     )
                 )
             }
@@ -41,7 +49,8 @@ enum UsageSummaryPresenter {
                         id: "claude-7d",
                         label: "7d",
                         valueText: valueText(for: sevenDay.usedPercentage, mode: mode, locale: locale),
-                        resetText: resetText(for: sevenDay.resetsAt, now: now, locale: locale)
+                        resetText: resetText(for: sevenDay.resetsAt, now: now, locale: locale),
+                        severity: severity(forUsedPercentage: sevenDay.usedPercentage)
                     )
                 )
             }
@@ -62,7 +71,8 @@ enum UsageSummaryPresenter {
                     id: "codex-\(window.key)",
                     label: window.label,
                     valueText: valueText(for: window.usedPercentage, mode: mode, locale: locale),
-                    resetText: resetText(for: window.resetsAt, now: now, locale: locale)
+                    resetText: resetText(for: window.resetsAt, now: now, locale: locale),
+                    severity: severity(forUsedPercentage: window.usedPercentage)
                 )
             }
 
@@ -157,6 +167,17 @@ enum UsageSummaryPresenter {
             return "\(minutes)m"
         }
         return "<1m"
+    }
+
+    nonisolated static func severity(forUsedPercentage usedPercentage: Double) -> UsageSummarySeverity {
+        let remainingPercentage = max(0, 100 - usedPercentage)
+        if remainingPercentage > 30 {
+            return .healthy
+        }
+        if remainingPercentage > 10 {
+            return .warning
+        }
+        return .critical
     }
 
     private nonisolated static func localizedRemainingLabel(locale: Locale) -> String {

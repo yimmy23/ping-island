@@ -53,14 +53,14 @@ struct UsageSummaryStripView: View {
 
                         Text(window.valueText)
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.84))
+                            .foregroundColor(emphasisColor(for: window.severity))
                             .lineLimit(1)
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 4)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.05))
+                            .fill(backgroundColor(for: window.severity))
                     )
                     .help(window.resetText ?? "")
                 }
@@ -79,10 +79,10 @@ struct UsageSummaryStripView: View {
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                                 .foregroundColor(.white.opacity(0.52))
 
-                            Text(window.valueText)
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.88))
-                                .lineLimit(1)
+                        Text(window.valueText)
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(emphasisColor(for: window.severity))
+                            .lineLimit(1)
                         }
 
                         if let resetText = window.resetText {
@@ -96,10 +96,32 @@ struct UsageSummaryStripView: View {
                     .padding(.vertical, 6)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.05))
+                            .fill(backgroundColor(for: window.severity))
                     )
                 }
             }
+        }
+    }
+
+    private func emphasisColor(for severity: UsageSummarySeverity) -> Color {
+        switch severity {
+        case .healthy:
+            return Color(red: 0.42, green: 0.92, blue: 0.60)
+        case .warning:
+            return Color(red: 0.98, green: 0.82, blue: 0.32)
+        case .critical:
+            return Color(red: 0.98, green: 0.44, blue: 0.38)
+        }
+    }
+
+    private func backgroundColor(for severity: UsageSummarySeverity) -> Color {
+        switch severity {
+        case .healthy:
+            return Color(red: 0.26, green: 0.52, blue: 0.34).opacity(0.22)
+        case .warning:
+            return Color(red: 0.56, green: 0.42, blue: 0.14).opacity(0.24)
+        case .critical:
+            return Color(red: 0.52, green: 0.18, blue: 0.16).opacity(0.26)
         }
     }
 }

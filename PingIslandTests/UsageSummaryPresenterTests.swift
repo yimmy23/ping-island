@@ -50,7 +50,7 @@ final class UsageSummaryPresenterTests: XCTestCase {
             UsageSummaryProvider(
                 id: "claude",
                 title: "Claude",
-                windows: [UsageSummaryWindow(id: "claude-5h", label: "5h", valueText: "42%", resetText: nil)]
+                windows: [UsageSummaryWindow(id: "claude-5h", label: "5h", valueText: "42%", resetText: nil, severity: .healthy)]
             )
         ]
         let session = SessionState(sessionId: "session", cwd: "/tmp/demo", phase: .processing)
@@ -77,5 +77,11 @@ final class UsageSummaryPresenterTests: XCTestCase {
                 providers: providers
             )
         )
+    }
+
+    func testSeverityUsesRemainingQuotaThresholds() {
+        XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 60), .healthy)
+        XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 75), .warning)
+        XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 95), .critical)
     }
 }
