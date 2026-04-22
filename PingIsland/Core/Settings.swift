@@ -13,6 +13,7 @@ enum AppSettingsDefaultKeys {
     static let surfaceMode = "surfaceMode"
     static let floatingPetAnchor = "floatingPetAnchor"
     static let presentationModeOnboardingPending = "presentationModeOnboardingPending"
+    static let notchDetachmentHintPending = "notchDetachmentHintPending"
 }
 
 enum AppLanguage: String, CaseIterable, Identifiable {
@@ -297,6 +298,7 @@ final class AppSettingsStore: ObservableObject {
         static let surfaceMode = AppSettingsDefaultKeys.surfaceMode
         static let floatingPetAnchor = AppSettingsDefaultKeys.floatingPetAnchor
         static let presentationModeOnboardingPending = AppSettingsDefaultKeys.presentationModeOnboardingPending
+        static let notchDetachmentHintPending = AppSettingsDefaultKeys.notchDetachmentHintPending
         static let mascotOverrides = "mascotOverrides"
         static let openActiveSessionShortcut = "openActiveSessionShortcut"
         static let openSessionListShortcut = "openSessionListShortcut"
@@ -590,6 +592,13 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(presentationModeOnboardingPending, forKey: Keys.presentationModeOnboardingPending)
+        }
+    }
+
+    @Published var notchDetachmentHintPending: Bool {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(notchDetachmentHintPending, forKey: Keys.notchDetachmentHintPending)
         }
     }
 
@@ -1022,6 +1031,12 @@ final class AppSettingsStore: ObservableObject {
             exists: persistedKeys.contains(Keys.presentationModeOnboardingPending),
             default: false
         ))
+        _notchDetachmentHintPending = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.notchDetachmentHintPending,
+            exists: persistedKeys.contains(Keys.notchDetachmentHintPending),
+            default: false
+        ))
         _mascotOverrides = Published(initialValue: Self.sanitizedMascotOverrides(mascotOverrideRaw))
         _openActiveSessionShortcut = Published(initialValue: openActiveSessionShortcut)
         _openSessionListShortcut = Published(initialValue: openSessionListShortcut)
@@ -1183,6 +1198,11 @@ enum AppSettings {
     static var presentationModeOnboardingPending: Bool {
         get { shared.presentationModeOnboardingPending }
         set { shared.presentationModeOnboardingPending = newValue }
+    }
+
+    static var notchDetachmentHintPending: Bool {
+        get { shared.notchDetachmentHintPending }
+        set { shared.notchDetachmentHintPending = newValue }
     }
 
     static func shortcut(for action: GlobalShortcutAction) -> GlobalShortcut? {

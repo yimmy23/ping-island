@@ -178,4 +178,18 @@ final class AppSettingsPersistenceTests: XCTestCase {
         XCTAssertFalse(reloadedStore.presentationModeOnboardingPending)
         XCTAssertEqual(defaults.object(forKey: AppSettingsDefaultKeys.presentationModeOnboardingPending) as? Bool, false)
     }
+
+    func testNotchDetachmentHintPendingPersistsAndClears() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+
+        store.notchDetachmentHintPending = true
+        XCTAssertEqual(defaults.object(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending) as? Bool, true)
+
+        store.notchDetachmentHintPending = false
+
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertFalse(reloadedStore.notchDetachmentHintPending)
+        XCTAssertEqual(defaults.object(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending) as? Bool, false)
+    }
 }

@@ -20,6 +20,12 @@ final class SettingsWindowControllerTests: XCTestCase {
         XCTAssertTrue(
             english.contains("\"独立悬浮宠物默认贴近当前激活窗口右下角显示。拖动后会记住新位置，右键宠物形象可重新打开设置面板。\" = \"The floating pet appears near the bottom-right corner of the active window by default. Dragging remembers the new position, and right-clicking the mascot reopens the Settings panel.\";")
         )
+        XCTAssertTrue(
+            zhHans.contains("\"拖动宠物，让 Island 离岛工作\" = \"拖动宠物，让 Island 离岛工作\";")
+        )
+        XCTAssertTrue(
+            english.contains("\"拖动宠物，让 Island 离岛工作\" = \"Drag the mascot to undock the Island.\";")
+        )
     }
 
     func testPresentReusesExistingWindowAndKeepsItVisible() throws {

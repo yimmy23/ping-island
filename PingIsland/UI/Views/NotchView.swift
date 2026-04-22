@@ -53,6 +53,8 @@ struct NotchView: View {
     @State private var activeCompletionNotification: SessionCompletionNotification?
     @State private var completionNotificationDismissWorkItem: DispatchWorkItem?
     @State private var shouldDismissCompletionNotificationOnHoverExit: Bool = false
+    @State private var isShowingDetachmentHint: Bool = false
+    @State private var detachmentHintDismissWorkItem: DispatchWorkItem?
 
     @Namespace private var activityNamespace
 
@@ -293,6 +295,7 @@ struct NotchView: View {
                 handleProcessingChange()
                 handleManualAttentionChange(sessionMonitor.instances)
                 primeCompletionNotificationTracking(sessionMonitor.instances)
+                presentDetachmentHintIfNeeded()
             }
             .onChange(of: viewModel.status) { oldStatus, newStatus in
                 handleStatusChange(from: oldStatus, to: newStatus)
@@ -403,6 +406,18 @@ struct NotchView: View {
             // Outer container does NOT receive hits - only the notch content does
             VStack(spacing: 0) {
                 styledNotchLayout
+            }
+
+            if isShowingDetachmentHint {
+                NotchDetachmentHintView()
+                    .offset(x: -64, y: -72)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.92, anchor: .bottomTrailing)),
+                            removal: .opacity.animation(.easeOut(duration: 0.18))
+                        )
+                    )
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -687,6 +702,7 @@ struct NotchView: View {
         switch newStatus {
         case .opened, .popping:
             isVisible = true
+            dismissDetachmentHint()
             // Clear waiting-for-input timestamps only when manually opened (user acknowledged)
             if viewModel.openReason == .click || viewModel.openReason == .hover {
                 waitingForInputTimestamps.removeAll()
@@ -722,6 +738,38 @@ struct NotchView: View {
         }
 
         previousPendingIds = currentIds
+    }
+
+    private func presentDetachmentHintIfNeeded() {
+        guard settings.notchDetachmentHintPending else { return }
+        guard settings.surfaceMode == .notch else { return }
+        guard viewModel.presentationMode == .docked else { return }
+        guard viewModel.status == .closed else { return }
+        guard !shouldHideClosedContent else { return }
+
+        settings.notchDetachmentHintPending = false
+        detachmentHintDismissWorkItem?.cancel()
+
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            isShowingDetachmentHint = true
+        }
+
+        let workItem = DispatchWorkItem {
+            withAnimation(.easeOut(duration: 0.18)) {
+                isShowingDetachmentHint = false
+            }
+        }
+        detachmentHintDismissWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6, execute: workItem)
+    }
+
+    private func dismissDetachmentHint() {
+        detachmentHintDismissWorkItem?.cancel()
+        detachmentHintDismissWorkItem = nil
+        guard isShowingDetachmentHint else { return }
+        withAnimation(.easeOut(duration: 0.18)) {
+            isShowingDetachmentHint = false
+        }
     }
 
     private func handleManualAttentionChange(_ instances: [SessionState]) {
@@ -1170,6 +1218,64 @@ struct NotchView: View {
         }
 
         return false
+    }
+}
+
+private struct NotchDetachmentHintView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(appLocalized: "拖动宠物，让 Island 离岛工作")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.96))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.black.opacity(0.88))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                        )
+                )
+
+            CurvedDetachHintArrow()
+                .stroke(
+                    Color.white.opacity(0.86),
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
+                )
+                .frame(width: 120, height: 48)
+                .offset(x: 10)
+        }
+        .shadow(color: Color.black.opacity(0.22), radius: 14, y: 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(AppLocalization.string("拖动宠物，让 Island 离岛工作")))
+    }
+}
+
+private struct CurvedDetachHintArrow: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let start = CGPoint(x: rect.maxX - 10, y: rect.minY + 6)
+        let mid = CGPoint(x: rect.midX + 8, y: rect.midY - 2)
+        let end = CGPoint(x: rect.minX + 14, y: rect.maxY - 8)
+
+        path.move(to: start)
+        path.addQuadCurve(
+            to: mid,
+            control: CGPoint(x: rect.maxX - 34, y: rect.midY - 12)
+        )
+        path.addQuadCurve(
+            to: end,
+            control: CGPoint(x: rect.midX - 26, y: rect.maxY - 4)
+        )
+
+        path.move(to: end)
+        path.addLine(to: CGPoint(x: end.x + 13, y: end.y - 2))
+
+        path.move(to: end)
+        path.addLine(to: CGPoint(x: end.x + 7, y: end.y - 12))
+
+        return path
     }
 }
 

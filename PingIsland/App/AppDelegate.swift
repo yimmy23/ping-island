@@ -75,6 +75,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func completePresentationModeOnboarding(with selectedMode: IslandSurfaceMode) {
         AppSettings.surfaceMode = selectedMode
         AppSettings.presentationModeOnboardingPending = false
+        AppSettings.notchDetachmentHintPending = selectedMode == .notch
         startWindowManagerIfNeeded()
 
         if shouldPresentSettingsAfterOnboarding {
