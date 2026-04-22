@@ -24,8 +24,13 @@ class SessionMonitor: ObservableObject {
     private var hasStarted = false
     private var allSessions: [SessionState] = []
 
-    init(runtimeCoordinator: any RuntimeCoordinating = RuntimeCoordinator.shared) {
+    init(
+        runtimeCoordinator: any RuntimeCoordinating = RuntimeCoordinator.shared,
+        observeSharedState: Bool = true
+    ) {
         self.runtimeCoordinator = runtimeCoordinator
+        guard observeSharedState else { return }
+
         SessionStore.shared.sessionsPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] sessions in

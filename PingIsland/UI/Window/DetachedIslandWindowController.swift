@@ -179,6 +179,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     private var previousResourceLimitIds = Set<String>()
     private var previousCompletionNotificationPhases: [String: SessionPhase] = [:]
     private var completionNotificationQueue: [SessionCompletionNotification] = []
+    var completionNotificationDismissDelay: TimeInterval = 5
     private var activeCompletionNotification: SessionCompletionNotification? {
         didSet {
             bubbleViewState.setActiveCompletionNotification(activeCompletionNotification)
@@ -239,19 +240,8 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
 
         super.init(window: window)
 
-        hostingController.onPetTap = { [weak self, weak interactionModel, weak sessionMonitor] in
-            let sessions = sessionMonitor?.instances ?? []
-            interactionModel?.togglePrimaryBubble(
-                canPresentPreview: DetachedIslandContentModel.canPresentBubble(
-                    from: sessions,
-                    mode: .hoverPreview,
-                    activeCompletionNotification: self?.activeCompletionNotification
-                ),
-                canPresentPinnedBubble: DetachedIslandContentModel.canPresentBubble(
-                    from: sessions,
-                    mode: .pinnedList
-                )
-            )
+        hostingController.onPetTap = { [weak self] in
+            self?.handlePetTap()
         }
         hostingController.onPetDragStarted = { [weak self] in
             self?.beginFloatingDrag()
@@ -394,11 +384,12 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
 
     func beginFloatingDrag() {
         guard floatingDragStartOrigin == nil else { return }
+        let startOrigin = window?.frame.origin
         cancelInteractionActivation()
         interactionModel.resetForDragSuppression()
         interactionModel.setPetDragging(true)
         hideBubbleRenderingImmediately()
-        floatingDragStartOrigin = window?.frame.origin
+        floatingDragStartOrigin = startOrigin ?? window?.frame.origin
     }
 
     func updateFloatingDrag(translation: CGSize) {
@@ -436,10 +427,9 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             mode: .hoverPreview,
             activeCompletionNotification: activeCompletionNotification
         )
-        interactionModel.presentHoverPreview(canPresentBubble: canPresentBubble)
-        syncBubblePresentation(to: interactionModel.bubbleState)
-        syncOutsideClickMonitor()
-        reconcileHighlightedSessionState()
+        applyBubbleStateChange {
+            interactionModel.presentHoverPreview(canPresentBubble: canPresentBubble)
+        }
     }
 
     func togglePinnedBubbleForTesting() {
@@ -447,21 +437,21 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             from: sessionMonitor.instances,
             mode: .pinnedList
         )
-        interactionModel.togglePinned(canPresentBubble: canPresentBubble)
-        syncBubblePresentation(to: interactionModel.bubbleState)
-        syncOutsideClickMonitor()
-        reconcileHighlightedSessionState()
+        applyBubbleStateChange {
+            interactionModel.togglePinned(canPresentBubble: canPresentBubble)
+        }
     }
 
     func hideBubbleForTesting() {
-        interactionModel.hidePinnedBubble()
-        syncBubblePresentation(to: interactionModel.bubbleState)
-        syncOutsideClickMonitor()
-        reconcileHighlightedSessionState()
+        applyBubbleStateChange {
+            interactionModel.hidePinnedBubble()
+        }
     }
 
     func dismissAttentionBubble() {
-        interactionModel.hidePinnedBubble()
+        applyBubbleStateChange {
+            interactionModel.hidePinnedBubble()
+        }
     }
 
     var renderedBubbleStateForTesting: DetachedIslandBubbleState {
@@ -486,6 +476,10 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
 
     var currentActiveCompletionNotificationForTesting: SessionCompletionNotification? {
         activeCompletionNotification
+    }
+
+    func simulateCompletionNotificationHoverForTesting(_ isHovering: Bool) {
+        handleCompletionNotificationHover(isHovering)
     }
 
     func dismiss() {
@@ -981,6 +975,32 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         applyPendingWindowSizeUpdate()
     }
 
+    private func applyBubbleStateChange(_ change: () -> Void) {
+        change()
+        syncBubblePresentation(to: interactionModel.bubbleState)
+        syncOutsideClickMonitor()
+        reconcileHighlightedSessionState()
+    }
+
+    private func handlePetTap() {
+        let canPresentPreview = DetachedIslandContentModel.canPresentBubble(
+            from: sessionMonitor.instances,
+            mode: .hoverPreview,
+            activeCompletionNotification: activeCompletionNotification
+        )
+        let canPresentPinnedBubble = DetachedIslandContentModel.canPresentBubble(
+            from: sessionMonitor.instances,
+            mode: .pinnedList
+        )
+
+        applyBubbleStateChange {
+            interactionModel.togglePrimaryBubble(
+                canPresentPreview: canPresentPreview,
+                canPresentPinnedBubble: canPresentPinnedBubble
+            )
+        }
+    }
+
     private func presentExistingAttentionIfNeeded() {
         guard interactionModel.bubbleState != .pinned else { return }
         guard DetachedIslandContentModel.canPresentBubble(
@@ -996,7 +1016,9 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             return
         }
 
-        interactionModel.presentHoverPreview(canPresentBubble: true)
+        applyBubbleStateChange {
+            interactionModel.presentHoverPreview(canPresentBubble: true)
+        }
     }
 
     private func handleManualAttentionChange() {
@@ -1049,7 +1071,9 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
                 mode: .hoverPreview,
                 activeCompletionNotification: activeCompletionNotification
             ) else {
-                interactionModel.hidePinnedBubble()
+                applyBubbleStateChange {
+                    interactionModel.hidePinnedBubble()
+                }
                 return
             }
         case .pinned:
@@ -1057,7 +1081,9 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
                 from: sessionMonitor.instances,
                 mode: .pinnedList
             ) else {
-                interactionModel.hidePinnedBubble()
+                applyBubbleStateChange {
+                    interactionModel.hidePinnedBubble()
+                }
                 return
             }
         }
@@ -1090,7 +1116,9 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         )
 
         guard !window.frame.contains(eventLocation) else { return }
-        interactionModel.hidePinnedBubble()
+        applyBubbleStateChange {
+            interactionModel.hidePinnedBubble()
+        }
     }
 
     private func updateBubblePlacementForCurrentWindow() {
@@ -1269,8 +1297,9 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
 
         let nextNotification = completionNotificationQueue.removeFirst()
         activeCompletionNotification = nextNotification
-        shouldDismissCompletionNotificationOnHoverExit = false
-        interactionModel.presentHoverPreview(canPresentBubble: true)
+        applyBubbleStateChange {
+            interactionModel.presentHoverPreview(canPresentBubble: true)
+        }
         scheduleCompletionNotificationDismissal(for: nextNotification.id)
     }
 
@@ -1284,7 +1313,10 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         }
 
         completionNotificationDismissWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: workItem)
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + completionNotificationDismissDelay,
+            execute: workItem
+        )
     }
 
     private func clearCompletionNotifications(keepBubbleOpen: Bool) {
@@ -1307,21 +1339,10 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func handleCompletionNotificationHover(_ isHovering: Bool) {
+        _ = isHovering
         guard activeCompletionNotification != nil else {
-            shouldDismissCompletionNotificationOnHoverExit = false
             return
         }
-
-        if isHovering {
-            shouldDismissCompletionNotificationOnHoverExit = true
-            completionNotificationDismissWorkItem?.cancel()
-            completionNotificationDismissWorkItem = nil
-            return
-        }
-
-        guard shouldDismissCompletionNotificationOnHoverExit else { return }
-        shouldDismissCompletionNotificationOnHoverExit = false
-        dismissActiveCompletionNotification(closeBubble: true, advanceQueue: true)
     }
 
     private func dismissActiveCompletionNotification(
@@ -1330,7 +1351,6 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     ) {
         completionNotificationDismissWorkItem?.cancel()
         completionNotificationDismissWorkItem = nil
-        shouldDismissCompletionNotificationOnHoverExit = false
 
         guard activeCompletionNotification != nil else {
             if advanceQueue {
@@ -1349,7 +1369,9 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
             ) != nil {
                 presentExistingAttentionIfNeeded()
             } else {
-                interactionModel.hidePinnedBubble()
+                applyBubbleStateChange {
+                    interactionModel.hidePinnedBubble()
+                }
             }
         }
 

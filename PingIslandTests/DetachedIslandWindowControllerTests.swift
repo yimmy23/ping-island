@@ -6,7 +6,7 @@ import XCTest
 final class DetachedIslandWindowControllerTests: XCTestCase {
     func testDetachedHostingViewStaysTransparent() throws {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = []
 
         let controller = DetachedIslandWindowController(
@@ -27,7 +27,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testDetachedHostingViewAcceptsFirstMouse() throws {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = []
 
         let controller = DetachedIslandWindowController(
@@ -43,7 +43,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testDetachedWindowDisablesSystemShadow() throws {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = []
 
         let controller = DetachedIslandWindowController(
@@ -61,7 +61,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testDetachedWindowUsesCustomDragInsteadOfBackgroundDragging() throws {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = []
 
         let controller = DetachedIslandWindowController(
@@ -77,7 +77,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testDetachedWindowSupportsFullscreenFloatingPresentation() throws {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = []
 
         let controller = DetachedIslandWindowController(
@@ -144,7 +144,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testFloatingDragUpdatesWindowOrigin() throws {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = []
 
         let controller = DetachedIslandWindowController(
@@ -170,7 +170,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testFloatingDragKeepsMouseEventsEnabled() throws {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = []
 
         let controller = DetachedIslandWindowController(
@@ -190,7 +190,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testFloatingDragUpdatesPetDraggingState() {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = []
 
         let controller = DetachedIslandWindowController(
@@ -211,7 +211,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testBeginFloatingDragPreservesPetAnchorWhenHoverBubbleIsVisible() throws {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = [
             makeSession(id: "active", phase: .processing)
         ]
@@ -241,7 +241,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         settingsController.dismiss()
 
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = []
 
         let controller = DetachedIslandWindowController(
@@ -550,7 +550,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
                 message: "Need your answer"
             )
         )
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = [attention]
 
         let controller = DetachedIslandWindowController(
@@ -575,7 +575,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testNewAttentionSessionAutoOpensBubbleInFloatingMode() {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
 
         let controller = DetachedIslandWindowController(
@@ -611,7 +611,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testCompletedSessionAutoOpensCompletionBubbleInFloatingMode() {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
 
         let controller = DetachedIslandWindowController(
@@ -649,13 +649,49 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         wait(for: [bubblePresented], timeout: 1.0)
     }
 
+    func testCompletionBubbleAutoDismissesEvenWhileHoveredInFloatingMode() {
+        let viewModel = makeViewModel()
+        let sessionMonitor = makeSessionMonitor()
+        sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        controller.completionNotificationDismissDelay = 1.0
+        defer { controller.dismiss() }
+
+        controller.present(atPetAnchor: CGPoint(x: 1200, y: 220))
+        controller.applySessionSnapshotForTesting([makeCompletedSession(id: "completed")])
+
+        let bubblePresented = expectation(description: "completion bubble becomes active")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            XCTAssertNotNil(controller.currentActiveCompletionNotificationForTesting)
+            controller.simulateCompletionNotificationHoverForTesting(true)
+            bubblePresented.fulfill()
+        }
+
+        wait(for: [bubblePresented], timeout: 1.0)
+
+        let bubbleDismissed = expectation(description: "completion bubble auto-dismisses")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            XCTAssertNil(controller.currentActiveCompletionNotificationForTesting)
+            XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
+            XCTAssertFalse(controller.isBubbleVisibleForTesting)
+            bubbleDismissed.fulfill()
+        }
+
+        wait(for: [bubbleDismissed], timeout: 2.0)
+    }
+
     func testDisablingCompletionNotificationsPreventsFloatingCompletionBubble() {
         let originalAutoOpenCompletionPanel = AppSettings.autoOpenCompletionPanel
         AppSettings.autoOpenCompletionPanel = false
         defer { AppSettings.autoOpenCompletionPanel = originalAutoOpenCompletionPanel }
 
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
 
         let controller = DetachedIslandWindowController(
@@ -681,7 +717,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testDismissAttentionBubbleHidesHoverPreview() {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = [makeSession(id: "active", phase: .processing)]
 
         let controller = DetachedIslandWindowController(
@@ -883,7 +919,7 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
 
     func testBubbleHideImmediatelyCollapsesRenderedLayout() {
         let viewModel = makeViewModel()
-        let sessionMonitor = SessionMonitor()
+        let sessionMonitor = makeSessionMonitor()
         sessionMonitor.instances = [
             makeSession(id: "active", phase: .processing)
         ]
@@ -914,6 +950,10 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
             observeSystemEnvironment: false,
             fullscreenActivityProvider: { _ in false }
         )
+    }
+
+    private func makeSessionMonitor() -> SessionMonitor {
+        SessionMonitor(observeSharedState: false)
     }
 
     private func makeSession(
