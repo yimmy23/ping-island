@@ -571,7 +571,7 @@ struct DetachedIslandPanelView: View {
             bubbleState: bubbleViewState.renderedBubbleState,
             bubblePlacement: interactionModel.bubblePlacement,
             measuredAttentionBubbleHeight: bubbleViewState.measuredAttentionBubbleHeight,
-            additionalFooterHeight: shouldShowPinnedUsageFooter
+            additionalFooterHeight: shouldShowFloatingUsageFooter
                 ? DetachedIslandPanelMetrics.usageFooterReservedHeight
                 : 0,
             activeCompletionNotification: bubbleViewState.activeCompletionNotification
@@ -587,10 +587,13 @@ struct DetachedIslandPanelView: View {
         )
     }
 
-    private var shouldShowPinnedUsageFooter: Bool {
-        settings.showUsage
-            && bubbleContentMode == .pinnedList
-            && !usageSummaryProviders.isEmpty
+    private var shouldShowFloatingUsageFooter: Bool {
+        guard let bubbleRoute else { return false }
+        return UsageSummaryPresenter.shouldShowSummary(
+            for: bubbleRoute,
+            showUsage: settings.showUsage,
+            providers: usageSummaryProviders
+        )
     }
 
     private var compactMascotKind: MascotKind {
@@ -711,7 +714,7 @@ struct DetachedIslandPanelView: View {
                     onDismissCompletionNotification: onDismissCompletionNotification
                 )
 
-                if shouldShowPinnedUsageFooter {
+                if shouldShowFloatingUsageFooter {
                     HStack {
                         Spacer(minLength: 0)
                         UsageSummaryStripView(
