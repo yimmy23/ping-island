@@ -89,6 +89,10 @@ resolve_dmg_icon_source() {
     return $?
   fi
 
+  if resolve_image_source "$BRAND_LOGO_SOURCE"; then
+    return 0
+  fi
+
   if resolve_app_bundle_icon_source "$app_bundle_path"; then
     return 0
   fi

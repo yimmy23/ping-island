@@ -14,6 +14,7 @@ NOTES_DIR="$PROJECT_DIR/releases/notes"
 KEYS_DIR="$PROJECT_DIR/.sparkle-keys"
 STAGING_DIR="$BUILD_DIR/dmg-staging"
 DMG_BACKGROUND_SOURCE="${PING_ISLAND_DMG_BACKGROUND_SOURCE:-$PROJECT_DIR/docs/images/ping-island-dmg-installer-background.png}"
+DMG_LOGO_SOURCE="${PING_ISLAND_DMG_LOGO_SOURCE:-$PROJECT_DIR/docs/images/ping-island-icon-transparent.svg}"
 
 APP_BUNDLE_NAME="Ping Island.app"
 APP_PRODUCT_NAME="PingIsland"
@@ -65,6 +66,15 @@ resolve_exported_app_icon() {
     fi
 
     echo "$PROJECT_DIR/PingIsland/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png"
+}
+
+resolve_dmg_icon_source() {
+    if [ -f "$DMG_LOGO_SOURCE" ]; then
+        echo "$DMG_LOGO_SOURCE"
+        return 0
+    fi
+
+    resolve_exported_app_icon
 }
 
 infer_github_repo() {
@@ -335,7 +345,7 @@ if [ ! -d "$APP_PATH" ]; then
     exit 1
 fi
 
-DMG_ICON_SOURCE="$(resolve_exported_app_icon)"
+DMG_ICON_SOURCE="$(resolve_dmg_icon_source)"
 require_file "$DMG_ICON_SOURCE"
 export PING_ISLAND_DMG_ICON_SOURCE="$DMG_ICON_SOURCE"
 
