@@ -31,9 +31,17 @@ concurrency:
 jobs:
   linux-bridge:
     name: Build Linux remote bridge
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     container: swift:6.1-jammy
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            artifact_arch: x86_64
+          - runner: ubuntu-24.04-arm
+            artifact_arch: aarch64
 
     steps:
       - name: Checkout tagged source
@@ -56,19 +64,20 @@ jobs:
           fi
 
           mkdir -p releases/unsigned
-          cp Prototype/.build/release/PingIslandBridge releases/unsigned/PingIslandBridge-linux-x86_64
-          chmod +x releases/unsigned/PingIslandBridge-linux-x86_64
+          bridge_name="PingIslandBridge-linux-${{ matrix.artifact_arch }}"
+          cp Prototype/.build/release/PingIslandBridge "releases/unsigned/$bridge_name"
+          chmod +x "releases/unsigned/$bridge_name"
           (
             cd releases/unsigned
-            python3 -m zipfile -c PingIslandBridge-linux-x86_64.zip PingIslandBridge-linux-x86_64
+            python3 -m zipfile -c "$bridge_name.zip" "$bridge_name"
           )
-          rm -f releases/unsigned/PingIslandBridge-linux-x86_64
+          rm -f "releases/unsigned/$bridge_name"
 
       - name: Upload Linux bridge artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PingIslandBridge-linux-x86_64.zip
-          path: releases/unsigned/PingIslandBridge-linux-x86_64.zip
+          name: PingIslandBridge-linux-${{ matrix.artifact_arch }}.zip
+          path: releases/unsigned/PingIslandBridge-linux-${{ matrix.artifact_arch }}.zip
           if-no-files-found: error
 
   release:
@@ -226,11 +235,12 @@ jobs:
 
           ./scripts/package-release.sh
 
-      - name: Download Linux bridge artifact
+      - name: Download Linux bridge artifacts
         uses: actions/download-artifact@v4
         with:
-          name: PingIslandBridge-linux-x86_64.zip
           path: releases/bridge
+          pattern: PingIslandBridge-linux-*.zip
+          merge-multiple: true
 
       - name: Collect release metadata
         id: meta
@@ -243,7 +253,7 @@ jobs:
           zip_assets=(releases/signed/*.zip)
           notes_assets=(releases/signed/*.md)
           appcast_assets=(releases/signed/appcast/*.xml)
-          linux_bridge_assets=(releases/bridge/PingIslandBridge-linux-*)
+          linux_bridge_assets=(releases/bridge/PingIslandBridge-linux-*.zip)
 
           if [ "${#dmg_assets[@]}" -ne 1 ]; then
             echo "::error::Expected exactly one DMG asset in releases/signed, found ${#dmg_assets[@]}"
@@ -256,8 +266,8 @@ jobs:
           fi
 
           app_path="build/release/export/Ping Island.app"
-          if [ "${#linux_bridge_assets[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one Linux bridge asset in releases/bridge, found ${#linux_bridge_assets[@]}"
+          if [ "${#linux_bridge_assets[@]}" -lt 1 ]; then
+            echo "::error::Expected at least one Linux bridge asset in releases/bridge, found ${#linux_bridge_assets[@]}"
             exit 1
           fi
           if [ ! -d "$app_path" ]; then
@@ -312,7 +322,9 @@ jobs:
             echo "build=$build"
             echo "dmg_path=${dmg_assets[0]}"
             echo "zip_path=${zip_assets[0]}"
-            echo "linux_bridge_path=${linux_bridge_assets[0]}"
+            printf 'linux_bridge_paths<<__PING_ISLAND_EOF__\n'
+            printf '%s\n' "${linux_bridge_assets[@]}"
+            printf '__PING_ISLAND_EOF__\n'
             echo "notes_path=$notes_path"
             echo "has_notes=$has_notes"
             echo "notes_asset_path=$notes_asset_path"
@@ -344,11 +356,17 @@ jobs:
             cp "${{ steps.meta.outputs.notes_path }}" "$notes_file"
             printf '\n\n%s\n' "$release_block" >> "$notes_file"
           else
-            printf 'Release build for %s.\n\nIncluded assets:\n- %s (recommended for manual install)\n- %s (kept for update/distribution workflows)\n- %s\n\n%s\n' \
+            linux_bridge_lines=
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              linux_bridge_lines="${linux_bridge_lines}- $(basename "$asset")"$'\n'
+            done <<< "${{ steps.meta.outputs.linux_bridge_paths }}"
+
+            printf 'Release build for %s.\n\nIncluded assets:\n- %s (recommended for manual install)\n- %s (kept for update/distribution workflows)\n%s\n%s\n' \
               "$RELEASE_TAG" \
               "$(basename "${{ steps.meta.outputs.dmg_path }}")" \
               "$(basename "${{ steps.meta.outputs.zip_path }}")" \
-              "$(basename "${{ steps.meta.outputs.linux_bridge_path }}")" \
+              "$linux_bridge_lines" \
               "$release_block" \
               > "$notes_file"
           fi
@@ -396,8 +414,12 @@ jobs:
           assets=(
             "${{ steps.meta.outputs.dmg_path }}"
             "${{ steps.meta.outputs.zip_path }}"
-            "${{ steps.meta.outputs.linux_bridge_path }}"
           )
+
+          while IFS= read -r asset; do
+            [ -n "$asset" ] || continue
+            assets+=("$asset")
+          done <<< "${{ steps.meta.outputs.linux_bridge_paths }}"
 
           if [ "${{ steps.meta.outputs.has_notes_asset }}" = "true" ]; then
             assets+=("${{ steps.meta.outputs.notes_asset_path }}")
