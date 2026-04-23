@@ -1207,32 +1207,37 @@ private struct SettingsPanelContentView: View {
 
     private var displayContent: some View {
         VStack(alignment: .leading, spacing: 18) {
-            SettingsSectionCard(title: "显示器") {
+            SettingsSectionCard(title: "面板") {
+                IslandSurfaceModeSelector(mode: $settings.surfaceMode)
+                SettingsLineDivider()
+
                 SettingsInfoLine(
-                    title: "当前显示器",
-                    subtitle: "切换后会重新挂载 Island 窗口位置"
+                    title: "默认宠物形象",
+                    subtitle: "设置展示模式示意图，以及没有活跃或待处理会话时刘海/悬浮宠物使用的默认形象。"
                 ) {
-                    screenPicker
+                    DisplayPreviewMascotPicker(kind: $settings.previewMascotKind)
+                }
+
+                if settings.surfaceMode == .notch {
+                    SettingsLineDivider()
+                    SettingsInfoLine(
+                        title: "刘海拖拽引导",
+                        subtitle: "重新演示老用户首次打开新版本时看到的刘海拖拽提示。"
+                    ) {
+                        HookManagementButton(
+                            title: "重新演示",
+                            tint: SettingsCategory.display.tint,
+                            action: replayNotchDetachmentHint
+                        )
+                    }
+                    SettingsLineDivider()
+                    NotchDisplayModeSelector(mode: $settings.notchDisplayMode)
+                } else {
+                    SettingsLineDivider()
+                    FloatingPetPlacementInfoCard()
                 }
                 SettingsLineDivider()
 
-                if let selectedScreen = screenSelector.selectedScreen {
-                    SettingsValueLine(
-                        title: "当前输出",
-                        value: selectedScreen.localizedName
-                    )
-                    SettingsLineDivider()
-                }
-
-                SettingsValueLine(
-                    title: "选择策略",
-                    value: screenSelector.selectionMode == .automatic
-                        ? AppLocalization.string("自动")
-                        : AppLocalization.string("手动指定")
-                )
-            }
-
-            SettingsSectionCard(title: "面板") {
                 SettingsToggleLine(
                     title: "显示代理活动详情",
                     subtitle: "在会话列表和 hover 预览里展示工具调用、思考与更细的状态描述",
@@ -1292,36 +1297,31 @@ private struct SettingsPanelContentView: View {
                     step: 10,
                     format: { "\($0.formatted(.number.precision(.fractionLength(0)))) pt" }
                 )
-                SettingsLineDivider()
+            }
 
-                IslandSurfaceModeSelector(mode: $settings.surfaceMode)
-                SettingsLineDivider()
-
+            SettingsSectionCard(title: "显示器") {
                 SettingsInfoLine(
-                    title: "默认宠物形象",
-                    subtitle: "设置展示模式示意图，以及没有活跃或待处理会话时刘海/悬浮宠物使用的默认形象。"
+                    title: "当前显示器",
+                    subtitle: "切换后会重新挂载 Island 窗口位置"
                 ) {
-                    DisplayPreviewMascotPicker(kind: $settings.previewMascotKind)
+                    screenPicker
+                }
+                SettingsLineDivider()
+
+                if let selectedScreen = screenSelector.selectedScreen {
+                    SettingsValueLine(
+                        title: "当前输出",
+                        value: selectedScreen.localizedName
+                    )
+                    SettingsLineDivider()
                 }
 
-                if settings.surfaceMode == .notch {
-                    SettingsLineDivider()
-                    SettingsInfoLine(
-                        title: "刘海拖拽引导",
-                        subtitle: "重新演示老用户首次打开新版本时看到的刘海拖拽提示。"
-                    ) {
-                        HookManagementButton(
-                            title: "重新演示",
-                            tint: SettingsCategory.display.tint,
-                            action: replayNotchDetachmentHint
-                        )
-                    }
-                    SettingsLineDivider()
-                    NotchDisplayModeSelector(mode: $settings.notchDisplayMode)
-                } else {
-                    SettingsLineDivider()
-                    FloatingPetPlacementInfoCard()
-                }
+                SettingsValueLine(
+                    title: "选择策略",
+                    value: screenSelector.selectionMode == .automatic
+                        ? AppLocalization.string("自动")
+                        : AppLocalization.string("手动指定")
+                )
             }
 
             SettingsSectionCard(title: "客户端形象") {
