@@ -369,7 +369,7 @@ struct NotchView: View {
             }
     }
 
-    private var instrumentedBody: some View {
+    private var contentTypeAwareBody: some View {
         settingsAwareBody
             .onChange(of: viewModel.contentType.id) { _, _ in
                 maybePresentNextCompletionNotification()
@@ -387,6 +387,10 @@ struct NotchView: View {
                 handleWaitingForInputChange(instances)
                 handleCompletionNotificationChange(instances)
             }
+    }
+
+    private var visibilityAwareBody: some View {
+        contentTypeAwareBody
             .onChange(of: viewModel.isFullscreenEdgeRevealActive) { _, isActive in
                 if isActive && viewModel.status != .opened {
                     isVisible = false
@@ -429,6 +433,10 @@ struct NotchView: View {
                     cancelScheduledDetachmentHintPresentation()
                 }
             }
+    }
+
+    private var shortcutAwareBody: some View {
+        visibilityAwareBody
             .onReceive(NotificationCenter.default.publisher(for: .pingIslandOpenActiveSessionShortcut)) { _ in
                 handleOpenActiveSessionShortcut()
             }
@@ -456,6 +464,10 @@ struct NotchView: View {
                     viewModel.updateOpenedMeasuredHeight(nil)
                 }
             }
+    }
+
+    private var instrumentedBody: some View {
+        shortcutAwareBody
     }
 
     private var bodyContent: some View {
