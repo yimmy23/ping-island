@@ -194,6 +194,49 @@ final class AppLaunchConfigurationTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
     }
 
+    func testNotchDetachmentHintExperienceUsesInjectedPendingMarkerForUpgrades() {
+        let defaults = makeDefaults()
+        var injectedMarkerInvocationCount = 0
+
+        NotchDetachmentHintExperience.prepareForLaunch(
+            defaults: defaults,
+            previousVersion: "0.5.0",
+            currentVersion: "0.5.1",
+            markHintsPending: {
+                injectedMarkerInvocationCount += 1
+            }
+        )
+
+        XCTAssertEqual(injectedMarkerInvocationCount, 1)
+    }
+
+    func testFirstLaunchCheckUsesInjectedPendingMarker() {
+        let defaults = makeDefaults()
+        var injectedMarkerInvocationCount = 0
+
+        let isFirstLaunch = HookInstaller.checkAndMarkFirstLaunch(
+            defaults: defaults,
+            markPresentationOnboardingPending: {
+                injectedMarkerInvocationCount += 1
+            }
+        )
+
+        XCTAssertTrue(isFirstLaunch)
+        XCTAssertEqual(injectedMarkerInvocationCount, 1)
+        XCTAssertEqual(defaults.object(forKey: "HookInstaller.isFirstLaunch.v1") as? Bool, true)
+        XCTAssertNil(defaults.object(forKey: AppSettingsDefaultKeys.presentationModeOnboardingPending))
+    }
+
+    func testFirstLaunchCheckFallsBackToDefaultsWithoutInjectedPendingMarker() {
+        let defaults = makeDefaults()
+
+        let isFirstLaunch = HookInstaller.checkAndMarkFirstLaunch(defaults: defaults)
+
+        XCTAssertTrue(isFirstLaunch)
+        XCTAssertEqual(defaults.object(forKey: "HookInstaller.isFirstLaunch.v1") as? Bool, true)
+        XCTAssertEqual(defaults.object(forKey: AppSettingsDefaultKeys.presentationModeOnboardingPending) as? Bool, true)
+    }
+
     func testMouseEventReplayMarkerDistinguishesSyntheticEvents() {
         let location = CGPoint(x: 120, y: 48)
         let originalEvent = CGEvent(
