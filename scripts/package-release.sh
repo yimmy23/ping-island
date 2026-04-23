@@ -13,6 +13,7 @@ RELEASE_DIR="${PING_ISLAND_RELEASE_DIR:-$PROJECT_DIR/releases/signed}"
 NOTES_DIR="$PROJECT_DIR/releases/notes"
 KEYS_DIR="$PROJECT_DIR/.sparkle-keys"
 STAGING_DIR="$BUILD_DIR/dmg-staging"
+DMG_BACKGROUND_SOURCE="${PING_ISLAND_DMG_BACKGROUND_SOURCE:-$PROJECT_DIR/docs/images/ping-island-dmg-installer-background.png}"
 
 APP_BUNDLE_NAME="Ping Island.app"
 APP_PRODUCT_NAME="PingIsland"
@@ -40,6 +41,30 @@ require_command() {
         echo "ERROR: Missing required command: $1"
         exit 1
     fi
+}
+
+require_file() {
+    if [ ! -f "$1" ]; then
+        echo "ERROR: Missing required file: $1"
+        exit 1
+    fi
+}
+
+resolve_exported_app_icon() {
+    local requested_icon_source="${PING_ISLAND_DMG_ICON_SOURCE:-}"
+    local bundled_icon_path="$APP_PATH/Contents/Resources/AppIcon.icns"
+
+    if [ -n "$requested_icon_source" ]; then
+        echo "$requested_icon_source"
+        return 0
+    fi
+
+    if [ -f "$bundled_icon_path" ]; then
+        echo "$bundled_icon_path"
+        return 0
+    fi
+
+    echo "$PROJECT_DIR/PingIsland/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png"
 }
 
 infer_github_repo() {
@@ -293,6 +318,7 @@ require_command codesign
 require_command spctl
 require_command swift
 require_command python3
+require_file "$DMG_BACKGROUND_SOURCE"
 
 resolve_notary_credentials
 
@@ -301,12 +327,17 @@ echo ""
 
 export PING_ISLAND_BUILD_DIR="$BUILD_DIR"
 export PING_ISLAND_DMG_FAIL_ON_PLAIN=1
+export PING_ISLAND_DMG_BACKGROUND_SOURCE="$DMG_BACKGROUND_SOURCE"
 "$SCRIPT_DIR/build.sh"
 
 if [ ! -d "$APP_PATH" ]; then
     echo "ERROR: App bundle not found at $APP_PATH"
     exit 1
 fi
+
+DMG_ICON_SOURCE="$(resolve_exported_app_icon)"
+require_file "$DMG_ICON_SOURCE"
+export PING_ISLAND_DMG_ICON_SOURCE="$DMG_ICON_SOURCE"
 
 log_section "Verifying App Signature"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"

@@ -7,6 +7,7 @@
   <a href="https://erha19.github.io/">Website</a> •
   <a href="#installation">Install</a> •
   <a href="#features">Features</a> •
+  <a href="#buddy-detach">Buddy Detach</a> •
   <a href="#supported-tools">Supported Tools</a> •
   <a href="#build-from-source">Build</a><br>
   English | <a href="README.zh-CN.md">简体中文</a>
@@ -55,6 +56,20 @@
   <sub>Claude Code · Codex · Gemini CLI · Hermes Agent · Qwen Code · OpenClaw · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
 </p>
 
+<a id="buddy-detach"></a>
+## Buddy Detach in v0.5.0+
+
+Starting in `v0.5.0` - the first release after `v0.4.0` - Ping Island can detach the active Buddy from the notch. Press and hold the notch, drag the Buddy upward out of the notch area, and it becomes an independent floating companion that stays with you across other windows.
+
+<p align="center">
+  <img src="docs/images/ping-island-0.5.0-buddy-detach.png" width="960" alt="Ping Island v0.5.0 Buddy detach poster">
+</p>
+
+- **Three-step interaction** - press and hold, drag outward, then let go to keep the Buddy floating.
+- **Independent floating presence** - keep session awareness visible even when you are no longer watching the top notch.
+- **Free placement with low disruption** - move the Buddy where it helps without pinning it to the menu bar.
+- **Same Island context** - the floating Buddy still represents the same live session, mascot identity, and progress cues.
+
 ## What is Ping Island?
 
 Ping Island is a macOS menu bar app that expands into a Dynamic Island-style surface when your coding agents need attention. It listens to Claude-style hooks, Codex hooks, Gemini CLI hooks, Hermes Agent plugin hooks, Qwen Code hooks, OpenClaw internal hooks plus session transcripts, the Codex app-server, OpenCode plugins, and compatible IDE integrations so approvals, input requests, completions, and session summaries show up without babysitting terminal tabs.
@@ -75,6 +90,7 @@ Ping Island focuses on the moments that actually interrupt coding flow, then kee
 - **Codex hook + app-server sync** - Support Codex CLI hooks, live app-server threads, and rollout parsing fallback when needed.
 - **Custom sounds** - Pick per-event macOS sounds or import local sound packs for your own notification style.
 - **Custom agent mascots** - Give each client its own animated mascot override across the notch, session list, and hover UI.
+- **Buddy detach in v0.5.0+** - Drag the active Buddy out of the notch so it can stay nearby as an independent floating companion.
 - **Hermes courier-fox mascot** - Hermes Agent uses a gold courier fox with a winged helmet and satchel so plugin-hook sessions stay visually distinct from the Claude/Qwen family.
 - **Qwen capybara mascot** - Qwen Code now ships with a mint-scarf capybara mascot tuned for prompt, reply, and notification-heavy flows.
 
@@ -134,6 +150,7 @@ To create a locally shareable unsigned package for local testing:
 
 The script re-signs the built app bundle with a consistent ad-hoc signature before creating the `.dmg` and `.zip`, which helps embedded frameworks launch more reliably on another machine. The package is still unsigned for distribution and not notarized, so first launch may still require `Open` from Finder's context menu or manual quarantine removal.
 The generated files land in `releases/unsigned/` as `PingIsland-<version>.dmg` and `PingIsland-<version>.zip`.
+The DMG uses the repo-tracked installer artwork at `docs/images/ping-island-dmg-installer-background.png` by default; set `PING_ISLAND_DMG_BACKGROUND_SOURCE` if you want to preview a different background locally.
 
 To create signed and notarized release packages in GitHub Actions, configure the release secrets described in [docs/sparkle-release.md](docs/sparkle-release.md) and run `.github/workflows/release-packages.yml` against a `v*` tag or the manual workflow dispatch input.
 

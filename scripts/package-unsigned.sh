@@ -10,6 +10,7 @@ BUILD_DIR="$PROJECT_DIR/build/unsigned"
 DERIVED_DATA_PATH="$BUILD_DIR/DerivedData"
 STAGING_DIR="$BUILD_DIR/dmg-staging"
 RELEASE_DIR="$PROJECT_DIR/releases/unsigned"
+DMG_BACKGROUND_SOURCE="${PING_ISLAND_DMG_BACKGROUND_SOURCE:-$PROJECT_DIR/docs/images/ping-island-dmg-installer-background.png}"
 
 APP_BUNDLE_NAME="Ping Island.app"
 APP_PRODUCT_NAME="PingIsland"
@@ -20,6 +21,30 @@ BUILD_MODE_LABEL="release"
 
 echo "=== Packaging Unsigned Ping Island ==="
 echo ""
+
+resolve_exported_app_icon() {
+    local requested_icon_source="${PING_ISLAND_DMG_ICON_SOURCE:-}"
+    local bundled_icon_path="$APP_PATH/Contents/Resources/AppIcon.icns"
+
+    if [ -n "$requested_icon_source" ]; then
+        echo "$requested_icon_source"
+        return 0
+    fi
+
+    if [ -f "$bundled_icon_path" ]; then
+        echo "$bundled_icon_path"
+        return 0
+    fi
+
+    echo "$PROJECT_DIR/PingIsland/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png"
+}
+
+if [ ! -f "$DMG_BACKGROUND_SOURCE" ]; then
+    echo "ERROR: DMG background image not found at $DMG_BACKGROUND_SOURCE"
+    exit 1
+fi
+
+export PING_ISLAND_DMG_BACKGROUND_SOURCE="$DMG_BACKGROUND_SOURCE"
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR" "$RELEASE_DIR"
@@ -53,6 +78,14 @@ if [ ! -d "$APP_PATH" ]; then
     echo "ERROR: App bundle not found at $APP_PATH"
     exit 1
 fi
+
+DMG_ICON_SOURCE="$(resolve_exported_app_icon)"
+if [ ! -f "$DMG_ICON_SOURCE" ]; then
+    echo "ERROR: DMG icon image not found at $DMG_ICON_SOURCE"
+    exit 1
+fi
+
+export PING_ISLAND_DMG_ICON_SOURCE="$DMG_ICON_SOURCE"
 
 echo ""
 echo "Re-signing app bundle with a consistent ad-hoc signature..."

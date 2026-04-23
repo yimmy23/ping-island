@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BACKGROUND_GENERATOR="$SCRIPT_DIR/generate-dmg-background.swift"
 BRAND_LOGO_SOURCE="${PING_ISLAND_DMG_LOGO_SOURCE:-$PROJECT_DIR/docs/images/ping-island-icon-transparent.svg}"
+DMG_BACKGROUND_SOURCE="${PING_ISLAND_DMG_BACKGROUND_SOURCE:-$PROJECT_DIR/docs/images/ping-island-dmg-installer-background.png}"
 DMG_ICON_SOURCE="${PING_ISLAND_DMG_ICON_SOURCE:-}"
 FALLBACK_ICON_PNG="$PROJECT_DIR/PingIsland/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png"
 
@@ -13,13 +14,13 @@ VOLNAME=""
 SOURCE_DIR=""
 OUTPUT_DMG=""
 APP_NAME="Ping Island.app"
-WINDOW_WIDTH="${PING_ISLAND_DMG_WINDOW_WIDTH:-520}"
-WINDOW_HEIGHT="${PING_ISLAND_DMG_WINDOW_HEIGHT:-360}"
-ICON_SIZE="${PING_ISLAND_DMG_ICON_SIZE:-92}"
-APP_X="${PING_ISLAND_DMG_APP_X:-138}"
-APP_Y="${PING_ISLAND_DMG_APP_Y:-168}"
-APPLICATIONS_X="${PING_ISLAND_DMG_APPLICATIONS_X:-388}"
-APPLICATIONS_Y="${PING_ISLAND_DMG_APPLICATIONS_Y:-168}"
+WINDOW_WIDTH="${PING_ISLAND_DMG_WINDOW_WIDTH:-768}"
+WINDOW_HEIGHT="${PING_ISLAND_DMG_WINDOW_HEIGHT:-512}"
+ICON_SIZE="${PING_ISLAND_DMG_ICON_SIZE:-108}"
+APP_X="${PING_ISLAND_DMG_APP_X:-212}"
+APP_Y="${PING_ISLAND_DMG_APP_Y:-246}"
+APPLICATIONS_X="${PING_ISLAND_DMG_APPLICATIONS_X:-602}"
+APPLICATIONS_Y="${PING_ISLAND_DMG_APPLICATIONS_Y:-248}"
 FAIL_ON_PLAIN="${PING_ISLAND_DMG_FAIL_ON_PLAIN:-0}"
 FINDER_VOLUME_NAME=""
 
@@ -106,11 +107,34 @@ rasterize_to_png() {
     *.png|*.PNG)
       cp "$source_path" "$output_path"
       ;;
+    *.jpg|*.JPG|*.jpeg|*.JPEG)
+      sips -s format png "$source_path" --out "$output_path" >/dev/null
+      ;;
     *)
       echo "Unsupported DMG image source: $source_path" >&2
       return 1
       ;;
   esac
+}
+
+prepare_background_png() {
+  local output_path="$1"
+  local background_source="${DMG_BACKGROUND_SOURCE:-}"
+
+  if [[ -n "$background_source" && -f "$background_source" ]]; then
+    local rasterized_background="$TMP_DIR/background-source.png"
+    rasterize_to_png "$background_source" "$rasterized_background"
+    sips -z "$WINDOW_HEIGHT" "$WINDOW_WIDTH" "$rasterized_background" --out "$output_path" >/dev/null
+    return 0
+  fi
+
+  local background_args=(
+    --output "$output_path"
+    --width "$WINDOW_WIDTH"
+    --height "$WINDOW_HEIGHT"
+  )
+
+  swift "$BACKGROUND_GENERATOR" "${background_args[@]}"
 }
 
 usage() {
@@ -121,6 +145,9 @@ Options:
   --app-name <bundle-name>       App bundle name inside the DMG
   --window-width <pixels>        Finder window width
   --window-height <pixels>       Finder window height
+
+Environment:
+  PING_ISLAND_DMG_BACKGROUND_SOURCE  Optional background image override
 EOF
 }
 
@@ -201,15 +228,10 @@ if logo_source="$(resolve_image_source "$BRAND_LOGO_SOURCE")"; then
   rasterize_to_png "$logo_source" "$BRAND_LOGO_PNG"
 fi
 
-background_args=(
-  --output "$BACKGROUND_PATH"
-  --width "$WINDOW_WIDTH"
-  --height "$WINDOW_HEIGHT"
-)
-
-swift "$BACKGROUND_GENERATOR" "${background_args[@]}"
+prepare_background_png "$BACKGROUND_PATH"
 
 if icon_source="$(resolve_dmg_icon_source)"; then
+  echo "Using DMG icon source: $icon_source"
   rasterize_to_png "$icon_source" "$ICON_WORK_PNG"
   sips -i "$ICON_WORK_PNG" >/dev/null
   DeRez -only icns "$ICON_WORK_PNG" > "$ICON_RESOURCE_PATH"
