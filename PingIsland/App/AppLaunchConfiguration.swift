@@ -67,28 +67,36 @@ struct AppLaunchFlow: Equatable {
 }
 
 struct NotchDetachmentHintExperience {
-    static let currentRevision = 1
-
-    private static let revisionDefaultsKey = "notchDetachmentHintExperienceRevision"
+    private static let preparedVersionDefaultsKey = "notchDetachmentHintExperiencePreparedVersion"
 
     static func prepareForLaunch(
         defaults: UserDefaults = .standard,
-        previousVersion: String?
+        previousVersion: String?,
+        currentVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     ) {
-        guard defaults.integer(forKey: revisionDefaultsKey) < currentRevision else {
+        let normalizedCurrentVersion = currentVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedCurrentVersion.isEmpty else {
             return
+        }
+
+        let lastPreparedVersion = defaults.string(forKey: preparedVersionDefaultsKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard lastPreparedVersion != normalizedCurrentVersion else {
+            return
+        }
+
+        defer {
+            defaults.set(normalizedCurrentVersion, forKey: preparedVersionDefaultsKey)
         }
 
         let normalizedPreviousVersion = previousVersion?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        if normalizedPreviousVersion.isEmpty {
-            defaults.set(currentRevision, forKey: revisionDefaultsKey)
+        if normalizedPreviousVersion.isEmpty || normalizedPreviousVersion == normalizedCurrentVersion {
             return
         }
 
         defaults.set(true, forKey: AppSettingsDefaultKeys.notchDetachmentHintPending)
         defaults.set(true, forKey: AppSettingsDefaultKeys.floatingPetSettingsHintPending)
-        defaults.set(currentRevision, forKey: revisionDefaultsKey)
     }
 }

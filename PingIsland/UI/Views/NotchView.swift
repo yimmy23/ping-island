@@ -29,6 +29,8 @@ struct OpenedPanelContentHeightPreferenceKey: PreferenceKey {
 
 struct NotchView: View {
     private static let temporaryReminderMuteDuration: TimeInterval = 10 * 60
+    private static let startupDetachmentHintDelay: TimeInterval = 1.8
+    private static let detachmentHintRetryDelay: TimeInterval = 0.75
 
     @ObservedObject var viewModel: NotchViewModel
     @ObservedObject var sessionMonitor: SessionMonitor
@@ -55,6 +57,7 @@ struct NotchView: View {
     @State private var shouldDismissCompletionNotificationOnHoverExit: Bool = false
     @State private var isShowingDetachmentHint: Bool = false
     @State private var detachmentHintDismissWorkItem: DispatchWorkItem?
+    @State private var detachmentHintPresentationWorkItem: DispatchWorkItem?
 
     @Namespace private var activityNamespace
 
@@ -322,7 +325,10 @@ struct NotchView: View {
                 handleProcessingChange()
                 handleManualAttentionChange(sessionMonitor.instances)
                 primeCompletionNotificationTracking(sessionMonitor.instances)
-                presentDetachmentHintIfNeeded()
+                scheduleDetachmentHintPresentationIfNeeded(delay: Self.startupDetachmentHintDelay)
+            }
+            .onDisappear {
+                cancelScheduledDetachmentHintPresentation()
             }
             .onChange(of: viewModel.status) { oldStatus, newStatus in
                 handleStatusChange(from: oldStatus, to: newStatus)
@@ -386,6 +392,7 @@ struct NotchView: View {
                     isVisible = false
                 } else {
                     handleProcessingChange()
+                    scheduleDetachmentHintPresentationIfNeeded(delay: Self.detachmentHintRetryDelay)
                 }
             }
             .onChange(of: viewModel.isFullscreenBrowserHiddenActive) { _, isActive in
@@ -393,6 +400,7 @@ struct NotchView: View {
                     isVisible = false
                 } else {
                     handleProcessingChange()
+                    scheduleDetachmentHintPresentationIfNeeded(delay: Self.detachmentHintRetryDelay)
                 }
             }
             .onChange(of: viewModel.isIdleAutoHiddenActive) { _, isHidden in
@@ -400,6 +408,25 @@ struct NotchView: View {
                     isVisible = false
                 } else {
                     handleProcessingChange()
+                    scheduleDetachmentHintPresentationIfNeeded(delay: Self.detachmentHintRetryDelay)
+                }
+            }
+            .onChange(of: viewModel.presentationMode) { _, _ in
+                scheduleDetachmentHintPresentationIfNeeded(delay: Self.detachmentHintRetryDelay)
+            }
+            .onChange(of: viewModel.isFullscreenPhysicalNotchCompactActive) { _, isActive in
+                if !isActive {
+                    scheduleDetachmentHintPresentationIfNeeded(delay: Self.detachmentHintRetryDelay)
+                }
+            }
+            .onChange(of: settings.surfaceMode) { _, _ in
+                scheduleDetachmentHintPresentationIfNeeded(delay: Self.detachmentHintRetryDelay)
+            }
+            .onChange(of: settings.notchDetachmentHintPending) { _, isPending in
+                if isPending {
+                    scheduleDetachmentHintPresentationIfNeeded(delay: Self.detachmentHintRetryDelay)
+                } else {
+                    cancelScheduledDetachmentHintPresentation()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .pingIslandOpenActiveSessionShortcut)) { _ in
@@ -741,6 +768,7 @@ struct NotchView: View {
         switch newStatus {
         case .opened, .popping:
             isVisible = true
+            cancelScheduledDetachmentHintPresentation()
             dismissDetachmentHint()
             // Clear waiting-for-input timestamps only when manually opened (user acknowledged)
             if viewModel.openReason == .click || viewModel.openReason == .hover {
@@ -750,7 +778,29 @@ struct NotchView: View {
         case .closed:
             isVisible = !viewModel.shouldHideWindowPresentation
             maybePresentNextCompletionNotification()
+            scheduleDetachmentHintPresentationIfNeeded(delay: Self.detachmentHintRetryDelay)
         }
+    }
+
+    private func scheduleDetachmentHintPresentationIfNeeded(force: Bool = false, delay: TimeInterval) {
+        guard force || settings.notchDetachmentHintPending else {
+            cancelScheduledDetachmentHintPresentation()
+            return
+        }
+
+        detachmentHintPresentationWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [force] in
+            detachmentHintPresentationWorkItem = nil
+            presentDetachmentHintIfNeeded(force: force)
+        }
+        detachmentHintPresentationWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func cancelScheduledDetachmentHintPresentation() {
+        detachmentHintPresentationWorkItem?.cancel()
+        detachmentHintPresentationWorkItem = nil
     }
 
     private func handlePendingSessionsChange(_ sessions: [SessionState]) {
@@ -786,6 +836,7 @@ struct NotchView: View {
         guard viewModel.status == .closed else { return }
         guard !shouldHideClosedContent else { return }
 
+        cancelScheduledDetachmentHintPresentation()
         settings.notchDetachmentHintPending = false
         detachmentHintDismissWorkItem?.cancel()
 

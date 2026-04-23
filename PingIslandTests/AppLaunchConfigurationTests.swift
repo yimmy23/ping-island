@@ -124,7 +124,8 @@ final class AppLaunchConfigurationTests: XCTestCase {
 
         NotchDetachmentHintExperience.prepareForLaunch(
             defaults: defaults,
-            previousVersion: "0.9.0"
+            previousVersion: "0.4.1",
+            currentVersion: "0.5.0"
         )
 
         XCTAssertTrue(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
@@ -136,24 +137,58 @@ final class AppLaunchConfigurationTests: XCTestCase {
 
         NotchDetachmentHintExperience.prepareForLaunch(
             defaults: defaults,
-            previousVersion: nil
+            previousVersion: nil,
+            currentVersion: "0.5.0"
         )
 
         XCTAssertFalse(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
     }
 
-    func testNotchDetachmentHintExperienceOnlyAppliesUpgradePromptOncePerRevision() {
+    func testNotchDetachmentHintExperienceOnlyAppliesUpgradePromptOncePerVersion() {
         let defaults = makeDefaults()
 
         NotchDetachmentHintExperience.prepareForLaunch(
             defaults: defaults,
-            previousVersion: "0.9.0"
+            previousVersion: "0.4.1",
+            currentVersion: "0.5.0"
         )
         defaults.set(false, forKey: AppSettingsDefaultKeys.notchDetachmentHintPending)
 
         NotchDetachmentHintExperience.prepareForLaunch(
             defaults: defaults,
-            previousVersion: "1.0.0"
+            previousVersion: "0.4.1",
+            currentVersion: "0.5.0"
+        )
+
+        XCTAssertFalse(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
+    }
+
+    func testNotchDetachmentHintExperienceSchedulesAgainForNextVersionUpgrade() {
+        let defaults = makeDefaults()
+
+        NotchDetachmentHintExperience.prepareForLaunch(
+            defaults: defaults,
+            previousVersion: "0.4.1",
+            currentVersion: "0.5.0"
+        )
+        defaults.set(false, forKey: AppSettingsDefaultKeys.notchDetachmentHintPending)
+
+        NotchDetachmentHintExperience.prepareForLaunch(
+            defaults: defaults,
+            previousVersion: "0.5.0",
+            currentVersion: "0.5.1"
+        )
+
+        XCTAssertTrue(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
+    }
+
+    func testNotchDetachmentHintExperienceSkipsWhenPreviousVersionMatchesCurrentVersion() {
+        let defaults = makeDefaults()
+
+        NotchDetachmentHintExperience.prepareForLaunch(
+            defaults: defaults,
+            previousVersion: "0.5.1",
+            currentVersion: "0.5.1"
         )
 
         XCTAssertFalse(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
