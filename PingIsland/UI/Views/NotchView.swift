@@ -678,44 +678,40 @@ struct NotchView: View {
 
     @ViewBuilder
     private var openedHeaderContent: some View {
-        ZStack {
-            IslandDragHandleVisual()
-
-            HStack(spacing: 8) {
-                if viewModel.openReason == .notification,
-                   activeCompletionNotification != nil {
-                    MascotView(
-                        kind: completionNotificationMascotKind,
-                        status: .idle,
-                        size: petIconSize
-                    )
-                    .padding(.leading, 14)
-                }
-
-                if shouldShowOpenedHeaderUsage {
-                    UsageSummaryStripView(
-                        providers: usageSummaryProviders,
-                        inline: true
-                    )
-                    .padding(.leading, viewModel.openReason == .notification && activeCompletionNotification != nil ? 6 : 4)
-                    .layoutPriority(1)
-                }
-
-                Spacer(minLength: 0)
-
-                NotchTemporaryMuteButton(
-                    isActive: areReminderNotificationsSuppressed,
-                    action: activateTemporaryReminderMute,
-                    helpText: temporaryMuteButtonHelpText
+        HStack(spacing: 8) {
+            if viewModel.openReason == .notification,
+               activeCompletionNotification != nil {
+                MascotView(
+                    kind: completionNotificationMascotKind,
+                    status: .idle,
+                    size: petIconSize
                 )
-
-                NotchSettingsButton(
-                    hasUnseenUpdate: updateManager.hasUnseenUpdate,
-                    action: openSettingsWindow
-                )
+                .padding(.leading, 14)
             }
-            .padding(.trailing, 12)
+
+            if shouldShowOpenedHeaderUsage {
+                UsageSummaryStripView(
+                    providers: usageSummaryProviders,
+                    inline: true
+                )
+                .padding(.leading, viewModel.openReason == .notification && activeCompletionNotification != nil ? 6 : 4)
+                .layoutPriority(1)
+            }
+
+            Spacer(minLength: 0)
+
+            NotchTemporaryMuteButton(
+                isActive: areReminderNotificationsSuppressed,
+                action: activateTemporaryReminderMute,
+                helpText: temporaryMuteButtonHelpText
+            )
+
+            NotchSettingsButton(
+                hasUnseenUpdate: updateManager.hasUnseenUpdate,
+                action: openSettingsWindow
+            )
         }
+        .padding(.trailing, 12)
         .frame(maxWidth: .infinity)
     }
 
