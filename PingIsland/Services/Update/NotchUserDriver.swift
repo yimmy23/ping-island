@@ -53,12 +53,18 @@ final class UpdateManager: NSObject, ObservableObject {
     private var latestAppcastItem: SUAppcastItem?
     private var releaseNotesTask: Task<Void, Never>?
     private var sessionActivityObserver: AnyCancellable?
+    private var updatePreferenceObserver: AnyCancellable?
     private var inactiveCheckTimer: Timer?
     private var pendingSilentInstall: (() -> Void)?
     private var hasActiveSessions = false
 
     private override init() {
         super.init()
+    }
+
+    private enum UpdateCheckTrigger {
+        case automatic
+        case manual
     }
 
     var isConfigured: Bool {
@@ -78,6 +84,10 @@ final class UpdateManager: NSObject, ObservableObject {
 
     var releaseNotesActionSubtitle: String {
         "使用独立弹窗查看 Markdown 更新日志"
+    }
+
+    private var automaticUpdateChecksEnabled: Bool {
+        AppSettings.shared.automaticUpdateChecksEnabled
     }
 
     func start() {
@@ -101,9 +111,10 @@ final class UpdateManager: NSObject, ObservableObject {
         updater.automaticallyDownloadsUpdates = true
         _ = updater.clearFeedURLFromUserDefaults()
 
+        beginObservingUpdatePreferenceIfNeeded()
         beginObservingSessionActivityIfNeeded()
         refreshSilentUpdateSchedule(hasActiveSessions: Self.hasActiveSessions(in: []))
-        performSilentUpdateCheck()
+        performUpdateCheck(trigger: .automatic)
     }
 
     func checkForUpdates() {
@@ -112,19 +123,19 @@ final class UpdateManager: NSObject, ObservableObject {
             return
         }
 
-        performSilentUpdateCheck()
+        performUpdateCheck(trigger: .manual)
     }
 
     func checkForUpdatesInBackground() {
-        performSilentUpdateCheck()
+        performUpdateCheck(trigger: .automatic)
     }
 
     func downloadAndInstall() {
-        performSilentUpdateCheck()
+        performUpdateCheck(trigger: .manual)
     }
 
     func installAndRelaunch() {
-        installPendingUpdateIfPossible()
+        installPendingUpdateIfPossible(userInitiated: true)
     }
 
     func skipUpdate() {
@@ -177,22 +188,34 @@ final class UpdateManager: NSObject, ObservableObject {
             }
     }
 
+    private func beginObservingUpdatePreferenceIfNeeded() {
+        guard updatePreferenceObserver == nil else { return }
+
+        updatePreferenceObserver = AppSettings.shared.$automaticUpdateChecksEnabled
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.refreshSilentUpdateSchedule(hasActiveSessions: self.hasActiveSessions)
+            }
+    }
+
     private func refreshSilentUpdateSchedule(hasActiveSessions: Bool) {
         self.hasActiveSessions = hasActiveSessions
 
-        if hasActiveSessions {
+        if hasActiveSessions || !automaticUpdateChecksEnabled {
             inactiveCheckTimer?.invalidate()
             inactiveCheckTimer = nil
             return
         }
 
-        installPendingUpdateIfPossible()
+        installPendingUpdateIfPossible(userInitiated: false)
 
         guard inactiveCheckTimer == nil else { return }
 
         inactiveCheckTimer = Timer.scheduledTimer(withTimeInterval: Self.silentCheckInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.performSilentUpdateCheck()
+                self?.performUpdateCheck(trigger: .automatic)
             }
         }
 
@@ -201,14 +224,26 @@ final class UpdateManager: NSObject, ObservableObject {
         }
     }
 
-    private func performSilentUpdateCheck() {
+    private func performUpdateCheck(trigger: UpdateCheckTrigger) {
+        if case .automatic = trigger, !automaticUpdateChecksEnabled {
+            return
+        }
+
         guard let updater = updaterController?.updater else {
             state = .error(message: configurationStatus.message)
             return
         }
 
         guard updater.canCheckForUpdates else {
-            installPendingUpdateIfPossible()
+            let userInitiated: Bool
+            switch trigger {
+            case .automatic:
+                userInitiated = false
+            case .manual:
+                userInitiated = true
+            }
+
+            installPendingUpdateIfPossible(userInitiated: userInitiated)
             return
         }
 
@@ -216,8 +251,9 @@ final class UpdateManager: NSObject, ObservableObject {
         updater.checkForUpdatesInBackground()
     }
 
-    private func installPendingUpdateIfPossible() {
-        guard !hasActiveSessions, let pendingSilentInstall else { return }
+    private func installPendingUpdateIfPossible(userInitiated: Bool) {
+        guard let pendingSilentInstall else { return }
+        guard userInitiated || (automaticUpdateChecksEnabled && !hasActiveSessions) else { return }
 
         self.pendingSilentInstall = nil
         hasUnseenUpdate = false
@@ -538,7 +574,7 @@ extension UpdateManager: SPUUpdaterDelegate {
             immediateInstallHandler()
         }
 
-        installPendingUpdateIfPossible()
+        installPendingUpdateIfPossible(userInitiated: false)
         return true
     }
 

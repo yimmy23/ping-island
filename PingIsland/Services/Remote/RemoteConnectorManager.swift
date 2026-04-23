@@ -1016,6 +1016,8 @@ final class RemoteConnectorManager: ObservableObject {
         switch architecture.lowercased() {
         case "x86_64", "amd64":
             return "x86_64"
+        case "aarch64", "arm64":
+            return "aarch64"
         default:
             return nil
         }

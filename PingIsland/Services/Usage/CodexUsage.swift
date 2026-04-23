@@ -22,6 +22,14 @@ struct CodexUsageSnapshot: Equatable, Codable, Sendable {
     let limitID: String?
     let windows: [CodexUsageWindow]
 
+    nonisolated var threadID: String? {
+        let stem = URL(fileURLWithPath: sourceFilePath).deletingPathExtension().lastPathComponent
+        guard stem.count >= 36 else { return nil }
+
+        let candidate = String(stem.suffix(36)).lowercased()
+        return UUID(uuidString: candidate) == nil ? nil : candidate
+    }
+
     nonisolated
     var isEmpty: Bool {
         windows.isEmpty

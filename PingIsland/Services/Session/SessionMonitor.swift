@@ -242,6 +242,7 @@ class SessionMonitor: ObservableObject {
 
             self.claudeUsageSnapshot = claudeSnapshot ?? cachedClaudeSnapshot
             self.codexUsageSnapshot = codexSnapshot ?? cachedCodexSnapshot
+            self.syncCodexThreadDiscovery(using: self.codexUsageSnapshot)
         }
     }
 
@@ -815,6 +816,16 @@ class SessionMonitor: ObservableObject {
         }
 
         return snapshot
+    }
+
+    private func syncCodexThreadDiscovery(using snapshot: CodexUsageSnapshot?) {
+        guard let threadID = snapshot?.threadID else { return }
+
+        Task {
+            let alreadyTracked = await SessionStore.shared.containsSession(threadID)
+            guard !alreadyTracked else { return }
+            await CodexAppServerMonitor.shared.refreshThreadDiscovery(threadId: threadID)
+        }
     }
 
     nonisolated static func shouldWatchTranscript(for event: HookEvent, phase: SessionPhase) -> Bool {

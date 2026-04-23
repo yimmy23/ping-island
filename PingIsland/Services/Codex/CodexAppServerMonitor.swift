@@ -40,10 +40,12 @@ actor CodexAppServerMonitor {
 
     private let logger = Logger(subsystem: "com.wudanwu.pingisland", category: "Codex")
     private let port = 41241
+    private let threadListRefreshInterval: Duration = .seconds(15)
 
     private var process: Process?
     private var websocket: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
+    private var threadListRefreshTask: Task<Void, Never>?
     private var requestSequence = 0
     private var pendingResponses: [String: CheckedContinuation<[String: Any], Error>] = [:]
     private var pendingRequestsByThread: [String: PendingRequest] = [:]
@@ -55,10 +57,12 @@ actor CodexAppServerMonitor {
 
     func start() async {
         if websocket != nil {
+            ensureThreadListRefreshLoop()
             return
         }
 
         if await connectToServer() {
+            ensureThreadListRefreshLoop()
             return
         }
 
@@ -86,6 +90,7 @@ actor CodexAppServerMonitor {
         for _ in 0..<12 {
             try? await Task.sleep(for: .milliseconds(250))
             if await connectToServer() {
+                ensureThreadListRefreshLoop()
                 return
             }
         }
@@ -94,6 +99,8 @@ actor CodexAppServerMonitor {
     }
 
     func stop() {
+        threadListRefreshTask?.cancel()
+        threadListRefreshTask = nil
         receiveTask?.cancel()
         receiveTask = nil
         websocket?.cancel(with: .goingAway, reason: nil)
@@ -308,6 +315,23 @@ actor CodexAppServerMonitor {
         lastThreadDiagnostics
     }
 
+    func refreshThreadDiscovery(threadId: String) async {
+        guard !threadId.isEmpty else { return }
+
+        if websocket == nil {
+            await start()
+        }
+
+        do {
+            _ = try await readThread(threadId: threadId, includeTurns: false)
+        } catch {
+            logger.debug(
+                "Codex thread/read refresh failed for \(threadId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
+            await refreshThreadList(reason: "usage-fallback")
+        }
+    }
+
     private func connectToServer() async -> Bool {
         guard websocket == nil else { return true }
         guard let url = URL(string: "ws://127.0.0.1:\(port)") else { return false }
@@ -335,16 +359,7 @@ actor CodexAppServerMonitor {
                 ]
             )
 
-            if let response = try? await sendRequest(
-                method: "thread/list",
-                params: [
-                    "archived": false,
-                    "limit": 30,
-                    "sortKey": "updated_at"
-                ]
-            ) {
-                await ingestThreadList(response)
-            }
+            await refreshThreadList(reason: "connect")
 
             return true
         } catch {
@@ -372,6 +387,46 @@ actor CodexAppServerMonitor {
 
         websocket?.cancel(with: .goingAway, reason: nil)
         websocket = nil
+        threadListRefreshTask?.cancel()
+        threadListRefreshTask = nil
+    }
+
+    private func ensureThreadListRefreshLoop() {
+        guard threadListRefreshTask == nil else { return }
+
+        threadListRefreshTask = Task { [weak self] in
+            await self?.runThreadListRefreshLoop()
+        }
+    }
+
+    private func runThreadListRefreshLoop() async {
+        defer {
+            threadListRefreshTask = nil
+        }
+
+        while !Task.isCancelled {
+            try? await Task.sleep(for: threadListRefreshInterval)
+            guard !Task.isCancelled else { break }
+            guard websocket != nil else { break }
+            await refreshThreadList(reason: "poll")
+        }
+    }
+
+    private func refreshThreadList(reason: String) async {
+        guard websocket != nil else { return }
+
+        do {
+            let response = try await sendRequest(
+                method: "thread/list",
+                params: Self.threadListRequestParams()
+            )
+            await ingestThreadList(response)
+            logger.debug("Codex thread/list refresh succeeded reason=\(reason, privacy: .public)")
+        } catch {
+            logger.debug(
+                "Codex thread/list refresh failed reason=\(reason, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 
     private func handle(_ message: URLSessionWebSocketTask.Message) async {
@@ -725,6 +780,14 @@ actor CodexAppServerMonitor {
         for thread in data {
             await ingestThread(thread)
         }
+    }
+
+    private static func threadListRequestParams(limit: Int = 30) -> [String: Any] {
+        [
+            "archived": false,
+            "limit": limit,
+            "sortKey": "updated_at"
+        ]
     }
 
     private func ingestThread(_ thread: [String: Any]) async {

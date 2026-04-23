@@ -181,6 +181,8 @@
 "首次安装" = "First install";
 "无" = "None";
 "更新" = "Updates";
+"自动检查更新" = "Automatic update checks";
+"启动时和空闲时自动检查、下载并安装更新；关闭后仅在手动检查时更新" = "Automatically check, download, and install updates on launch and while idle. When off, updates only run after a manual check.";
 "检查更新" = "Check for updates";
 "检查中..." = "Checking...";
 "下载更新" = "Download update";
@@ -190,6 +192,8 @@
 "安装中..." = "Installing...";
 "重试更新" = "Retry update";
 "检查 Island 是否有新版本" = "Check whether a new version of Island is available";
+"自动更新已关闭，可随时手动检查" = "Automatic updates are off. You can check manually at any time.";
+"启动时和空闲时自动检查、下载并安装更新" = "Automatically check, download, and install updates on launch and while idle";
 "当前已经是最新版本" = "You're already on the latest version";
 "正在连接更新源" = "Connecting to the update feed";
 "发现新版本 v%@" = "New version found: v%@";

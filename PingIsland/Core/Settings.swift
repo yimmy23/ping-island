@@ -301,6 +301,7 @@ final class AppSettingsStore: ObservableObject {
         static let presentationModeOnboardingPending = AppSettingsDefaultKeys.presentationModeOnboardingPending
         static let notchDetachmentHintPending = AppSettingsDefaultKeys.notchDetachmentHintPending
         static let floatingPetSettingsHintPending = AppSettingsDefaultKeys.floatingPetSettingsHintPending
+        static let automaticUpdateChecksEnabled = "automaticUpdateChecksEnabled"
         static let mascotOverrides = "mascotOverrides"
         static let openActiveSessionShortcut = "openActiveSessionShortcut"
         static let openSessionListShortcut = "openSessionListShortcut"
@@ -608,6 +609,13 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(floatingPetSettingsHintPending, forKey: Keys.floatingPetSettingsHintPending)
+        }
+    }
+
+    @Published var automaticUpdateChecksEnabled: Bool {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(automaticUpdateChecksEnabled, forKey: Keys.automaticUpdateChecksEnabled)
         }
     }
 
@@ -1051,6 +1059,12 @@ final class AppSettingsStore: ObservableObject {
             key: Keys.floatingPetSettingsHintPending,
             exists: persistedKeys.contains(Keys.floatingPetSettingsHintPending),
             default: false
+        ))
+        _automaticUpdateChecksEnabled = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.automaticUpdateChecksEnabled,
+            exists: persistedKeys.contains(Keys.automaticUpdateChecksEnabled),
+            default: true
         ))
         _mascotOverrides = Published(initialValue: Self.sanitizedMascotOverrides(mascotOverrideRaw))
         _openActiveSessionShortcut = Published(initialValue: openActiveSessionShortcut)

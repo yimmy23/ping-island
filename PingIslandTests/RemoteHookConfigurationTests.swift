@@ -64,12 +64,28 @@ final class RemoteHookConfigurationTests: XCTestCase {
             "x86_64"
         )
         XCTAssertEqual(
+            RemoteConnectorManager.normalizedLinuxBridgeArchitecture("aarch64"),
+            "aarch64"
+        )
+        XCTAssertEqual(
+            RemoteConnectorManager.normalizedLinuxBridgeArchitecture("arm64"),
+            "aarch64"
+        )
+        XCTAssertEqual(
             RemoteConnectorManager.remoteLinuxBridgeBinaryAssetName(normalizedArchitecture: "x86_64"),
             "PingIslandBridge-linux-x86_64"
         )
         XCTAssertEqual(
             RemoteConnectorManager.remoteLinuxBridgeArchiveAssetName(normalizedArchitecture: "x86_64"),
             "PingIslandBridge-linux-x86_64.zip"
+        )
+        XCTAssertEqual(
+            RemoteConnectorManager.remoteLinuxBridgeBinaryAssetName(normalizedArchitecture: "aarch64"),
+            "PingIslandBridge-linux-aarch64"
+        )
+        XCTAssertEqual(
+            RemoteConnectorManager.remoteLinuxBridgeArchiveAssetName(normalizedArchitecture: "aarch64"),
+            "PingIslandBridge-linux-aarch64.zip"
         )
     }
 

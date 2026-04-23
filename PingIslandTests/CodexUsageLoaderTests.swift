@@ -193,6 +193,30 @@ final class CodexUsageLoaderTests: XCTestCase {
 
         XCTAssertNil(snapshot)
     }
+
+    func testSnapshotExtractsThreadIDFromRolloutPath() {
+        let snapshot = CodexUsageSnapshot(
+            sourceFilePath: "/tmp/.codex/sessions/2026/04/23/rollout-2026-04-23T17-23-55-019db9a7-336a-7b62-9288-7304c3d2d4b9.jsonl",
+            capturedAt: nil,
+            planType: nil,
+            limitID: nil,
+            windows: []
+        )
+
+        XCTAssertEqual(snapshot.threadID, "019db9a7-336a-7b62-9288-7304c3d2d4b9")
+    }
+
+    func testSnapshotThreadIDIsNilForNonThreadRolloutPath() {
+        let snapshot = CodexUsageSnapshot(
+            sourceFilePath: "/tmp/.codex/sessions/2026/04/23/rollout-latest.jsonl",
+            capturedAt: nil,
+            planType: nil,
+            limitID: nil,
+            windows: []
+        )
+
+        XCTAssertNil(snapshot.threadID)
+    }
 }
 
 private func temporaryRootURL(named name: String) -> URL {

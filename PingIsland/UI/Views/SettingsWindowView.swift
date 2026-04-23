@@ -1628,6 +1628,13 @@ private struct SettingsPanelContentView: View {
             }
 
             SettingsSectionCard(title: "更新") {
+                SettingsToggleLine(
+                    title: "自动检查更新",
+                    subtitle: "启动时和空闲时自动检查、下载并安装更新；关闭后仅在手动检查时更新",
+                    isOn: $settings.automaticUpdateChecksEnabled
+                )
+                SettingsLineDivider()
+
                 SettingsActionLine(
                     title: updateTitle,
                     subtitle: updateSubtitle
@@ -1939,7 +1946,11 @@ private struct SettingsPanelContentView: View {
         switch updateManager.state {
         case .idle:
             return updateManager.isConfigured
-                ? AppLocalization.string("启动时和空闲时自动静默更新")
+                ? AppLocalization.string(
+                    settings.automaticUpdateChecksEnabled
+                        ? "启动时和空闲时自动检查、下载并安装更新"
+                        : "自动更新已关闭，可随时手动检查"
+                )
                 : updateManager.configurationStatus.message
         case .upToDate:
             return AppLocalization.string("当前已经是最新版本")
