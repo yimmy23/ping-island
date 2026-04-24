@@ -569,7 +569,7 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(session.subagentClientTypeBadgeText, "Qoder")
     }
 
-    func testSubagentVisibilityModeShowsAllChildrenWhenEnabled() {
+    func testSubagentVisibilityModeHidesExplicitChildrenWhenDisabled() {
         let parent = SessionState(
             sessionId: "codex-parent",
             cwd: "/tmp/project",
@@ -604,10 +604,47 @@ final class SessionStateTests: XCTestCase {
         )
 
         XCTAssertTrue(parent.shouldDisplaySubagent(in: .hidden))
-        XCTAssertTrue(parentAgent.shouldDisplaySubagent(in: .hidden))
+        XCTAssertFalse(parentAgent.shouldDisplaySubagent(in: .hidden))
         XCTAssertFalse(firstLevelChild.shouldDisplaySubagent(in: .hidden))
         XCTAssertTrue(firstLevelChild.shouldDisplaySubagent(in: .visible))
         XCTAssertTrue(nestedChild.shouldDisplaySubagent(in: .visible))
+    }
+
+    func testPrimarySessionGroupsNestExplicitSubagentsUnderRootParent() {
+        let parent = SessionState(
+            sessionId: "codex-parent",
+            cwd: "/tmp/project",
+            provider: .codex,
+            phase: .processing,
+            lastActivity: Date(timeIntervalSince1970: 100)
+        )
+        let child = SessionState(
+            sessionId: "codex-child",
+            cwd: "/tmp/project",
+            provider: .codex,
+            codexParentThreadId: "codex-parent",
+            codexSubagentDepth: 1,
+            codexSubagentNickname: "Search API endpoints",
+            codexSubagentRole: "explore",
+            phase: .processing,
+            lastActivity: Date(timeIntervalSince1970: 110)
+        )
+        let nestedChild = SessionState(
+            sessionId: "codex-nested-child",
+            cwd: "/tmp/project",
+            provider: .codex,
+            codexParentThreadId: "codex-child",
+            codexSubagentDepth: 2,
+            codexSubagentNickname: "handleRequest",
+            codexSubagentRole: "explore",
+            phase: .processing,
+            lastActivity: Date(timeIntervalSince1970: 120)
+        )
+
+        let groups = PrimarySessionGroup.groups(from: [nestedChild, child, parent])
+
+        XCTAssertEqual(groups.map(\.session.sessionId), ["codex-parent"])
+        XCTAssertEqual(groups.first?.childSessions.map(\.sessionId), ["codex-nested-child", "codex-child"])
     }
 
     func testSubagentVisibilityModeAppliesToLinkedChildSessions() {

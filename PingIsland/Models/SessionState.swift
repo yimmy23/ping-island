@@ -252,6 +252,24 @@ struct SessionState: Equatable, Identifiable, Sendable {
         return qoderAgentPrefixedSubagentDisplayTitle != nil
     }
 
+    nonisolated var explicitSubagentParentSessionId: String? {
+        if let codexParentThreadId = sanitizedSubagentDisplayText(codexParentThreadId),
+           codexParentThreadId != sessionId {
+            return codexParentThreadId
+        }
+
+        if let linkedParentSessionId = sanitizedSubagentDisplayText(linkedParentSessionId),
+           linkedParentSessionId != sessionId {
+            return linkedParentSessionId
+        }
+
+        return nil
+    }
+
+    nonisolated var shouldNestUnderParentInPrimaryUI: Bool {
+        explicitSubagentParentSessionId != nil
+    }
+
     nonisolated var usesTitleOnlySubagentPresentation: Bool {
         isCodexSubagent
             || isLinkedSubagentSession
@@ -262,6 +280,10 @@ struct SessionState: Equatable, Identifiable, Sendable {
     /// Primary-list visibility treats linked child sessions like first-level
     /// subagents so settings can hide or show all child sessions consistently.
     nonisolated var primarySubagentVisibilityLevel: Int? {
+        if let explicitSubagentParentSessionId, explicitSubagentParentSessionId != sessionId {
+            return max(codexSubagentLevel ?? 1, 1)
+        }
+
         if isLinkedSubagentSession {
             return 1
         }

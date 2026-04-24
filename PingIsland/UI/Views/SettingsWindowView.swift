@@ -1221,15 +1221,7 @@ private struct SettingsPanelContentView: View {
                         title: "当前输出",
                         value: selectedScreen.localizedName
                     )
-                    SettingsLineDivider()
                 }
-
-                SettingsValueLine(
-                    title: "选择策略",
-                    value: screenSelector.selectionMode == .automatic
-                        ? AppLocalization.string("自动")
-                        : AppLocalization.string("手动指定")
-                )
             }
 
             SettingsSectionCard(title: "面板") {
@@ -1293,7 +1285,7 @@ private struct SettingsPanelContentView: View {
 
                 SettingsInfoLine(
                     title: "子 Agent 显示",
-                    subtitle: "控制主列表里是否展示子 Agent 消息项；当前会影响 Codex、Qoder 等带子会话的客户端"
+                    subtitle: "控制主列表里是否在主 Agent 下展示明确的子 Agent；当前会影响 Codex、Qoder 等带子会话的客户端"
                 ) {
                     SubagentVisibilityPicker(
                         mode: Binding(
@@ -1322,30 +1314,6 @@ private struct SettingsPanelContentView: View {
                     step: 10,
                     format: { "\($0.formatted(.number.precision(.fractionLength(0)))) pt" }
                 )
-            }
-
-            SettingsSectionCard(title: "客户端形象") {
-                SettingsValueLine(
-                    title: "切换方式",
-                    value: settings.customizedMascotClientCount == 0
-                        ? AppLocalization.string("按客户端自动切换")
-                        : AppLocalization.string("按客户端切换 + 自定义覆盖")
-                )
-
-                SettingsLineDivider()
-
-                SettingsInfoLine(
-                    title: "当前策略",
-                    subtitle: "Claude Code、Codex、Gemini CLI、OpenCode、Cursor、Qoder、CodeBuddy、WorkBuddy、Trae 等客户端会显示各自独立的宠物形象与动作，并支持逐客户端改成别的宠物。"
-                ) {
-                    Text(
-                        settings.customizedMascotClientCount == 0
-                            ? AppLocalization.string("自动")
-                            : AppLocalization.format("已自定义 %lld", settings.customizedMascotClientCount)
-                    )
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.72))
-                }
             }
         }
     }

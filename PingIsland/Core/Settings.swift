@@ -168,9 +168,9 @@ enum SubagentVisibilityMode: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .hidden:
-            return "主列表里隐藏所有子 Agent 消息项"
+            return "主列表里隐藏挂靠在主 Agent 下的子 Agent 项"
         case .visible:
-            return "主列表里展示所有子 Agent 消息项"
+            return "主列表里将明确的子 Agent 挂靠在主 Agent 下展示"
         }
     }
 

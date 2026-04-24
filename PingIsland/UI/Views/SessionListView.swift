@@ -87,31 +87,65 @@ struct SessionListView: View {
         sessionMonitor.instances.sorted { $0.shouldSortBeforeInQueue($1) }
     }
 
+    private var sessionGroups: [PrimarySessionGroup] {
+        PrimarySessionGroup.groups(from: sortedInstances)
+    }
+
+    private var displayedInstances: [SessionState] {
+        sessionGroups.flatMap { [$0.session] + $0.childSessions }
+    }
+
+    private var displayedStableIDs: [String] {
+        displayedInstances.map(\.stableId)
+    }
+
     private var shouldUseScrollContainer: Bool {
-        sortedInstances.count > 3 || expandedSessionStableID != nil
+        displayedInstances.count > 3 || expandedSessionStableID != nil
     }
 
     private var listContent: some View {
         LazyVStack(spacing: 2) {
-            ForEach(sortedInstances) { session in
-                InstanceRow(
-                    session: session,
-                    isExpanded: expandedSessionStableID == session.stableId,
-                    isSelected: selectedSessionStableID == session.stableId,
-                    isHighlighted: highlightedSessionStableID == session.stableId,
-                    onSelect: { selectSession(session) },
-                    onActivate: { activateSession(session) },
-                    onToggleExpanded: { toggleExpanded(session) },
-                    onFocus: { activateSession(session) },
-                    onChat: { openChat(session) },
-                    onOpenClient: { openClient(session) },
-                    onArchive: { archiveSession(session) },
-                    onTerminate: { terminateSession(session) },
-                    onApprove: { approveSession(session) },
-                    onApproveForSession: { approveSessionForScope(session) },
-                    onReject: { rejectSession(session) }
-                )
-                .id(session.stableId)
+            ForEach(sessionGroups) { group in
+                VStack(spacing: 0) {
+                    InstanceRow(
+                        session: group.session,
+                        isExpanded: expandedSessionStableID == group.session.stableId,
+                        isSelected: selectedSessionStableID == group.session.stableId,
+                        isHighlighted: highlightedSessionStableID == group.session.stableId,
+                        onSelect: { selectSession(group.session) },
+                        onActivate: { activateSession(group.session) },
+                        onToggleExpanded: { toggleExpanded(group.session) },
+                        onFocus: { activateSession(group.session) },
+                        onChat: { openChat(group.session) },
+                        onOpenClient: { openClient(group.session) },
+                        onArchive: { archiveSession(group.session) },
+                        onTerminate: { terminateSession(group.session) },
+                        onApprove: { approveSession(group.session) },
+                        onApproveForSession: { approveSessionForScope(group.session) },
+                        onReject: { rejectSession(group.session) }
+                    )
+                    .id(group.session.stableId)
+
+                    if !group.childSessions.isEmpty {
+                        VStack(spacing: 4) {
+                            ForEach(group.childSessions) { childSession in
+                                SubagentAttachmentRow(
+                                    session: childSession,
+                                    isSelected: selectedSessionStableID == childSession.stableId,
+                                    isHighlighted: highlightedSessionStableID == childSession.stableId,
+                                    onSelect: { selectSession(childSession) },
+                                    onActivate: { activateSession(childSession) },
+                                    onChat: { openChat(childSession) }
+                                )
+                                .id(childSession.stableId)
+                            }
+                        }
+                        .padding(.leading, 46)
+                        .padding(.trailing, 0)
+                        .padding(.top, 3)
+                        .padding(.bottom, 5)
+                    }
+                }
             }
         }
         .padding(.vertical, 4)
@@ -146,11 +180,11 @@ struct SessionListView: View {
             .onDisappear {
                 removeKeyEventMonitor()
             }
-            .onChange(of: sortedInstances.map(\.stableId)) { _, stableIDs in
+            .onChange(of: displayedStableIDs) { _, stableIDs in
                 if let expandedSessionStableID, !stableIDs.contains(expandedSessionStableID) {
                     self.expandedSessionStableID = nil
                 }
-                syncSelection(with: sortedInstances)
+                syncSelection(with: displayedInstances)
             }
             .onChange(of: selectedSessionStableID) { _, stableID in
                 guard let stableID else { return }
@@ -271,7 +305,7 @@ struct SessionListView: View {
         guard case .instances = viewModel.contentType else { return false }
         guard NSApp.keyWindow is NotchPanel else { return false }
 
-        let sessions = sortedInstances
+        let sessions = displayedInstances
         guard !sessions.isEmpty else { return false }
 
         switch event.keyCode {
@@ -355,6 +389,239 @@ struct SessionListView: View {
         case .copilot:
             return Color.white.opacity(0.5)
         }
+    }
+}
+
+struct PrimarySessionGroup: Identifiable, Equatable {
+    let session: SessionState
+    let childSessions: [SessionState]
+
+    var id: String { session.stableId }
+
+    static func groups(from sortedSessions: [SessionState]) -> [PrimarySessionGroup] {
+        let sessionsById = Dictionary(uniqueKeysWithValues: sortedSessions.map { ($0.sessionId, $0) })
+        var childrenByParentId: [String: [SessionState]] = [:]
+        var nestedChildIds = Set<String>()
+
+        for session in sortedSessions {
+            guard let parentId = attachmentParentId(for: session, sessionsById: sessionsById) else {
+                continue
+            }
+
+            childrenByParentId[parentId, default: []].append(session)
+            nestedChildIds.insert(session.sessionId)
+        }
+
+        return sortedSessions
+            .filter { !nestedChildIds.contains($0.sessionId) }
+            .map { session in
+                PrimarySessionGroup(
+                    session: session,
+                    childSessions: childrenByParentId[session.sessionId] ?? []
+                )
+            }
+    }
+
+    private static func attachmentParentId(
+        for session: SessionState,
+        sessionsById: [String: SessionState]
+    ) -> String? {
+        guard var parentId = session.explicitSubagentParentSessionId,
+              sessionsById[parentId] != nil else {
+            return nil
+        }
+
+        var visitedIds: Set<String> = [session.sessionId]
+        while let parent = sessionsById[parentId],
+              let nextParentId = parent.explicitSubagentParentSessionId,
+              sessionsById[nextParentId] != nil,
+              !visitedIds.contains(nextParentId) {
+            visitedIds.insert(parentId)
+            parentId = nextParentId
+        }
+
+        return parentId == session.sessionId ? nil : parentId
+    }
+}
+
+private struct SubagentAttachmentRow: View {
+    let session: SessionState
+    let isSelected: Bool
+    let isHighlighted: Bool
+    let onSelect: () -> Void
+    let onActivate: () -> Void
+    let onChat: () -> Void
+
+    @State private var isHovered = false
+
+    private var title: String {
+        if session.isCodexSubagent {
+            let role = sanitized(session.codexSubagentRole).map(Self.titleCased(_:))
+            let title = sanitized(session.sessionName)
+                ?? sanitized(session.firstUserMessage)
+                ?? sanitized(session.previewText)
+                ?? sanitized(session.displayTitle)
+                ?? sanitized(session.codexSubagentNickname)
+
+            if let role, let title, role.caseInsensitiveCompare(title) != .orderedSame {
+                return "\(role) (\(title))"
+            }
+
+            return role
+                ?? sanitized(session.codexSubagentNickname)
+                ?? sanitized(session.codexSubagentListTitle)
+                ?? session.displayTitle
+        }
+
+        return sanitized(session.linkedSubagentDisplayTitle)
+            ?? sanitized(session.heuristicSubagentDisplayTitle)
+            ?? sanitized(session.titleOnlySubagentDisplayTitle)
+            ?? session.displayTitle
+    }
+
+    private var detail: String? {
+        if let latestTool = latestToolCall {
+            let preview = latestTool.inputPreview.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !preview.isEmpty {
+                return "\(latestTool.name): \(preview)"
+            }
+            return latestTool.statusDisplay.text
+        }
+
+        if let lastToolName = sanitized(session.lastToolName) {
+            return lastToolName
+        }
+
+        if let lastMessage = sanitized(session.lastMessage) {
+            return lastMessage
+        }
+
+        switch session.phase {
+        case .processing:
+            return AppLocalization.string("工作中...")
+        case .compacting:
+            return AppLocalization.string("正在压缩上下文...")
+        case .waitingForApproval:
+            return session.needsQuestionResponse
+                ? AppLocalization.string("需要你的输入")
+                : AppLocalization.string("等待批准")
+        case .waitingForInput:
+            return AppLocalization.string("等待你的下一条消息")
+        case .ended:
+            return AppLocalization.string("会话已结束")
+        case .idle:
+            return nil
+        }
+    }
+
+    private var latestToolCall: ToolCallItem? {
+        for item in session.chatItems.reversed() {
+            if case .toolCall(let tool) = item.type {
+                return tool
+            }
+        }
+        return nil
+    }
+
+    private var ageLabel: String {
+        SessionPhaseHelpers.timeBadgeLabel(for: session.attentionRequestedAt ?? session.lastActivity)
+    }
+
+    private var rowFill: Color {
+        if isSelected {
+            return Color.white.opacity(isHovered ? 0.11 : 0.08)
+        }
+        if isHighlighted {
+            return Color.white.opacity(isHovered ? 0.09 : 0.06)
+        }
+        return isHovered ? Color.white.opacity(0.055) : Color.clear
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.84))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                if let detail {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("└")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.18))
+                        Text(detail)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.42))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(alignment: .center, spacing: 5) {
+                Text(ageLabel)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundColor(.white.opacity(0.34))
+
+                Text("SUBAGENT")
+                    .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.9))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.white.opacity(0.1))
+                    .clipShape(Capsule())
+            }
+            .padding(.top, 1)
+            .fixedSize()
+        }
+        .padding(.leading, 9)
+        .padding(.trailing, 12)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(rowFill)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            onSelect()
+            onChat()
+        }
+        .onTapGesture {
+            onSelect()
+            onActivate()
+        }
+        .onHover {
+            isHovered = $0
+            if $0 {
+                onSelect()
+            }
+        }
+    }
+
+    private func sanitized(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let collapsed = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return collapsed.isEmpty ? nil : collapsed
+    }
+
+    nonisolated private static func titleCased(_ text: String) -> String {
+        text
+            .split(separator: " ")
+            .map { word in
+                guard let first = word.first else { return String(word) }
+                return first.uppercased() + String(word.dropFirst())
+            }
+            .joined(separator: " ")
     }
 }
 

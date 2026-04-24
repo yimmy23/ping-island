@@ -54,7 +54,8 @@
 "用量显示方式" = "Usage display mode";
 "切换显示已用量或剩余量；Claude 与 Codex 共用这组设置" = "Choose whether the strip shows used quota or remaining quota. Claude and Codex share this setting.";
 "子 Agent 显示" = "Sub-agent visibility";
-"控制主列表里是否展示子 Agent 消息项；当前会影响 Codex、Qoder 等带子会话的客户端" = "Controls whether sub-agent messages appear in the main list. This currently affects clients with child sessions, including Codex and Qoder.";
+"控制主列表里是否展示子 Agent 消息项；当前会影响 Codex、Qoder 等带子会话的客户端" = "Controls whether explicit sub-agents appear under their main agent. This currently affects clients with child sessions, including Codex and Qoder.";
+"控制主列表里是否在主 Agent 下展示明确的子 Agent；当前会影响 Codex、Qoder 等带子会话的客户端" = "Controls whether explicit sub-agents appear under their main agent. This currently affects clients with child sessions, including Codex and Qoder.";
 "内容字号" = "Content font size";
 "调整会话列表、hover 预览和结果视图的文字大小" = "Adjust text size in session lists, hover previews, and result views";
 "最大面板高度" = "Maximum panel height";
