@@ -1207,6 +1207,31 @@ private struct SettingsPanelContentView: View {
 
     private var displayContent: some View {
         VStack(alignment: .leading, spacing: 18) {
+            SettingsSectionCard(title: "显示器") {
+                SettingsInfoLine(
+                    title: "当前显示器",
+                    subtitle: "切换后会重新挂载 Island 窗口位置"
+                ) {
+                    screenPicker
+                }
+                SettingsLineDivider()
+
+                if let selectedScreen = screenSelector.selectedScreen {
+                    SettingsValueLine(
+                        title: "当前输出",
+                        value: selectedScreen.localizedName
+                    )
+                    SettingsLineDivider()
+                }
+
+                SettingsValueLine(
+                    title: "选择策略",
+                    value: screenSelector.selectionMode == .automatic
+                        ? AppLocalization.string("自动")
+                        : AppLocalization.string("手动指定")
+                )
+            }
+
             SettingsSectionCard(title: "面板") {
                 IslandSurfaceModeSelector(mode: $settings.surfaceMode)
                 SettingsLineDivider()
@@ -1296,31 +1321,6 @@ private struct SettingsPanelContentView: View {
                     range: 480...700,
                     step: 10,
                     format: { "\($0.formatted(.number.precision(.fractionLength(0)))) pt" }
-                )
-            }
-
-            SettingsSectionCard(title: "显示器") {
-                SettingsInfoLine(
-                    title: "当前显示器",
-                    subtitle: "切换后会重新挂载 Island 窗口位置"
-                ) {
-                    screenPicker
-                }
-                SettingsLineDivider()
-
-                if let selectedScreen = screenSelector.selectedScreen {
-                    SettingsValueLine(
-                        title: "当前输出",
-                        value: selectedScreen.localizedName
-                    )
-                    SettingsLineDivider()
-                }
-
-                SettingsValueLine(
-                    title: "选择策略",
-                    value: screenSelector.selectionMode == .automatic
-                        ? AppLocalization.string("自动")
-                        : AppLocalization.string("手动指定")
                 )
             }
 
