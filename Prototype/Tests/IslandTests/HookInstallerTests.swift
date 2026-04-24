@@ -39,7 +39,6 @@ func installerMergesClaudeHooksWithoutDroppingExistingValues() throws {
         ((hook["hooks"] as? [[String: Any]])?.first?["command"] as? String)
     }
     #expect(sessionStartCommands.contains { $0.contains("/.ping-island/bin/ping-island-bridge --source claude") })
-    #expect(!sessionStartCommands.contains { $0.contains("island-state.py") })
 
     let permissionRequest = try #require(hooks["PermissionRequest"] as? [[String: Any]])
     let installedHook = try #require(permissionRequest.last?["hooks"] as? [[String: Any]])

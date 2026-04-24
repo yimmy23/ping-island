@@ -384,10 +384,6 @@ struct HookInstaller {
             persistPreferredTargets(targets)
         }
 
-        if profile.id == "claude-hooks" {
-            removeLegacyClaudeScriptIfNeeded()
-        }
-
         guard canManage(profile) else {
             return
         }
@@ -424,10 +420,6 @@ struct HookInstaller {
             var targets = preferredTargets()
             targets.remove(profile.id)
             persistPreferredTargets(targets)
-        }
-
-        if profile.id == "claude-hooks" {
-            removeLegacyClaudeScriptIfNeeded()
         }
 
         switch profile.installationKind {
@@ -562,14 +554,6 @@ struct HookInstaller {
             pluginURL: pluginURL
         )
         writeData(data, to: url)
-    }
-
-    private static func removeLegacyClaudeScriptIfNeeded() {
-        let legacyScriptURL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude")
-            .appendingPathComponent("hooks")
-            .appendingPathComponent("island-state.py")
-        try? FileManager.default.removeItem(at: legacyScriptURL)
     }
 
     private static func removeLegacyTraeHooks() {
@@ -1117,8 +1101,7 @@ struct HookInstaller {
 
     private static func isIslandManagedHookCommand(_ command: String) -> Bool {
         let normalized = command.lowercased()
-        return normalized.contains("island-state.py")
-            || normalized.contains("/.ping-island/bin/ping-island-bridge")
+        return normalized.contains("/.ping-island/bin/ping-island-bridge")
             || normalized.contains("/.ping-island/bin/island-bridge")
     }
 

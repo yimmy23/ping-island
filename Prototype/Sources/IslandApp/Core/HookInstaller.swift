@@ -611,7 +611,6 @@ struct HookInstaller {
         let normalized = command.lowercased()
         return normalized.contains("/.ping-island/bin/ping-island-bridge")
             || normalized.contains("/.ping-island/bin/island-bridge")
-            || normalized.contains("island-state.py")
     }
 
     private static func hookCommandString(_ entry: [String: Any]) -> String? {
