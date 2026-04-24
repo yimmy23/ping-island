@@ -201,6 +201,14 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
            let inferredProfile = ClientProfileRegistry.runtimeProfile(id: inferredProfileID) {
             return inferredProfile.displayName
         }
+        if provider == .codex,
+           kind == .codexCLI,
+           originator == nil,
+           terminalSessionIdentifier == nil,
+           iTermSessionIdentifier == nil,
+           let terminalSourceDisplayName {
+            return terminalSourceDisplayName
+        }
         if let name {
             return Self.normalizedBadgeLabel(name, provider: provider, kind: kind) ?? name
         }

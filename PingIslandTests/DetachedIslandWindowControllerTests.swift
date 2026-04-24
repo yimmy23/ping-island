@@ -161,11 +161,12 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         )
 
         controller.beginFloatingDrag()
+        let dragStartOrigin = window.frame.origin
         controller.updateFloatingDrag(translation: CGSize(width: 24, height: 16))
         controller.endFloatingDrag()
 
-        XCTAssertEqual(window.frame.origin.x, 204, accuracy: 0.5)
-        XCTAssertEqual(window.frame.origin.y, 436, accuracy: 0.5)
+        XCTAssertEqual(window.frame.origin.x, dragStartOrigin.x + 24, accuracy: 0.5)
+        XCTAssertEqual(window.frame.origin.y, dragStartOrigin.y + 16, accuracy: 0.5)
     }
 
     func testFloatingDragKeepsMouseEventsEnabled() throws {
