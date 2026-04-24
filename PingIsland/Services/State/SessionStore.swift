@@ -2542,8 +2542,19 @@ actor SessionStore {
         nextPhase: SessionPhase,
         clientKind: SessionClientKind
     ) -> Bool {
-        guard incoming == nil,
-              let current else {
+        guard let current else {
+            return false
+        }
+
+        if let incoming,
+           incoming.metadata["source"] == "codex_rollout_request_user_input",
+           incoming.metadata["responseMode"] == "external_only",
+           current.kind == .question,
+           current.metadata["responseMode"] != "external_only" {
+            return true
+        }
+
+        if case .some = incoming {
             return false
         }
 

@@ -49,6 +49,96 @@ final class SessionStoreCodexInterventionTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testCodexAppServerQuestionSurvivesRolloutQuestionRefresh() async {
+        let sessionId = "codex-app-question-\(UUID().uuidString)"
+        let store = SessionStore.shared
+        let appServerIntervention = SessionIntervention(
+            id: "jsonrpc-request-1",
+            kind: .question,
+            title: "Codex Needs Input",
+            message: "TodoList 示例的数据要怎么处理？",
+            options: [],
+            questions: [
+                SessionInterventionQuestion(
+                    id: "todo_data",
+                    header: "Data",
+                    prompt: "TodoList 示例的数据要怎么处理？",
+                    detail: nil,
+                    options: [],
+                    allowsMultiple: false,
+                    allowsOther: false,
+                    isSecret: false
+                )
+            ],
+            supportsSessionScope: false,
+            metadata: [
+                "turnId": "turn-1",
+                "itemId": "item-1"
+            ]
+        )
+        let rolloutIntervention = SessionIntervention(
+            id: "call_question_1",
+            kind: .question,
+            title: "Codex Needs Input",
+            message: "TodoList 示例的数据要怎么处理？",
+            options: [],
+            questions: appServerIntervention.resolvedQuestions,
+            supportsSessionScope: false,
+            metadata: [
+                "source": "codex_rollout_request_user_input",
+                "responseMode": "external_only",
+                "toolUseId": "call_question_1"
+            ]
+        )
+        let now = Date()
+
+        await store.upsertCodexSession(
+            sessionId: sessionId,
+            name: "Codex",
+            preview: appServerIntervention.message,
+            cwd: "/tmp/project",
+            phase: .waitingForInput,
+            intervention: appServerIntervention,
+            clientInfo: SessionClientInfo.codexApp(threadId: sessionId),
+            activityAt: now
+        )
+
+        await store.syncCodexThreadSnapshot(
+            CodexThreadSnapshot(
+                threadId: sessionId,
+                name: "Codex",
+                preview: rolloutIntervention.message,
+                cwd: "/tmp/project",
+                clientInfo: SessionClientInfo.codexApp(threadId: sessionId),
+                intervention: rolloutIntervention,
+                createdAt: now,
+                updatedAt: now.addingTimeInterval(1),
+                phase: .waitingForInput,
+                historyItems: [],
+                conversationInfo: ConversationInfo(
+                    summary: "Codex",
+                    lastMessage: rolloutIntervention.message,
+                    lastMessageRole: "assistant",
+                    lastToolName: nil,
+                    firstUserMessage: "build a TodoList sample",
+                    lastUserMessageDate: now
+                ),
+                latestTurnId: "turn-1",
+                latestResponseText: nil,
+                latestResponsePhase: nil,
+                latestUserText: "build a TodoList sample"
+            ),
+            ingress: .hookBridge
+        )
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.intervention?.id, "jsonrpc-request-1")
+        XCTAssertEqual(session?.intervention?.metadata["itemId"], "item-1")
+        XCTAssertEqual(session?.phase, .waitingForInput)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     func testStaleCodexIdleRefreshDoesNotDowngradeFreshProcessingState() async {
         let sessionId = "codex-stale-idle-\(UUID().uuidString)"
         let store = SessionStore.shared

@@ -193,7 +193,8 @@ actor CodexRolloutParser {
                 case "function_call":
                     guard let callId = stringValue(payload["call_id"]),
                           let name = stringValue(payload["name"]) else { continue }
-                    let input = parseJSONStringDictionary(payload["arguments"])
+                    let inputObject = parseJSONStringObject(payload["arguments"])
+                    let input = parseJSONStringDictionary(inputObject ?? payload["arguments"])
                     let item = ChatHistoryItem(
                         id: callId,
                         type: .toolCall(ToolCallItem(
@@ -208,7 +209,16 @@ actor CodexRolloutParser {
                     )
                     toolIndexes[callId] = historyItems.count
                     historyItems.append(item)
-                    phase = .processing
+                    if let questionIntervention = codexUserInputIntervention(
+                        callId: callId,
+                        toolName: name,
+                        input: inputObject
+                    ) {
+                        intervention = questionIntervention
+                        phase = .waitingForInput
+                    } else {
+                        phase = .processing
+                    }
 
                 case "custom_tool_call":
                     guard let callId = stringValue(payload["call_id"]),
@@ -264,6 +274,10 @@ actor CodexRolloutParser {
                         type: .toolCall(tool),
                         timestamp: historyItems[toolIndex].timestamp
                     )
+                    if intervention?.matchesResolvedToolUseId(callId) == true {
+                        intervention = nil
+                        phase = .processing
+                    }
 
                 case "custom_tool_call_output":
                     guard let callId = stringValue(payload["call_id"]),
@@ -292,7 +306,9 @@ actor CodexRolloutParser {
             }
         }
 
-        if historyItems.contains(where: Self.isRunningToolItem(_:)) {
+        if intervention?.kind == .question {
+            phase = .waitingForInput
+        } else if historyItems.contains(where: Self.isRunningToolItem(_:)) {
             phase = .processing
         } else if phase == .processing, latestFinalText != nil {
             phase = .idle
@@ -485,6 +501,92 @@ actor CodexRolloutParser {
         return nil
     }
 
+    private func codexUserInputIntervention(
+        callId: String,
+        toolName: String,
+        input: [String: Any]?
+    ) -> SessionIntervention? {
+        guard normalizedToolName(toolName) == "requestuserinput" else {
+            return nil
+        }
+
+        let questions = parseInterventionQuestions(input?["questions"] as? [[String: Any]] ?? [])
+        guard !questions.isEmpty else {
+            return nil
+        }
+
+        let prompt = questions.first?.prompt ?? "Codex needs your input."
+        var metadata: [String: String] = [
+            "source": "codex_rollout_request_user_input",
+            "responseMode": "external_only",
+            "toolName": toolName,
+            "toolUseId": callId
+        ]
+        if let input,
+           JSONSerialization.isValidJSONObject(input),
+           let data = try? JSONSerialization.data(withJSONObject: input, options: [.sortedKeys]),
+           let json = String(data: data, encoding: .utf8) {
+            metadata["toolInputJSON"] = json
+        }
+
+        return SessionIntervention(
+            id: callId,
+            kind: .question,
+            title: "Codex Needs Input",
+            message: prompt,
+            options: questions.first?.options ?? [],
+            questions: questions,
+            supportsSessionScope: false,
+            metadata: metadata
+        )
+    }
+
+    private func parseInterventionQuestions(_ rawQuestions: [[String: Any]]) -> [SessionInterventionQuestion] {
+        rawQuestions.enumerated().compactMap { index, question in
+            let prompt = stringValue(question["question"])
+                ?? stringValue(question["prompt"])
+                ?? stringValue(question["label"])
+            guard let prompt, !prompt.isEmpty else { return nil }
+
+            let objectOptions = (question["options"] as? [[String: Any]] ?? []).enumerated().compactMap { optionIndex, option -> SessionInterventionOption? in
+                guard let label = stringValue(option["label"]) ?? stringValue(option["title"]),
+                      !label.isEmpty else { return nil }
+                return SessionInterventionOption(
+                    id: stringValue(option["id"]) ?? label,
+                    title: label,
+                    detail: stringValue(option["description"])
+                )
+            }
+
+            let stringOptions = (question["options"] as? [String] ?? []).enumerated().map { optionIndex, label in
+                SessionInterventionOption(
+                    id: "\(index)-option-\(optionIndex)",
+                    title: label,
+                    detail: nil
+                )
+            }
+
+            return SessionInterventionQuestion(
+                id: stringValue(question["id"]) ?? prompt,
+                header: stringValue(question["header"]) ?? "\(index + 1).",
+                prompt: prompt,
+                detail: stringValue(question["description"]),
+                options: objectOptions.isEmpty ? stringOptions : objectOptions,
+                allowsMultiple: boolValue(question["isMultiple"])
+                    ?? boolValue(question["allowsMultiple"])
+                    ?? boolValue(question["multiSelect"])
+                    ?? boolValue(question["multiple"])
+                    ?? false,
+                allowsOther: boolValue(question["isOther"])
+                    ?? boolValue(question["allowsOther"])
+                    ?? false,
+                isSecret: boolValue(question["isSecret"])
+                    ?? boolValue(question["secret"])
+                    ?? false
+            )
+        }
+    }
+
     private func parseJSONStringDictionary(_ value: Any?) -> [String: String] {
         guard let object = parseJSONStringObject(value) else {
             return [:]
@@ -578,6 +680,35 @@ actor CodexRolloutParser {
         default:
             return nil
         }
+    }
+
+    private func boolValue(_ value: Any?) -> Bool? {
+        switch value {
+        case let bool as Bool:
+            return bool
+        case let number as NSNumber:
+            return number.boolValue
+        case let string as String:
+            let normalized = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if ["true", "yes", "1"].contains(normalized) {
+                return true
+            }
+            if ["false", "no", "0"].contains(normalized) {
+                return false
+            }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    private func normalizedToolName(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: " ", with: "")
     }
 }
 
