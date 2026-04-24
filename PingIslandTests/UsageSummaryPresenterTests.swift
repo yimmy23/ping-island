@@ -50,7 +50,16 @@ final class UsageSummaryPresenterTests: XCTestCase {
             UsageSummaryProvider(
                 id: "claude",
                 title: "Claude",
-                windows: [UsageSummaryWindow(id: "claude-5h", label: "5h", valueText: "42%", resetText: nil, severity: .healthy)]
+                windows: [
+                    UsageSummaryWindow(
+                        id: "claude-5h",
+                        label: "5h",
+                        valueText: "42%",
+                        resetText: nil,
+                        severity: .healthy,
+                        remainingPercentage: 58
+                    )
+                ]
             )
         ]
         let session = SessionState(sessionId: "session", cwd: "/tmp/demo", phase: .processing)
@@ -81,7 +90,32 @@ final class UsageSummaryPresenterTests: XCTestCase {
 
     func testSeverityUsesRemainingQuotaThresholds() {
         XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 60), .healthy)
+        XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 69), .healthy)
+        XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 70), .warning)
         XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 75), .warning)
+        XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 90), .critical)
         XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 95), .critical)
+    }
+
+    func testFloatingBoltShowsOnlyBelowSixtyPercentRemaining() {
+        let sixtyRemaining = UsageSummaryWindow(
+            id: "sixty",
+            label: "5h",
+            valueText: "60% left",
+            resetText: nil,
+            severity: .healthy,
+            remainingPercentage: 60
+        )
+        let belowSixtyRemaining = UsageSummaryWindow(
+            id: "below-sixty",
+            label: "5h",
+            valueText: "59% left",
+            resetText: nil,
+            severity: .healthy,
+            remainingPercentage: 59
+        )
+
+        XCTAssertFalse(UsageSummaryPresenter.shouldShowFloatingBolt(for: sixtyRemaining))
+        XCTAssertTrue(UsageSummaryPresenter.shouldShowFloatingBolt(for: belowSixtyRemaining))
     }
 }

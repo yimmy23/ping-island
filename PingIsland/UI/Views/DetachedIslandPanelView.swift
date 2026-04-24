@@ -18,6 +18,8 @@ enum DetachedIslandPanelMetrics {
     static let bubbleHorizontalPadding: CGFloat = 6
     static let bubbleVerticalPadding: CGFloat = 4
     static let usageFooterReservedHeight: CGFloat = 34
+    static let usageFooterVerticalOffset: CGFloat = -3
+    static let floatingUsageBoltVerticalOffset: CGFloat = 6
     static let settingsHintBubbleSize = CGSize(width: 248, height: 92)
 }
 
@@ -627,6 +629,13 @@ struct DetachedIslandPanelView: View {
         )
     }
 
+    private var floatingPetUsageWindows: [UsageSummaryWindow] {
+        guard settings.showUsage else { return [] }
+        return usageSummaryProviders
+            .flatMap(\.windows)
+            .filter(UsageSummaryPresenter.shouldShowFloatingBolt)
+    }
+
     private var shouldShowFloatingUsageFooter: Bool {
         guard let bubbleRoute else { return false }
         return UsageSummaryPresenter.shouldShowSummary(
@@ -719,6 +728,7 @@ struct DetachedIslandPanelView: View {
     private var petButton: some View {
         DetachedFloatingPetInteractionView(
             activeCount: activeCount,
+            usageWindows: floatingPetUsageWindows,
             mascotKind: compactMascotKind,
             mascotStatus: compactMascotStatus,
             isDragging: interactionModel.isPetDragging,
@@ -771,6 +781,7 @@ struct DetachedIslandPanelView: View {
                         )
                     }
                     .padding(.top, -2)
+                    .offset(y: DetachedIslandPanelMetrics.usageFooterVerticalOffset)
                 }
             }
         }
@@ -808,6 +819,7 @@ private struct DetachedFloatingPetSettingsHintView: View {
 
 private struct DetachedFloatingPetInteractionView: View {
     let activeCount: Int
+    let usageWindows: [UsageSummaryWindow]
     let mascotKind: MascotKind
     let mascotStatus: MascotStatus
     let isDragging: Bool
@@ -840,6 +852,13 @@ private struct DetachedFloatingPetInteractionView: View {
             width: DetachedIslandPanelMetrics.petHitFrame,
             height: DetachedIslandPanelMetrics.petHitFrame
         )
+        .overlay(alignment: .top) {
+            if !usageWindows.isEmpty {
+                DetachedFloatingUsageBoltView(windows: usageWindows)
+                    .offset(y: DetachedIslandPanelMetrics.floatingUsageBoltVerticalOffset)
+                    .allowsHitTesting(false)
+            }
+        }
         .rotationEffect(.degrees(isDragging ? -7 : 0))
         .scaleEffect(isDragging ? 1.08 : 1)
         .animation(.spring(response: 0.22, dampingFraction: 0.68), value: isDragging)
@@ -870,6 +889,54 @@ private struct DetachedFloatingPetInteractionView: View {
             weight: .semibold,
             tracking: activeCount >= 10 ? -0.15 : -0.05
         )
+    }
+}
+
+private struct DetachedFloatingUsageBoltView: View {
+    let windows: [UsageSummaryWindow]
+
+    private let cycleInterval: TimeInterval = 1.8
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { context in
+            if let window = window(for: context.date) {
+                let phase = context.date.timeIntervalSinceReferenceDate
+                let pulse = 1 + (sin(phase * .pi * 2 / 1.2) * 0.05)
+                let lift = sin(phase * .pi * 2 / 1.6) * 1.2
+
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 8, weight: .black))
+                    .foregroundColor(color(for: window.severity))
+                    .scaleEffect((window.severity == .critical ? 1.08 : 1) * pulse)
+                    .offset(y: lift)
+                    .id(window.id)
+                    .help(window.resetText ?? window.valueText)
+                    .accessibilityLabel(Text(accessibilityLabel(for: window)))
+            }
+        }
+    }
+
+    private func window(for date: Date) -> UsageSummaryWindow? {
+        guard !windows.isEmpty else { return nil }
+        let index = Int(date.timeIntervalSinceReferenceDate / cycleInterval) % windows.count
+        return windows[index]
+    }
+
+    private func color(for severity: UsageSummarySeverity) -> Color {
+        switch severity {
+        case .healthy:
+            return Color(red: 0.42, green: 0.92, blue: 0.60)
+        case .warning:
+            return Color(red: 0.98, green: 0.82, blue: 0.32)
+        case .critical:
+            return Color(red: 0.98, green: 0.44, blue: 0.38)
+        }
+    }
+
+    private func accessibilityLabel(for window: UsageSummaryWindow) -> String {
+        [window.label, window.valueText, window.resetText]
+            .compactMap { $0 }
+            .joined(separator: ", ")
     }
 }
 
