@@ -547,7 +547,7 @@ final class SessionStateTests: XCTestCase {
             codexSubagentDepth: 1
         )
 
-        XCTAssertEqual(session.clientDisplayName, "iTerm2")
+        XCTAssertEqual(session.clientDisplayName, "Codex")
         XCTAssertEqual(session.subagentClientTypeBadgeText, "Codex")
     }
 
@@ -984,7 +984,7 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(cliSession.messageBadgeDisplayName, cliSession.clientDisplayName)
     }
 
-    func testTerminalHostedCodexCLIUsesITermAsPrimaryBadge() {
+    func testTerminalHostedCodexCLIUsesCodexPrimaryAndITermAsTerminalBadge() {
         let session = SessionState(
             sessionId: "codex-iterm-session",
             cwd: "/tmp/project",
@@ -1001,10 +1001,10 @@ final class SessionStateTests: XCTestCase {
         )
 
         XCTAssertEqual(session.providerDisplayName, "Codex")
-        XCTAssertEqual(session.clientDisplayName, "iTerm2")
-        XCTAssertEqual(session.messageBadgeDisplayName, "iTerm2")
+        XCTAssertEqual(session.clientDisplayName, "Codex")
+        XCTAssertEqual(session.messageBadgeDisplayName, "Codex")
         XCTAssertEqual(session.interactionDisplayName, "iTerm2")
-        XCTAssertNil(session.terminalSourceBadgeLabel)
+        XCTAssertEqual(session.terminalSourceBadgeLabel, "iTerm2")
     }
 
     func testCodexTerminalSourceBadgeIsHiddenWhenItDuplicatesPrimaryBadge() {
@@ -1365,6 +1365,49 @@ final class SessionStateTests: XCTestCase {
         XCTAssertTrue(
             SessionLauncher.shouldActivateAllWindowsForClientFallback(
                 bundleIdentifier: "com.apple.finder"
+            )
+        )
+    }
+
+    func testTerminalHostedCodexDoesNotFallBackToCodexAppNavigation() {
+        let terminalHostedCodex = SessionClientInfo(
+            kind: .codexApp,
+            profileID: "codex-app",
+            name: "Codex App",
+            bundleIdentifier: "com.openai.codex",
+            launchURL: "codex://threads/thread-123",
+            terminalBundleIdentifier: "com.googlecode.iterm2",
+            terminalProgram: "iTerm.app",
+            iTermSessionIdentifier: "w0t0p0:82B6B83C-9817-47EB-B42B-EDC2AAB96556"
+        )
+
+        XCTAssertTrue(
+            SessionLauncher.isTerminalHostedCodexSession(
+                provider: .codex,
+                clientInfo: terminalHostedCodex
+            )
+        )
+        XCTAssertFalse(
+            SessionLauncher.allowsAppFallback(
+                provider: .codex,
+                clientInfo: terminalHostedCodex
+            )
+        )
+    }
+
+    func testNativeCodexAppStillAllowsAppNavigation() {
+        let codexApp = SessionClientInfo.codexApp(threadId: "thread-123")
+
+        XCTAssertFalse(
+            SessionLauncher.isTerminalHostedCodexSession(
+                provider: .codex,
+                clientInfo: codexApp
+            )
+        )
+        XCTAssertTrue(
+            SessionLauncher.allowsAppFallback(
+                provider: .codex,
+                clientInfo: codexApp
             )
         )
     }

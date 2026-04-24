@@ -124,10 +124,22 @@ public enum HookPayloadMapper {
         case .codex:
             switch decision {
             case .approve:
+                if eventType == "PermissionRequest" {
+                    return codexPermissionRequestPayload(behavior: "allow")
+                }
                 return #"{"decision":"accept"}"#
             case .approveForSession:
+                if eventType == "PermissionRequest" {
+                    return codexPermissionRequestPayload(behavior: "allow")
+                }
                 return #"{"decision":"acceptForSession"}"#
             case .deny:
+                if eventType == "PermissionRequest" {
+                    return codexPermissionRequestPayload(
+                        behavior: "deny",
+                        message: response.reason ?? "Denied from Island"
+                    )
+                }
                 return #"{"decision":"decline"}"#
             case .cancel:
                 return #"{"decision":"cancel"}"#
@@ -159,6 +171,31 @@ public enum HookPayloadMapper {
                 return String(data: data, encoding: .utf8) ?? #"{"permissionDecision":"allow"}"#
             }
         }
+    }
+
+    private static func codexPermissionRequestPayload(
+        behavior: String,
+        message: String? = nil
+    ) -> String {
+        var decision: [String: Any] = ["behavior": behavior]
+        if let message {
+            decision["message"] = message
+        }
+
+        let payload: [String: Any] = [
+            "hookSpecificOutput": [
+                "hookEventName": "PermissionRequest",
+                "decision": decision
+            ]
+        ]
+
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+
+        return string
     }
 
     private static let codeBuddyApprovalTools: Set<String> = [

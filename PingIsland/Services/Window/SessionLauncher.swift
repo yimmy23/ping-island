@@ -260,12 +260,47 @@ actor SessionLauncher {
     }
 
     private func shouldPrioritizeAppNavigation(for session: SessionState) -> Bool {
+        guard !Self.isTerminalHostedCodexSession(provider: session.provider, clientInfo: session.clientInfo) else {
+            return false
+        }
         guard session.clientInfo.prefersAppNavigation else { return false }
         return session.clientInfo.kind == .codexApp
     }
 
     private func allowsAppFallback(for session: SessionState) -> Bool {
-        session.clientInfo.kind != .codexCLI
+        Self.allowsAppFallback(provider: session.provider, clientInfo: session.clientInfo)
+    }
+
+    nonisolated static func allowsAppFallback(
+        provider: SessionProvider,
+        clientInfo: SessionClientInfo
+    ) -> Bool {
+        guard !isTerminalHostedCodexSession(provider: provider, clientInfo: clientInfo) else {
+            return false
+        }
+        return clientInfo.kind != .codexCLI
+    }
+
+    nonisolated static func isTerminalHostedCodexSession(
+        provider: SessionProvider,
+        clientInfo: SessionClientInfo
+    ) -> Bool {
+        guard provider == .codex,
+              let terminalBundleIdentifier = clientInfo.terminalBundleIdentifier?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              !terminalBundleIdentifier.isEmpty else {
+            return false
+        }
+
+        let normalizedBundleIdentifier = TerminalAppRegistry.normalizedHostBundleIdentifier(
+            for: terminalBundleIdentifier
+        )
+        guard normalizedBundleIdentifier != "com.openai.codex" else {
+            return false
+        }
+
+        return TerminalAppRegistry.isTerminalBundle(normalizedBundleIdentifier)
+            || TerminalAppRegistry.isIDEBundle(normalizedBundleIdentifier)
     }
 
     private func activateHostedIDEFallback(for session: SessionState) async -> Bool {

@@ -1003,6 +1003,7 @@ actor SessionStore {
             }
         }
 
+        clearResolvedApprovalIntervention(in: &session, toolUseId: toolUseId)
         sessions[sessionId] = session
     }
 
@@ -1063,7 +1064,18 @@ actor SessionStore {
             session.completedErrorToolIDs.insert(toolUseId)
         }
 
+        clearResolvedApprovalIntervention(in: &session, toolUseId: toolUseId)
         sessions[sessionId] = session
+    }
+
+    private func clearResolvedApprovalIntervention(in session: inout SessionState, toolUseId: String) {
+        guard let intervention = session.intervention,
+              intervention.kind == .approval,
+              intervention.matchesResolvedToolUseId(toolUseId) else {
+            return
+        }
+
+        session.intervention = nil
     }
 
     /// Find the next tool waiting for approval (excluding a specific tool ID)
@@ -1110,6 +1122,7 @@ actor SessionStore {
             }
         }
 
+        clearResolvedApprovalIntervention(in: &session, toolUseId: toolUseId)
         sessions[sessionId] = session
     }
 
@@ -2334,7 +2347,9 @@ actor SessionStore {
         } else {
             hasIntervention = false
         }
-        if session.ingress != .hookBridge || (!session.phase.needsAttention && !hasIntervention) {
+        if shouldPreserveCodexHookPermissionIngress(session: session) {
+            session.ingress = .hookBridge
+        } else if session.ingress != .hookBridge || (!session.phase.needsAttention && !hasIntervention) {
             session.ingress = .codexAppServer
         }
         if shouldPreserveActivePhaseDuringApparentIdle(
@@ -2488,7 +2503,9 @@ actor SessionStore {
         } else {
             hasIntervention = false
         }
-        if ingress == .hookBridge {
+        if shouldPreserveCodexHookPermissionIngress(session: session) {
+            session.ingress = .hookBridge
+        } else if ingress == .hookBridge {
             if session.ingress != .codexAppServer {
                 session.ingress = .hookBridge
             }
@@ -2525,20 +2542,35 @@ actor SessionStore {
         nextPhase: SessionPhase,
         clientKind: SessionClientKind
     ) -> Bool {
-        guard clientKind == .codexCLI else {
+        guard incoming == nil,
+              let current else {
             return false
         }
-        guard incoming == nil,
-              let current,
+
+        let source = current.metadata["source"] ?? ""
+        if source == "codex_hook_permission" {
+            return !nextPhase.needsAttention
+        }
+
+        guard clientKind == .codexCLI,
               current.metadata["responseMode"] == "external_only",
-              current.metadata["source"]?.hasPrefix("rollout_pending_mcp") == true
-                || current.metadata["source"]?.hasPrefix("app_server_pending_mcp") == true
-                || current.metadata["source"]?.hasPrefix("guardian_review") == true
+              source.hasPrefix("rollout_pending_mcp")
+                || source.hasPrefix("app_server_pending_mcp")
+                || source.hasPrefix("guardian_review")
         else {
             return false
         }
 
         return !nextPhase.needsAttention
+    }
+
+    private func shouldPreserveCodexHookPermissionIngress(session: SessionState) -> Bool {
+        guard session.provider == .codex,
+              session.intervention?.metadata["source"] == "codex_hook_permission",
+              session.phase.needsAttention else {
+            return false
+        }
+        return true
     }
 
     private func shouldPreserveActivePhaseFromStaleCodexRefresh(

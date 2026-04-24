@@ -605,23 +605,17 @@ private extension BridgeEnvelope {
                 kind = .claudeCode
             }
         case .codex:
-            if let matchedProfile {
-                kind = matchedProfile.kind
-            } else if explicitKind?.contains("app") == true
-                || explicitKind?.contains("desktop") == true
-                || hasExplicitNonTerminalBundle
-                || explicitBundleID == "com.openai.codex" {
-                kind = .codexApp
-            } else if explicitKind?.contains("cli") == true
-                || terminalContext.tty != nil
-                || terminalContext.terminalProgram != nil
-                || terminalContext.terminalBundleID != nil {
-                kind = .codexCLI
-            } else if explicitName != nil {
-                kind = .custom
-            } else {
-                kind = .codexApp
-            }
+            kind = HookSocketServer.inferredCodexClientKind(
+                explicitKind: explicitKind,
+                explicitName: explicitName,
+                explicitBundleID: explicitBundleID,
+                hasExplicitNonTerminalBundle: hasExplicitNonTerminalBundle,
+                terminalTTY: terminalContext.tty,
+                terminalProgram: terminalContext.terminalProgram,
+                terminalBundleID: terminalContext.terminalBundleID,
+                ideBundleID: terminalContext.ideBundleID,
+                matchedProfileKind: matchedProfile?.kind
+            )
         case .copilot:
             if let matchedProfile {
                 kind = matchedProfile.kind
@@ -630,11 +624,20 @@ private extension BridgeEnvelope {
             }
         }
 
+        let resolvedProfile: SessionClientProfile?
+        if matchedProfile?.kind == kind {
+            resolvedProfile = matchedProfile
+        } else if provider == .codex, kind == .codexCLI || kind == .codexApp {
+            resolvedProfile = ClientProfileRegistry.defaultRuntimeProfile(for: providerKind, kind: kind)
+        } else {
+            resolvedProfile = matchedProfile
+        }
+
         let resolvedBundleID: String?
         if kind == .codexApp {
             resolvedBundleID = explicitBundleID
                 ?? terminalBundleID
-                ?? matchedProfile?.defaultBundleIdentifier
+                ?? resolvedProfile?.defaultBundleIdentifier
                 ?? "com.openai.codex"
         } else {
             resolvedBundleID = explicitBundleID
@@ -644,7 +647,7 @@ private extension BridgeEnvelope {
         if let explicitName {
             resolvedName = explicitName
         } else {
-            resolvedName = matchedProfile?.displayName
+            resolvedName = resolvedProfile?.displayName
                 ?? (kind == .claudeCode ? "Claude Code" : nil)
         }
 
@@ -672,16 +675,16 @@ private extension BridgeEnvelope {
         if let explicitOrigin {
             resolvedOrigin = explicitOrigin
         } else if provider == .codex {
-            resolvedOrigin = matchedProfile?.defaultOrigin ?? (kind == .codexCLI ? "cli" : "desktop")
+            resolvedOrigin = resolvedProfile?.defaultOrigin ?? (kind == .codexCLI ? "cli" : "desktop")
         } else if provider == .copilot {
-            resolvedOrigin = matchedProfile?.defaultOrigin ?? "cli"
+            resolvedOrigin = resolvedProfile?.defaultOrigin ?? "cli"
         } else {
             resolvedOrigin = nil
         }
 
         return SessionClientInfo(
             kind: kind,
-            profileID: matchedProfile?.id,
+            profileID: resolvedProfile?.id,
             name: resolvedName,
             bundleIdentifier: resolvedBundleID,
             launchURL: resolvedLaunchURL,
@@ -814,6 +817,83 @@ typealias PermissionFailureHandler = @Sendable (_ sessionId: String, _ toolUseId
 class HookSocketServer {
     static let shared = HookSocketServer()
     static let socketPath = "/tmp/island.sock"
+    private static let interventionMatchingIgnoredInputKeys: Set<String> = [
+        "description",
+        "justification",
+        "reason"
+    ]
+
+    static func inferredCodexClientKind(
+        explicitKind: String?,
+        explicitName: String?,
+        explicitBundleID: String?,
+        hasExplicitNonTerminalBundle: Bool,
+        terminalTTY: String?,
+        terminalProgram: String?,
+        terminalBundleID: String?,
+        ideBundleID: String?,
+        matchedProfileKind: SessionClientKind?
+    ) -> SessionClientKind {
+        func hasContent(_ value: String?) -> Bool {
+            guard let value else { return false }
+            return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        let normalizedKind = explicitKind?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedBundleID = explicitBundleID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedTerminalBundleID = terminalBundleID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedIDEBundleID = ideBundleID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedTerminalProgram = terminalProgram?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let inferredTerminalProgramBundleID = TerminalAppRegistry
+            .inferredBundleIdentifier(forTerminalProgram: terminalProgram)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        let isExplicitCLI = normalizedKind?.contains("cli") == true
+            || normalizedKind?.contains("tui") == true
+        let isExplicitDesktop = normalizedKind?.contains("app") == true
+            || normalizedKind?.contains("desktop") == true
+            || normalizedBundleID == "com.openai.codex"
+        let hasHostedTerminalBundle = normalizedTerminalBundleID != nil
+            && normalizedTerminalBundleID != "com.openai.codex"
+        let hasHostedIDEBundle = normalizedIDEBundleID != nil
+            && normalizedIDEBundleID != "com.openai.codex"
+        let hasHostedTerminalProgram = normalizedTerminalProgram != nil
+            && normalizedTerminalProgram != "codex"
+            && inferredTerminalProgramBundleID != "com.openai.codex"
+        let hasTerminalContext = hasContent(terminalTTY)
+            || hasHostedTerminalProgram
+            || hasHostedTerminalBundle
+            || hasHostedIDEBundle
+
+        if isExplicitCLI || hasTerminalContext {
+            return .codexCLI
+        }
+
+        if isExplicitDesktop || hasExplicitNonTerminalBundle {
+            return .codexApp
+        }
+
+        if let matchedProfileKind {
+            return matchedProfileKind
+        }
+
+        if hasContent(explicitName) {
+            return .custom
+        }
+
+        return .codexApp
+    }
 
     private var serverSocket: Int32 = -1
     private var acceptSource: DispatchSourceRead?
@@ -1030,9 +1110,9 @@ class HookSocketServer {
         return encoder
     }()
 
-    private func cacheKey(sessionId: String, toolName: String?, toolInput: [String: AnyCodable]?) -> String {
+    private static func cacheKey(sessionId: String, toolName: String?, toolInput: [String: AnyCodable]?) -> String {
         let inputStr: String
-        if let input = toolInput,
+        if let input = Self.normalizedToolInputForInterventionMatching(toolInput),
            let data = try? Self.sortedEncoder.encode(input),
            let str = String(data: data, encoding: .utf8) {
             inputStr = str
@@ -1051,7 +1131,7 @@ class HookSocketServer {
                 guard let latestPending = pendings.max(by: { $0.receivedAt < $1.receivedAt }) else {
                     return nil
                 }
-                guard eventsLikelyReferToSameIntervention(latestPending.event, event) else { return nil }
+                guard Self.eventsLikelyReferToSameIntervention(latestPending.event, event) else { return nil }
                 return PendingPermission(
                     sessionId: latestPending.sessionId,
                     toolUseId: toolUseId,
@@ -1066,7 +1146,7 @@ class HookSocketServer {
         return matching.first?.toolUseId
     }
 
-    private func eventsLikelyReferToSameIntervention(_ lhs: HookEvent, _ rhs: HookEvent) -> Bool {
+    static func eventsLikelyReferToSameIntervention(_ lhs: HookEvent, _ rhs: HookEvent) -> Bool {
         guard lhs.sessionId == rhs.sessionId else { return false }
 
         let normalizedLhsTool = lhs.tool?
@@ -1090,10 +1170,22 @@ class HookSocketServer {
         return lhsSignature == rhsSignature
     }
 
+    private static func normalizedToolInputForInterventionMatching(
+        _ toolInput: [String: AnyCodable]?
+    ) -> [String: AnyCodable]? {
+        guard var toolInput else { return nil }
+        guard toolInput.count > 1 else { return toolInput }
+
+        for key in interventionMatchingIgnoredInputKeys {
+            toolInput.removeValue(forKey: key)
+        }
+        return toolInput
+    }
+
     private func cacheToolUseId(event: HookEvent) {
         guard let toolUseId = event.toolUseId else { return }
 
-        let key = cacheKey(sessionId: event.sessionId, toolName: event.tool, toolInput: event.toolInput)
+        let key = Self.cacheKey(sessionId: event.sessionId, toolName: event.tool, toolInput: event.toolInput)
 
         cacheLock.lock()
         if toolUseIdCache[key] == nil {
@@ -1106,7 +1198,7 @@ class HookSocketServer {
     }
 
     private func popCachedToolUseId(event: HookEvent) -> String? {
-        let key = cacheKey(sessionId: event.sessionId, toolName: event.tool, toolInput: event.toolInput)
+        let key = Self.cacheKey(sessionId: event.sessionId, toolName: event.tool, toolInput: event.toolInput)
 
         cacheLock.lock()
         defer { cacheLock.unlock() }

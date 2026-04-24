@@ -859,6 +859,15 @@ class NotchViewModel: ObservableObject {
         showChat(for: session)
     }
 
+    /// Surface manual-attention content through the route resolver instead of forcing chat.
+    /// Approval cards should take priority over the underlying session detail view.
+    func presentNotificationAttention() {
+        currentChatSession = nil
+        contentType = .instances
+        openedMeasuredHeight = nil
+        notchOpen(reason: .notification)
+    }
+
     /// Go back to instances list and clear saved chat state
     func exitChat() {
         currentChatSession = nil

@@ -361,6 +361,25 @@ func claudePermissionPayloadUsesHookSpecificOutput() throws {
 }
 
 @Test
+func codexPermissionPayloadUsesLatestHookSpecificOutput() throws {
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .codex,
+        response: BridgeResponse(requestID: UUID(), decision: .approve),
+        eventType: "PermissionRequest",
+        metadata: [:]
+    )
+    let json = try #require(
+        JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any]
+    )
+
+    #expect(json["decision"] == nil)
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    #expect(hookSpecificOutput["hookEventName"] as? String == "PermissionRequest")
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
+}
+
+@Test
 func claudeQuestionAnswerPayloadPreservesFullUpdatedInputForPermissionRequests() throws {
     let response = BridgeResponse(
         requestID: UUID(),

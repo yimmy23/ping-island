@@ -298,7 +298,10 @@ class SessionMonitor: ObservableObject {
                 return
             }
 
-            if session.ingress == .codexAppServer {
+            let shouldRespondToHookPermission = session.intervention?.metadata["source"] == "codex_hook_permission"
+                && session.activePermission != nil
+
+            if session.ingress == .codexAppServer, !shouldRespondToHookPermission {
                 let resolvedSessionId = await SessionStore.shared.resolvedCodexSessionId(for: sessionId)
                 await CodexAppServerMonitor.shared.approve(threadId: resolvedSessionId, forSession: forSession)
                 return
@@ -360,7 +363,10 @@ class SessionMonitor: ObservableObject {
                 return
             }
 
-            if session.ingress == .codexAppServer {
+            let shouldRespondToHookPermission = session.intervention?.metadata["source"] == "codex_hook_permission"
+                && session.activePermission != nil
+
+            if session.ingress == .codexAppServer, !shouldRespondToHookPermission {
                 let resolvedSessionId = await SessionStore.shared.resolvedCodexSessionId(for: sessionId)
                 await CodexAppServerMonitor.shared.deny(threadId: resolvedSessionId)
                 return

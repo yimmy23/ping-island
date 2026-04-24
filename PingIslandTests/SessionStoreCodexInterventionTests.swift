@@ -145,4 +145,121 @@ final class SessionStoreCodexInterventionTests: XCTestCase {
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }
+
+    func testCodexHookPermissionRequestSurvivesAppServerRefresh() async {
+        let sessionId = "codex-hook-approval-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(HookEvent(
+            sessionId: sessionId,
+            cwd: "/tmp/project",
+            event: "PermissionRequest",
+            status: "waiting_for_approval",
+            provider: .codex,
+            clientInfo: SessionClientInfo.codexApp(threadId: sessionId),
+            pid: nil,
+            tty: nil,
+            tool: "Bash",
+            toolInput: [
+                "command": AnyCodable("date"),
+                "description": AnyCodable("Show the current time.")
+            ],
+            toolUseId: "call-date-1",
+            notificationType: nil,
+            message: nil
+        )))
+
+        await store.upsertCodexSession(
+            sessionId: sessionId,
+            name: nil,
+            preview: "Show the current time.",
+            cwd: "/tmp/project",
+            phase: .processing,
+            intervention: nil,
+            clientInfo: SessionClientInfo.codexApp(threadId: sessionId),
+            activityAt: Date().addingTimeInterval(5)
+        )
+
+        let session = await store.session(for: sessionId)
+        XCTAssertTrue(session?.phase.isWaitingForApproval == true)
+        XCTAssertEqual(session?.activePermission?.toolUseId, "call-date-1")
+        XCTAssertEqual(session?.activePermission?.toolName, "Bash")
+        XCTAssertEqual(session?.intervention?.kind, .approval)
+        XCTAssertEqual(session?.intervention?.title, "Approve Command")
+        XCTAssertEqual(session?.intervention?.message, "date")
+        XCTAssertEqual(session?.intervention?.supportsSessionScope, false)
+        XCTAssertEqual(session?.intervention?.metadata["source"], "codex_hook_permission")
+        XCTAssertEqual(session?.ingress, .hookBridge)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
+    func testCodexHookPermissionApprovalClearsInterventionImmediately() async {
+        let sessionId = "codex-hook-approved-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(HookEvent(
+            sessionId: sessionId,
+            cwd: "/tmp/project",
+            event: "PermissionRequest",
+            status: "waiting_for_approval",
+            provider: .codex,
+            clientInfo: SessionClientInfo(kind: .codexCLI, profileID: "codex-cli", name: "Codex CLI"),
+            pid: nil,
+            tty: nil,
+            tool: "Bash",
+            toolInput: [
+                "command": AnyCodable("curl -I https://example.com"),
+                "description": AnyCodable("Allow a test HEAD request.")
+            ],
+            toolUseId: "call-curl-1",
+            notificationType: nil,
+            message: nil
+        )))
+
+        var session = await store.session(for: sessionId)
+        XCTAssertTrue(session?.needsApprovalResponse ?? false)
+        XCTAssertEqual(session?.intervention?.metadata["source"], "codex_hook_permission")
+
+        await store.process(.permissionApproved(sessionId: sessionId, toolUseId: "call-curl-1"))
+
+        session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .processing)
+        XCTAssertNil(session?.intervention)
+        XCTAssertFalse(session?.needsApprovalResponse ?? true)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
+    func testCodexHookPermissionDenialClearsInterventionImmediately() async {
+        let sessionId = "codex-hook-denied-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(HookEvent(
+            sessionId: sessionId,
+            cwd: "/tmp/project",
+            event: "PermissionRequest",
+            status: "waiting_for_approval",
+            provider: .codex,
+            clientInfo: SessionClientInfo(kind: .codexCLI, profileID: "codex-cli", name: "Codex CLI"),
+            pid: nil,
+            tty: nil,
+            tool: "Bash",
+            toolInput: ["command": AnyCodable("curl -I https://example.com")],
+            toolUseId: "call-curl-deny",
+            notificationType: nil,
+            message: nil
+        )))
+
+        await store.process(
+            .permissionDenied(sessionId: sessionId, toolUseId: "call-curl-deny", reason: "No network")
+        )
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .processing)
+        XCTAssertNil(session?.intervention)
+        XCTAssertFalse(session?.needsApprovalResponse ?? true)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
 }

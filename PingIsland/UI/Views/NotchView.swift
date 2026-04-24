@@ -887,6 +887,11 @@ struct NotchView: View {
             return
         }
 
+        if targetSession.needsApprovalResponse {
+            viewModel.presentNotificationAttention()
+            return
+        }
+
         if targetSession.needsQuestionResponse, viewModel.status == .opened {
             viewModel.notchClose()
             DispatchQueue.main.async {

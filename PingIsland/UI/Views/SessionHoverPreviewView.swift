@@ -433,7 +433,7 @@ private struct HoverApprovalCard: View {
     let onActionCompleted: () -> Void
 
     private var providerLabel: String {
-        session.interactionDisplayName
+        session.messageBadgeDisplayName
     }
 
     private var toolLabel: String {
@@ -974,7 +974,10 @@ private enum HoverPreviewStyle {
     }
 
     static func assistantPrefixLabel(for session: SessionState) -> String {
-        if session.needsQuestionResponse || session.needsApprovalResponse {
+        if session.needsApprovalResponse {
+            return session.messageBadgeDisplayName
+        }
+        if session.needsQuestionResponse {
             return session.interactionDisplayName
         }
         return session.providerDisplayName

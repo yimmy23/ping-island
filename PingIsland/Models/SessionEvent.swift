@@ -278,6 +278,34 @@ extension HookEvent {
     }
 
     nonisolated var intervention: SessionIntervention? {
+        if provider == .codex,
+           event == "PermissionRequest",
+           expectsResponse,
+           !isAskUserQuestionRequest {
+            var metadata: [String: String] = [
+                "source": "codex_hook_permission"
+            ]
+            if let tool {
+                metadata["toolName"] = tool
+            }
+            if let toolInputJSONObject,
+               let data = try? JSONSerialization.data(withJSONObject: toolInputJSONObject, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) {
+                metadata["toolInputJSON"] = json
+            }
+
+            return SessionIntervention(
+                id: toolUseId ?? UUID().uuidString,
+                kind: .approval,
+                title: codexApprovalInterventionTitle,
+                message: codexApprovalInterventionMessage,
+                options: [],
+                questions: [],
+                supportsSessionScope: false,
+                metadata: metadata
+            )
+        }
+
         guard isAskUserQuestionRequest, let questions = questionPayloads else { return nil }
         let actorName = clientInfo.interactionLabel(for: provider)
 
@@ -365,6 +393,41 @@ extension HookEvent {
             supportsSessionScope: false,
             metadata: metadata
         )
+    }
+
+    private nonisolated var codexApprovalInterventionTitle: String {
+        switch normalizedToolNameForIntervention {
+        case "bash":
+            return "Approve Command"
+        case "write", "edit", "patch", "multiedit":
+            return "Approve File Changes"
+        default:
+            return "Codex Needs Approval"
+        }
+    }
+
+    private nonisolated var codexApprovalInterventionMessage: String {
+        if let command = SessionTextSanitizer.sanitizedDisplayText(toolInputJSONObject?["command"] as? String) {
+            return command
+        }
+
+        if let path = SessionTextSanitizer.sanitizedDisplayText(
+            (toolInputJSONObject?["path"] as? String) ?? (toolInputJSONObject?["file_path"] as? String)
+        ) {
+            return path
+        }
+
+        if let detail = SessionTextSanitizer.sanitizedDisplayText(
+            (toolInputJSONObject?["description"] as? String) ?? (toolInputJSONObject?["reason"] as? String)
+        ) {
+            return detail
+        }
+
+        if let tool = SessionTextSanitizer.sanitizedDisplayText(tool) {
+            return tool
+        }
+
+        return "Codex needs approval to continue."
     }
 
     /// Determine the target session phase based on this hook event

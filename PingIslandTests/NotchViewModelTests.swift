@@ -35,6 +35,20 @@ final class NotchViewModelTests: XCTestCase {
         }
     }
 
+    func testPresentNotificationAttentionClearsChatSoApprovalCardCanRouteFirst() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+            let session = makeSession(id: "approval-session")
+
+            viewModel.presentChat(for: session)
+            viewModel.presentNotificationAttention()
+
+            XCTAssertEqual(viewModel.status, .opened)
+            XCTAssertEqual(viewModel.openReason, .notification)
+            XCTAssertEqual(viewModel.contentType, .instances)
+        }
+    }
+
     func testDeferredHoverOpenDoesNotOverrideActiveNotificationPresentation() async {
         await MainActor.run {
             let viewModel = makeViewModel()

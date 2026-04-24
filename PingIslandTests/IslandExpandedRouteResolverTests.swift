@@ -13,6 +13,29 @@ final class IslandExpandedRouteResolverTests: XCTestCase {
         XCTAssertEqual(route, .sessionList)
     }
 
+    func testClickWithManualAttentionResolvesToAttentionNotification() {
+        let attention = makeSession(
+            id: "approval",
+            phase: .waitingForApproval(
+                PermissionContext(
+                    toolUseId: "tool-1",
+                    toolName: "Bash",
+                    toolInput: nil,
+                    receivedAt: Date()
+                )
+            )
+        )
+
+        let route = IslandExpandedRouteResolver.resolve(
+            surface: .docked,
+            trigger: .click,
+            contentType: .instances,
+            sessions: [makeSession(id: "active", phase: .processing), attention]
+        )
+
+        XCTAssertEqual(route, .attentionNotification(attention))
+    }
+
     func testHoverWithoutManualAttentionResolvesToHoverDashboard() {
         let route = IslandExpandedRouteResolver.resolve(
             surface: .docked,
@@ -58,6 +81,29 @@ final class IslandExpandedRouteResolverTests: XCTestCase {
         )
 
         XCTAssertEqual(route, .completionNotification(notification))
+    }
+
+    func testDockedNotificationWithApprovalResolvesToAttentionNotification() {
+        let attention = makeSession(
+            id: "approval",
+            phase: .waitingForApproval(
+                PermissionContext(
+                    toolUseId: "tool-1",
+                    toolName: "Bash",
+                    toolInput: nil,
+                    receivedAt: Date()
+                )
+            )
+        )
+
+        let route = IslandExpandedRouteResolver.resolve(
+            surface: .docked,
+            trigger: .notification,
+            contentType: .instances,
+            sessions: [attention]
+        )
+
+        XCTAssertEqual(route, .attentionNotification(attention))
     }
 
     func testFloatingNotificationWithApprovalResolvesToAttentionNotification() {

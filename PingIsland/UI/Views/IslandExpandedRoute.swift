@@ -34,6 +34,9 @@ enum IslandExpandedRouteResolver {
 
         switch (surface, trigger) {
         case (.docked, .notification):
+            if let session = highestPriorityAttentionSession(from: sessions) {
+                return .attentionNotification(session)
+            }
             if let activeCompletionNotification {
                 return .completionNotification(activeCompletionNotification)
             }
@@ -51,7 +54,12 @@ enum IslandExpandedRouteResolver {
                 return .completionNotification(activeCompletionNotification)
             }
             return .hoverDashboard
-        case (_, .click), (_, .pinnedList):
+        case (_, .click):
+            if let session = highestPriorityAttentionSession(from: sessions) {
+                return .attentionNotification(session)
+            }
+            return .sessionList
+        case (_, .pinnedList):
             return .sessionList
         }
     }

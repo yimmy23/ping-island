@@ -201,11 +201,6 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
            let inferredProfile = ClientProfileRegistry.runtimeProfile(id: inferredProfileID) {
             return inferredProfile.displayName
         }
-        if provider == .codex,
-           kind == .codexCLI,
-           let terminalSourceDisplayName {
-            return terminalSourceDisplayName
-        }
         if let name {
             return Self.normalizedBadgeLabel(name, provider: provider, kind: kind) ?? name
         }
@@ -902,6 +897,13 @@ struct SessionIntervention: Equatable, Identifiable, Sendable {
     nonisolated func hasTimedOutExternalContinuation(now: Date = Date()) -> Bool {
         guard let deadline = externalContinuationDeadline else { return false }
         return now >= deadline
+    }
+
+    nonisolated func matchesResolvedToolUseId(_ toolUseId: String) -> Bool {
+        id == toolUseId
+            || metadata["originalToolUseId"] == toolUseId
+            || metadata["toolUseId"] == toolUseId
+            || metadata["tool_use_id"] == toolUseId
     }
 
     nonisolated func markingAwaitingExternalContinuation(
