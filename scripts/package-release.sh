@@ -259,8 +259,38 @@ validate_release_progression() {
         return
     fi
 
-    local previous_release_tsv
-    previous_release_tsv=$(gh api "repos/$repo/releases" --jq ".[] | select(.draft == false and .prerelease == false and .tag_name != \"v$VERSION\") | . as \$release | ([\$release.assets[]? | select((.name | startswith(\"PingIsland-\")) and (.name | endswith(\".zip\"))) | .browser_download_url][0]) as \$app_zip | select(\$app_zip != null) | [\$release.tag_name, \$app_zip] | @tsv" | head -n 1)
+    local releases_json previous_release_tsv
+    if ! releases_json=$(gh api "repos/$repo/releases"); then
+        echo "WARNING: Could not fetch published releases; skipping version progression check."
+        return
+    fi
+
+    previous_release_tsv=$(RELEASES_JSON="$releases_json" python3 - "$VERSION" <<'PY'
+import json
+import os
+import sys
+
+current_tag = f"v{sys.argv[1]}"
+releases = json.loads(os.environ["RELEASES_JSON"])
+
+for release in releases:
+    if release.get("draft") or release.get("prerelease") or release.get("tag_name") == current_tag:
+        continue
+
+    zip_url = next(
+        (
+            asset.get("browser_download_url", "")
+            for asset in release.get("assets", [])
+            if asset.get("name", "").startswith("PingIsland-")
+            and asset.get("name", "").endswith(".zip")
+        ),
+        "",
+    )
+    if zip_url:
+        print(f"{release.get('tag_name', '')}\t{zip_url}")
+        break
+PY
+)
 
     if [ -z "$previous_release_tsv" ]; then
         echo "No earlier published release found for version progression check."
