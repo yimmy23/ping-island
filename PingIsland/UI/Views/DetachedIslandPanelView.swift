@@ -467,8 +467,10 @@ final class DetachedIslandInteractionModel: ObservableObject {
         DetachedIslandBubbleContentMode(bubbleState: bubbleState)
     }
 
+    #if compiler(>=6.3)
     // Match NotchViewModel teardown behavior for Xcode 26 unit-test stability.
     nonisolated deinit {}
+    #endif
 
     func setBubblePlacement(_ placement: DetachedIslandBubblePlacement) {
         guard bubblePlacement != placement else { return }
@@ -540,8 +542,10 @@ final class DetachedIslandBubbleViewState: ObservableObject {
 
     var bubbleFadeDuration: TimeInterval { 0.18 }
 
+    #if compiler(>=6.3)
     // Match NotchViewModel teardown behavior for Xcode 26 unit-test stability.
     nonisolated deinit {}
+    #endif
 
     func prepareLayout(for bubbleState: DetachedIslandBubbleState) {
         guard renderedBubbleState != bubbleState else { return }

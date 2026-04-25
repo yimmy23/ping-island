@@ -325,9 +325,11 @@ class NotchViewModel: ObservableObject {
         refreshFullscreenPresentationState()
     }
 
+    #if compiler(>=6.3)
     // Keep teardown outside MainActor isolation; Xcode 26 can otherwise abort
     // while destroying this view model in unit-test scope teardown.
     nonisolated deinit {}
+    #endif
 
     private func observeEnvironment() {
         let workspaceCenter = NSWorkspace.shared.notificationCenter
