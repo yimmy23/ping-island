@@ -37,6 +37,7 @@ struct NotchView: View {
     @StateObject private var activityCoordinator = NotchActivityCoordinator.shared
     @ObservedObject private var updateManager = UpdateManager.shared
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var screenSelector = ScreenSelector.shared
     @State private var previousPendingIds: Set<String> = []
     @State private var manualAttentionTracker = SessionManualAttentionTracker()
     @State private var previousWaitingForInputIds: Set<String> = []
@@ -105,9 +106,21 @@ struct NotchView: View {
         UsageSummaryPresenter.providers(
             claudeSnapshot: sessionMonitor.claudeUsageSnapshot,
             codexSnapshot: sessionMonitor.codexUsageSnapshot,
-            mode: settings.usageValueMode,
+            mode: openedHeaderUsageValueMode,
             locale: settings.locale
         )
+    }
+
+    private var openedHeaderUsageValueMode: UsageValueMode {
+        isOnBuiltinDisplay ? .remaining : settings.usageValueMode
+    }
+
+    private var openedHeaderUsageDisplayStyle: UsageSummaryStripView.DisplayStyle {
+        isOnBuiltinDisplay ? .preferredBattery : .numeric
+    }
+
+    private var isOnBuiltinDisplay: Bool {
+        screenSelector.selectedScreen?.isBuiltinDisplay == true
     }
 
     private var shouldShowOpenedHeaderUsage: Bool {
@@ -457,7 +470,7 @@ struct NotchView: View {
                         ? height
                         : max(height, SessionCompletionNotificationView.minimumContentHeight)
                     let measuredHeight = height > 0
-                        ? viewModel.openedHeaderHeight + effectiveHeight + 12
+                        ? closedNotchSize.height + effectiveHeight + 12
                         : nil
                     viewModel.updateOpenedMeasuredHeight(measuredHeight)
                 } else {
@@ -563,12 +576,14 @@ struct NotchView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row - always present, contains pet and spinner that persist across states
             headerRow
-                .frame(height: headerRowHeight)
+                .frame(height: max(24, closedNotchSize.height))
+                .zIndex(1)
 
             // Main content only when opened
             if viewModel.status == .opened {
                 contentView
                     .frame(width: notchSize.width - 24) // Fixed width to prevent reflow
+                    .zIndex(0)
                     .transition(
                         .asymmetric(
                             insertion: .scale(scale: 0.8, anchor: .top)
@@ -626,20 +641,9 @@ struct NotchView: View {
                         .frame(width: sideWidth, alignment: .trailing)
                     }
                 }
-                .padding(.top, openedHeaderTopInset)
             }
         }
-        .frame(height: headerRowHeight, alignment: .top)
-    }
-
-    private var headerRowHeight: CGFloat {
-        viewModel.status == .opened
-            ? viewModel.openedHeaderHeight
-            : closedNotchSize.height
-    }
-
-    private var openedHeaderTopInset: CGFloat {
-        viewModel.status == .opened ? viewModel.openedTopContentInset : 0
+        .frame(height: closedNotchSize.height)
     }
 
     private var sideWidth: CGFloat {
@@ -703,10 +707,13 @@ struct NotchView: View {
             if shouldShowOpenedHeaderUsage {
                 UsageSummaryStripView(
                     providers: usageSummaryProviders,
-                    inline: true
+                    inline: true,
+                    displayStyle: openedHeaderUsageDisplayStyle,
+                    locale: settings.locale
                 )
                 .padding(.leading, viewModel.openReason == .notification && activeCompletionNotification != nil ? 6 : 4)
                 .layoutPriority(1)
+                .zIndex(200)
             }
 
             Spacer(minLength: 0)

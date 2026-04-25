@@ -11,8 +11,27 @@ struct UsageSummaryWindow: Equatable {
     let label: String
     let valueText: String
     let resetText: String?
+    let resetsAt: Date?
     let severity: UsageSummarySeverity
     let remainingPercentage: Double
+
+    nonisolated init(
+        id: String,
+        label: String,
+        valueText: String,
+        resetText: String?,
+        resetsAt: Date? = nil,
+        severity: UsageSummarySeverity,
+        remainingPercentage: Double
+    ) {
+        self.id = id
+        self.label = label
+        self.valueText = valueText
+        self.resetText = resetText
+        self.resetsAt = resetsAt
+        self.severity = severity
+        self.remainingPercentage = remainingPercentage
+    }
 }
 
 struct UsageSummaryProvider: Equatable, Identifiable {
@@ -22,6 +41,34 @@ struct UsageSummaryProvider: Equatable, Identifiable {
 }
 
 enum UsageSummaryPresenter {
+    nonisolated static func preferredBatteryWindow(for provider: UsageSummaryProvider) -> UsageSummaryWindow? {
+        provider.windows.first { window in
+            let normalizedLabel = window.label
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            return normalizedLabel == "7d" || normalizedLabel.hasPrefix("7d ")
+        } ?? provider.windows.last
+    }
+
+    nonisolated static func remainingHelpText(
+        for provider: UsageSummaryProvider,
+        locale: Locale = .current
+    ) -> String {
+        let lines = provider.windows.map { window in
+            let components = [
+                window.label,
+                remainingValueText(for: window.remainingPercentage, locale: locale)
+            ]
+            return components.joined(separator: " · ")
+        }
+
+        guard !lines.isEmpty else {
+            return provider.title
+        }
+
+        return ([provider.title] + lines).joined(separator: "\n")
+    }
+
     nonisolated static func providers(
         claudeSnapshot: ClaudeUsageSnapshot?,
         codexSnapshot: CodexUsageSnapshot?,
@@ -40,6 +87,7 @@ enum UsageSummaryPresenter {
                         label: "5h",
                         valueText: valueText(for: fiveHour.usedPercentage, mode: mode, locale: locale),
                         resetText: resetText(for: fiveHour.resetsAt, now: now, locale: locale),
+                        resetsAt: fiveHour.resetsAt,
                         severity: severity(forUsedPercentage: fiveHour.usedPercentage),
                         remainingPercentage: remainingPercentage(forUsedPercentage: fiveHour.usedPercentage)
                     )
@@ -52,6 +100,7 @@ enum UsageSummaryPresenter {
                         label: "7d",
                         valueText: valueText(for: sevenDay.usedPercentage, mode: mode, locale: locale),
                         resetText: resetText(for: sevenDay.resetsAt, now: now, locale: locale),
+                        resetsAt: sevenDay.resetsAt,
                         severity: severity(forUsedPercentage: sevenDay.usedPercentage),
                         remainingPercentage: remainingPercentage(forUsedPercentage: sevenDay.usedPercentage)
                     )
@@ -75,6 +124,7 @@ enum UsageSummaryPresenter {
                     label: window.label,
                     valueText: valueText(for: window.usedPercentage, mode: mode, locale: locale),
                     resetText: resetText(for: window.resetsAt, now: now, locale: locale),
+                    resetsAt: window.resetsAt,
                     severity: severity(forUsedPercentage: window.usedPercentage),
                     remainingPercentage: remainingPercentage(forUsedPercentage: window.usedPercentage)
                 )
@@ -121,8 +171,16 @@ enum UsageSummaryPresenter {
             return "\(Int(usedPercentage.rounded()))%"
         case .remaining:
             let remaining = max(0, 100 - usedPercentage)
-            return "\(Int(remaining.rounded()))% \(localizedRemainingLabel(locale: locale))"
+            return remainingValueText(for: remaining, locale: locale)
         }
+    }
+
+    nonisolated static func remainingValueText(
+        for remainingPercentage: Double,
+        locale: Locale = .current
+    ) -> String {
+        let remaining = max(0, remainingPercentage)
+        return "\(Int(remaining.rounded()))% \(localizedRemainingLabel(locale: locale))"
     }
 
     nonisolated static func resetText(
@@ -178,7 +236,7 @@ enum UsageSummaryPresenter {
         if remainingPercentage > 30 {
             return .healthy
         }
-        if remainingPercentage > 10 {
+        if remainingPercentage >= 10 {
             return .warning
         }
         return .critical

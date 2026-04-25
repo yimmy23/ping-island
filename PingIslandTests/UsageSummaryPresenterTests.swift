@@ -45,6 +45,67 @@ final class UsageSummaryPresenterTests: XCTestCase {
         XCTAssertEqual(valueText, "87% left")
     }
 
+    func testPreferredBatteryWindowUsesSevenDayWhenAvailable() {
+        let provider = UsageSummaryProvider(
+            id: "codex",
+            title: "Codex",
+            windows: [
+                UsageSummaryWindow(
+                    id: "codex-primary",
+                    label: "5h",
+                    valueText: "24% left",
+                    resetText: nil,
+                    severity: .warning,
+                    remainingPercentage: 24
+                ),
+                UsageSummaryWindow(
+                    id: "codex-secondary",
+                    label: "7d",
+                    valueText: "82% left",
+                    resetText: nil,
+                    severity: .healthy,
+                    remainingPercentage: 82
+                )
+            ]
+        )
+
+        XCTAssertEqual(UsageSummaryPresenter.preferredBatteryWindow(for: provider)?.id, "codex-secondary")
+    }
+
+    func testRemainingHelpTextIncludesAllWindows() {
+        let provider = UsageSummaryProvider(
+            id: "claude",
+            title: "Claude",
+            windows: [
+                UsageSummaryWindow(
+                    id: "claude-5h",
+                    label: "5h",
+                    valueText: "25% left",
+                    resetText: "Resets in 2h",
+                    severity: .warning,
+                    remainingPercentage: 25
+                ),
+                UsageSummaryWindow(
+                    id: "claude-7d",
+                    label: "7d",
+                    valueText: "91% left",
+                    resetText: "Resets in 5d",
+                    severity: .healthy,
+                    remainingPercentage: 91
+                )
+            ]
+        )
+
+        XCTAssertEqual(
+            UsageSummaryPresenter.remainingHelpText(for: provider, locale: Locale(identifier: "en")),
+            """
+            Claude
+            5h · 25% left
+            7d · 91% left
+            """
+        )
+    }
+
     func testShouldShowSummaryHidesAttentionAndCompletionRoutes() {
         let providers = [
             UsageSummaryProvider(
@@ -93,7 +154,8 @@ final class UsageSummaryPresenterTests: XCTestCase {
         XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 69), .healthy)
         XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 70), .warning)
         XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 75), .warning)
-        XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 90), .critical)
+        XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 90), .warning)
+        XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 91), .critical)
         XCTAssertEqual(UsageSummaryPresenter.severity(forUsedPercentage: 95), .critical)
     }
 

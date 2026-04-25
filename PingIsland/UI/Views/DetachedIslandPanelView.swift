@@ -787,11 +787,14 @@ struct DetachedIslandPanelView: View {
                             providers: usageSummaryProviders,
                             inline: true,
                             alignment: .trailing,
-                            displayStyle: .battery
+                            displayStyle: .battery,
+                            locale: settings.locale
                         )
+                        .zIndex(200)
                     }
                     .padding(.top, -2)
                     .offset(y: DetachedIslandPanelMetrics.usageFooterVerticalOffset)
+                    .zIndex(200)
                 }
             }
         }

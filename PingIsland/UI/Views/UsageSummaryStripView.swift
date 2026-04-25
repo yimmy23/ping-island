@@ -1,15 +1,19 @@
+import AppKit
 import SwiftUI
 
 struct UsageSummaryStripView: View {
     enum DisplayStyle {
         case numeric
         case battery
+        case preferredBattery
     }
 
     let providers: [UsageSummaryProvider]
     var inline = false
     var alignment: HorizontalAlignment = .leading
     var displayStyle: DisplayStyle = .numeric
+    var locale: Locale = .current
+    @State private var hoveredBatteryProviderID: String?
 
     var body: some View {
         Group {
@@ -52,40 +56,26 @@ struct UsageSummaryStripView: View {
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundColor(.white.opacity(0.62))
 
-                ForEach(provider.windows, id: \.id) { window in
-                    if displayStyle == .battery {
-                        HStack(spacing: 4) {
-                            Text(window.label)
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.4))
-
-                            BatteryQuotaIndicator(severity: window.severity)
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(Color.white.opacity(0.04))
+                switch displayStyle {
+                case .preferredBattery:
+                    if let window = UsageSummaryPresenter.preferredBatteryWindow(for: provider) {
+                        batteryWindowSection(
+                            provider: provider,
+                            window,
+                            detailWindows: provider.windows
                         )
-                        .help(window.resetText ?? "")
-                    } else {
-                        HStack(spacing: 3) {
-                            Text(window.label)
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.4))
-
-                            Text(window.valueText)
-                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                                .foregroundColor(emphasisColor(for: window.severity))
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(backgroundColor(for: window.severity))
+                    }
+                case .battery:
+                    ForEach(provider.windows, id: \.id) { window in
+                        batteryWindowSection(
+                            provider: provider,
+                            window,
+                            detailWindows: [window]
                         )
-                        .help(window.resetText ?? "")
+                    }
+                case .numeric:
+                    ForEach(provider.windows, id: \.id) { window in
+                        numericWindowSection(window)
                     }
                 }
             }
@@ -103,10 +93,10 @@ struct UsageSummaryStripView: View {
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                                 .foregroundColor(.white.opacity(0.52))
 
-                        Text(window.valueText)
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(emphasisColor(for: window.severity))
-                            .lineLimit(1)
+                            Text(window.valueText)
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundColor(emphasisColor(for: window.severity))
+                                .lineLimit(1)
                         }
 
                         if let resetText = window.resetText {
@@ -125,6 +115,75 @@ struct UsageSummaryStripView: View {
                 }
             }
         }
+    }
+
+    private func batteryWindowSection(
+        provider: UsageSummaryProvider,
+        _ window: UsageSummaryWindow,
+        detailWindows: [UsageSummaryWindow]
+    ) -> some View {
+        let detailProvider = UsageSummaryProvider(
+            id: provider.id,
+            title: provider.title,
+            windows: detailWindows
+        )
+        let helpText = UsageSummaryPresenter.remainingHelpText(for: detailProvider, locale: locale)
+
+        return HStack(spacing: 4) {
+            Text(window.label)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.4))
+
+            BatteryQuotaIndicator(
+                severity: window.severity,
+                remainingPercentage: window.remainingPercentage
+            )
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+        .overlay(alignment: batteryPopoverAlignment) {
+            if hoveredBatteryProviderID == hoverID(provider: provider, window: window) {
+                UsageBatteryDetailPopover(
+                    providers: providers,
+                    locale: locale
+                )
+                .offset(x: 0, y: 24)
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
+                .allowsHitTesting(false)
+                .zIndex(100)
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                hoveredBatteryProviderID = hovering ? hoverID(provider: provider, window: window) : nil
+            }
+        }
+        .accessibilityLabel(Text(helpText.replacingOccurrences(of: "\n", with: ", ")))
+        .zIndex(hoveredBatteryProviderID == hoverID(provider: provider, window: window) ? 100 : 0)
+    }
+
+    private func numericWindowSection(_ window: UsageSummaryWindow) -> some View {
+        HStack(spacing: 3) {
+            Text(window.label)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.4))
+
+            Text(window.valueText)
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundColor(emphasisColor(for: window.severity))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(
+            Capsule(style: .continuous)
+                .fill(backgroundColor(for: window.severity))
+        )
+        .help(window.resetText ?? "")
     }
 
     private func emphasisColor(for severity: UsageSummarySeverity) -> Color {
@@ -148,20 +207,150 @@ struct UsageSummaryStripView: View {
             return Color(red: 0.52, green: 0.18, blue: 0.16).opacity(0.26)
         }
     }
+
+    private func hoverID(provider: UsageSummaryProvider, window: UsageSummaryWindow) -> String {
+        "\(provider.id)-\(window.id)"
+    }
+
+    private var batteryPopoverAlignment: Alignment {
+        alignment == .trailing ? .topTrailing : .topLeading
+    }
+}
+
+private struct UsageBatteryDetailPopover: View {
+    let providers: [UsageSummaryProvider]
+    let locale: Locale
+
+    var body: some View {
+        content
+            .padding(.leading, 12)
+            .padding(.trailing, 10)
+            .padding(.vertical, 12)
+            .frame(width: 148, alignment: .leading)
+            .background(OpaquePopoverBackground(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+            )
+            .compositingGroup()
+            .shadow(color: Color.black.opacity(0.42), radius: 12, y: 6)
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(providers.enumerated()), id: \.element.id) { index, provider in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(provider.title)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(titleColor)
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        ForEach(provider.windows, id: \.id) { window in
+                            HStack(spacing: 5) {
+                                Text(window.label)
+                                    .frame(width: 24, alignment: .leading)
+
+                                Text(remainingLabel)
+                                    .frame(width: 38, alignment: .leading)
+
+                                Text(remainingPercentText(for: window))
+                                    .foregroundStyle(percentColor(for: window.remainingPercentage))
+                                    .frame(width: 42, alignment: .trailing)
+                            }
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.white.opacity(0.78))
+                        }
+                    }
+                }
+
+                if index < providers.count - 1 {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.10))
+                        .frame(height: 1)
+                }
+            }
+        }
+    }
+
+    private var titleColor: Color {
+        Color(red: 0.92, green: 0.48, blue: 0.14)
+    }
+
+    private var remainingLabel: String {
+        switch locale.language.languageCode?.identifier {
+        case "zh":
+            return "剩余:"
+        default:
+            return "left:"
+        }
+    }
+
+    private func remainingPercentText(for window: UsageSummaryWindow) -> String {
+        "\(Int(max(0, window.remainingPercentage).rounded()))%"
+    }
+
+    private func percentColor(for remainingPercentage: Double) -> Color {
+        if remainingPercentage > 30 {
+            return Color(red: 0.22, green: 0.86, blue: 0.45)
+        }
+        if remainingPercentage >= 10 {
+            return Color(red: 0.96, green: 0.75, blue: 0.24)
+        }
+        return Color(red: 0.96, green: 0.30, blue: 0.28)
+    }
+}
+
+private struct OpaquePopoverBackground: NSViewRepresentable {
+    let cornerRadius: CGFloat
+
+    func makeNSView(context: Context) -> OpaquePopoverBackingView {
+        OpaquePopoverBackingView(cornerRadius: cornerRadius)
+    }
+
+    func updateNSView(_ nsView: OpaquePopoverBackingView, context: Context) {
+        nsView.cornerRadius = cornerRadius
+    }
+}
+
+private final class OpaquePopoverBackingView: NSView {
+    var cornerRadius: CGFloat {
+        didSet {
+            layer?.cornerRadius = cornerRadius
+        }
+    }
+
+    init(cornerRadius: CGFloat) {
+        self.cornerRadius = cornerRadius
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.cgColor
+        layer?.cornerRadius = cornerRadius
+        layer?.masksToBounds = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isOpaque: Bool {
+        true
+    }
+
+    override func layout() {
+        super.layout()
+        layer?.backgroundColor = NSColor.black.cgColor
+        layer?.cornerRadius = cornerRadius
+    }
 }
 
 private struct BatteryQuotaIndicator: View {
     let severity: UsageSummarySeverity
+    let remainingPercentage: Double
 
     private var fillLevel: CGFloat {
-        switch severity {
-        case .healthy:
-            return 0.82
-        case .warning:
-            return 0.42
-        case .critical:
-            return 0.14
-        }
+        CGFloat(min(100, max(0, remainingPercentage)) / 100)
     }
 
     private var fillColor: Color {
@@ -186,11 +375,14 @@ private struct BatteryQuotaIndicator: View {
                                 .fill(Color.white.opacity(0.04))
                         )
 
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(fillColor)
-                        .frame(width: max(2, (proxy.size.width - 4) * fillLevel))
-                        .padding(.horizontal, 2)
-                        .padding(.vertical, 2)
+                    let fillWidth = max(0, (proxy.size.width - 4) * fillLevel)
+                    if fillWidth > 0 {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(fillColor)
+                            .frame(width: max(1.5, fillWidth))
+                            .padding(.horizontal, 2)
+                            .padding(.vertical, 2)
+                    }
                 }
             }
             .frame(width: 18, height: 10)
