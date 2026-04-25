@@ -457,7 +457,7 @@ struct NotchView: View {
                         ? height
                         : max(height, SessionCompletionNotificationView.minimumContentHeight)
                     let measuredHeight = height > 0
-                        ? closedNotchSize.height + effectiveHeight + 12
+                        ? viewModel.openedHeaderHeight + effectiveHeight + 12
                         : nil
                     viewModel.updateOpenedMeasuredHeight(measuredHeight)
                 } else {
@@ -563,7 +563,7 @@ struct NotchView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row - always present, contains pet and spinner that persist across states
             headerRow
-                .frame(height: max(24, closedNotchSize.height))
+                .frame(height: headerRowHeight)
 
             // Main content only when opened
             if viewModel.status == .opened {
@@ -626,9 +626,20 @@ struct NotchView: View {
                         .frame(width: sideWidth, alignment: .trailing)
                     }
                 }
+                .padding(.top, openedHeaderTopInset)
             }
         }
-        .frame(height: closedNotchSize.height)
+        .frame(height: headerRowHeight, alignment: .top)
+    }
+
+    private var headerRowHeight: CGFloat {
+        viewModel.status == .opened
+            ? viewModel.openedHeaderHeight
+            : closedNotchSize.height
+    }
+
+    private var openedHeaderTopInset: CGFloat {
+        viewModel.status == .opened ? viewModel.openedTopContentInset : 0
     }
 
     private var sideWidth: CGFloat {
