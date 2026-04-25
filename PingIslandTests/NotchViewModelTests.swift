@@ -77,6 +77,17 @@ final class NotchViewModelTests: XCTestCase {
         }
     }
 
+    func testClickedSessionListUsesRoomierWidthThanCompactClosedNotch() async {
+        await MainActor.run {
+            let viewModel = makeViewModel()
+
+            viewModel.presentSessionList(reason: .click)
+
+            XCTAssertEqual(viewModel.openedSize.width, 520)
+            XCTAssertGreaterThan(viewModel.openedSize.width, viewModel.closedSize.width)
+        }
+    }
+
     func testClosedHeightUsesDetectedSystemNotchHeight() async {
         await MainActor.run {
             let viewModel = NotchViewModel(
@@ -90,11 +101,11 @@ final class NotchViewModelTests: XCTestCase {
             )
 
             XCTAssertEqual(viewModel.closedHeight, 38)
-            XCTAssertEqual(viewModel.closedSize, CGSize(width: 300, height: 38))
+            XCTAssertEqual(viewModel.closedSize, CGSize(width: 266, height: 38))
         }
     }
 
-    func testClosedWidthLeavesVisibleGuttersAroundDetectedSystemNotch() async {
+    func testClosedWidthExpandsToCoverWiderDetectedSystemNotch() async {
         await MainActor.run {
             let viewModel = NotchViewModel(
                 deviceNotchRect: CGRect(x: 0, y: 0, width: 312, height: 38),
@@ -106,29 +117,8 @@ final class NotchViewModelTests: XCTestCase {
                 fullscreenActivityProvider: { _ in false }
             )
 
-            XCTAssertEqual(viewModel.closedWidth, 392)
-            XCTAssertEqual(viewModel.closedSize, CGSize(width: 392, height: 38))
-        }
-    }
-
-    func testOpenedHeaderReservesSpaceBelowPhysicalNotch() async {
-        await MainActor.run {
-            let viewModel = NotchViewModel(
-                deviceNotchRect: CGRect(x: 0, y: 0, width: 220, height: 38),
-                screenRect: CGRect(x: 0, y: 0, width: 1800, height: 1169),
-                windowHeight: 750,
-                hasPhysicalNotch: true,
-                enableEventMonitoring: false,
-                observeSystemEnvironment: false,
-                fullscreenActivityProvider: { _ in false }
-            )
-
-            XCTAssertEqual(viewModel.openedTopContentInset, 30)
-            XCTAssertEqual(viewModel.openedHeaderHeight, 68)
-
-            viewModel.notchOpen(reason: .click)
-
-            XCTAssertGreaterThanOrEqual(viewModel.openedSize.height, 230)
+            XCTAssertEqual(viewModel.closedWidth, 312)
+            XCTAssertEqual(viewModel.closedSize, CGSize(width: 312, height: 38))
         }
     }
 

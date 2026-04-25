@@ -60,8 +60,8 @@ class NotchViewModel: ObservableObject {
 
     private static let defaultClosedHeight = ScreenNotchMetrics.fallbackClosedHeight
     private static let defaultClosedWidth: CGFloat = 266
-    private static let physicalNotchContentGutter: CGFloat = 40
-    private static let physicalNotchOpenedContentOverlap: CGFloat = 8
+    private static let clickedInstancesPanelWidthRatio: CGFloat = 0.44
+    private static let clickedInstancesPanelMaximumWidth: CGFloat = 520
     private static let detachmentLongPressNarrowedWidthScale: CGFloat = 0.82
     private static let detachmentLongPressMaximumShrink: CGFloat = 56
     @Published private(set) var closedWidth: CGFloat
@@ -82,13 +82,6 @@ class NotchViewModel: ObservableObject {
             return deviceNotchRect.size
         }
         return CGSize(width: closedWidth, height: closedHeight)
-    }
-    var openedTopContentInset: CGFloat {
-        guard hasPhysicalNotch else { return 0 }
-        return max(0, closedHeight - Self.physicalNotchOpenedContentOverlap)
-    }
-    var openedHeaderHeight: CGFloat {
-        max(24, closedHeight) + openedTopContentInset
     }
     var closedScreenRect: CGRect {
         CGRect(
@@ -119,7 +112,7 @@ class NotchViewModel: ObservableObject {
         guard hasPhysicalNotch else { return defaultClosedWidth }
         let systemWidth = ceil(deviceNotchRect.width)
         guard systemWidth > 0 else { return defaultClosedWidth }
-        return max(defaultClosedWidth, systemWidth + (Self.physicalNotchContentGutter * 2))
+        return max(defaultClosedWidth, systemWidth)
     }
 
     private var narrowedClosedWidth: CGFloat {
@@ -176,7 +169,7 @@ class NotchViewModel: ObservableObject {
                 )
             }
         case .instances:
-            let fallbackHeight: CGFloat = (openReason == .hover ? 180 : 200) + openedTopContentInset
+            let fallbackHeight: CGFloat = openReason == .hover ? 180 : 200
             let measuredHeight = openedMeasuredHeight ?? fallbackHeight
 
             switch style {
@@ -184,15 +177,18 @@ class NotchViewModel: ObservableObject {
                 return CGSize(
                     width: openReason == .hover
                         ? min(screenRect.width - 64, 600)
-                        : min(screenRect.width * 0.4, 480),
-                    height: min(maxAllowedHeight, max(openedHeaderHeight + 24, measuredHeight))
+                        : min(
+                            screenRect.width * Self.clickedInstancesPanelWidthRatio,
+                            Self.clickedInstancesPanelMaximumWidth
+                        ),
+                    height: min(maxAllowedHeight, max(closedHeight + 24, measuredHeight))
                 )
             case .detached:
                 return CGSize(
                     width: min(screenRect.width - 112, 400),
                     height: min(
                         maxAllowedHeight,
-                        max(openedHeaderHeight + 24, min(measuredHeight, 300 + openedTopContentInset))
+                        max(closedHeight + 24, min(measuredHeight, 300))
                     )
                 )
             }
