@@ -387,10 +387,10 @@ struct NotchView: View {
             .onChange(of: viewModel.contentType.id) { _, _ in
                 maybePresentNextCompletionNotification()
             }
-            .onChange(of: sessionMonitor.pendingInstances) { _, sessions in
+            .onReceive(sessionMonitor.$pendingInstances) { sessions in
                 handlePendingSessionsChange(sessions)
             }
-            .onChange(of: sessionMonitor.instances) { _, instances in
+            .onReceive(sessionMonitor.$instances) { instances in
                 viewModel.setManualAttentionActive(
                     instances.contains { $0.needsApprovalResponse || $0.intervention != nil }
                 )

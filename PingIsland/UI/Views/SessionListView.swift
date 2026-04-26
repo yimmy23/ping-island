@@ -18,12 +18,18 @@ struct SessionListView: View {
     @State private var expandedSessionStableID: String?
     @State private var selectedSessionStableID: String?
     @State private var keyEventMonitor: Any?
+    @State private var isYabaiAvailable = false
 
     var body: some View {
-        if sessionMonitor.instances.isEmpty {
-            emptyState
-        } else {
-            instancesList
+        Group {
+            if sessionMonitor.instances.isEmpty {
+                emptyState
+            } else {
+                instancesList
+            }
+        }
+        .task {
+            isYabaiAvailable = await WindowFinder.shared.isYabaiAvailable()
         }
     }
 
@@ -84,7 +90,7 @@ struct SessionListView: View {
     // MARK: - Instances List
 
     private var sortedInstances: [SessionState] {
-        sessionMonitor.instances.sorted { $0.shouldSortBeforeInQueue($1) }
+        sessionMonitor.instances
     }
 
     private var sessionGroups: [PrimarySessionGroup] {
@@ -112,6 +118,7 @@ struct SessionListView: View {
                         isExpanded: expandedSessionStableID == group.session.stableId,
                         isSelected: selectedSessionStableID == group.session.stableId,
                         isHighlighted: highlightedSessionStableID == group.session.stableId,
+                        isYabaiAvailable: isYabaiAvailable,
                         onSelect: { selectSession(group.session) },
                         onActivate: { activateSession(group.session) },
                         onToggleExpanded: { toggleExpanded(group.session) },
@@ -632,6 +639,7 @@ struct InstanceRow: View {
     let isExpanded: Bool
     let isSelected: Bool
     let isHighlighted: Bool
+    let isYabaiAvailable: Bool
     let onSelect: () -> Void
     let onActivate: () -> Void
     let onToggleExpanded: () -> Void
@@ -646,7 +654,6 @@ struct InstanceRow: View {
 
     @State private var isHovered = false
     @State private var spinnerPhase = 0
-    @State private var isYabaiAvailable = false
     @ObservedObject private var settings = AppSettings.shared
 
     private let spinnerSymbols = ["·", "✢", "✳", "∗", "✻", "✽"]
@@ -784,9 +791,6 @@ struct InstanceRow: View {
             if $0 {
                 onSelect()
             }
-        }
-        .task {
-            isYabaiAvailable = await WindowFinder.shared.isYabaiAvailable()
         }
     }
 

@@ -599,11 +599,21 @@ class SessionMonitor: ObservableObject {
             !$0.shouldHideFromPrimaryUI && $0.shouldDisplaySubagent(in: visibilityMode)
         }
         return primaryVisibleSessions.filter { candidate in
-            !primaryVisibleSessions.contains { other in
+            guard shouldCheckDuplicateVisibility(for: candidate) else {
+                return true
+            }
+
+            return !primaryVisibleSessions.contains { other in
                 candidate.shouldHideAsDuplicateCodexPlaceholder(comparedTo: other)
                     || candidate.shouldHideAsDuplicateOpenCodeChildSession(comparedTo: other)
             }
         }
+    }
+
+    private func shouldCheckDuplicateVisibility(for session: SessionState) -> Bool {
+        session.isLikelyEmptyCodexPlaceholderForUI
+            || session.isLikelyTransientCodexContinuationPlaceholder
+            || session.isLikelyOpenCodeChildSessionPlaceholderForUI
     }
 
     private func findTmuxTarget(tty: String) async -> TmuxTarget? {
