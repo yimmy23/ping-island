@@ -408,6 +408,35 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         )
     }
 
+    func testBubbleLayoutLeavesWindowGutterAroundRenderedBubble() throws {
+        let viewModel = makeViewModel()
+        let session = makeSession(id: "active", phase: .processing)
+
+        for placement in DetachedIslandBubblePlacement.allCases {
+            let layout = DetachedIslandContentModel.layout(
+                for: [session],
+                viewModel: viewModel,
+                bubbleState: .hoverPreview,
+                bubblePlacement: placement
+            )
+            let bubbleFrame = try XCTUnwrap(layout.bubbleFrame)
+            let gutter = DetachedIslandPanelMetrics.bubbleWindowGutter
+
+            XCTAssertGreaterThanOrEqual(bubbleFrame.minX, gutter, "minX for \(placement)")
+            XCTAssertGreaterThanOrEqual(bubbleFrame.minY, gutter, "minY for \(placement)")
+            XCTAssertLessThanOrEqual(
+                bubbleFrame.maxX,
+                layout.containerSize.width - gutter,
+                "maxX for \(placement)"
+            )
+            XCTAssertLessThanOrEqual(
+                bubbleFrame.maxY,
+                layout.containerSize.height - gutter,
+                "maxY for \(placement)"
+            )
+        }
+    }
+
     func testHoverPreviewUsesSharedAttentionRouteWhenNeeded() {
         let attention = makeSession(
             id: "attention",

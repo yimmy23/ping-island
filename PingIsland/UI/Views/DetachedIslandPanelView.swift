@@ -15,6 +15,7 @@ enum DetachedIslandPanelMetrics {
     static let bubbleTailOverlap: CGFloat = 7
     static let bubbleTailInset: CGFloat = 4
     static let bubbleCornerRadius: CGFloat = 22
+    static let bubbleWindowGutter: CGFloat = 2
     static let bubbleHorizontalPadding: CGFloat = 6
     static let bubbleVerticalPadding: CGFloat = 4
     static let usageFooterReservedHeight: CGFloat = 34
@@ -370,34 +371,35 @@ enum DetachedIslandContentModel {
         let bottomPlacementVerticalAdjustment = resolvedPlacement.isBubbleAbovePet
             ? 0
             : DetachedIslandPanelMetrics.petVisualFrame
-        let containerWidth = petSize.width + horizontalGap + bubbleSize.width
+        let gutter = DetachedIslandPanelMetrics.bubbleWindowGutter
+        let containerWidth = petSize.width + horizontalGap + bubbleSize.width + (gutter * 2)
         let containerHeight = max(
             petSize.height,
             petSize.height + verticalGap + bubbleSize.height
                 - topPlacementVerticalAdjustment
                 - bottomPlacementVerticalAdjustment
-        )
+        ) + (gutter * 2)
 
         let petOriginX: CGFloat
         let bubbleOriginX: CGFloat
         if resolvedPlacement.isBubbleLeftOfPet {
-            bubbleOriginX = 0
-            petOriginX = bubbleSize.width + horizontalGap
+            bubbleOriginX = gutter
+            petOriginX = gutter + bubbleSize.width + horizontalGap
         } else {
-            petOriginX = 0
-            bubbleOriginX = petSize.width + horizontalGap
+            petOriginX = gutter
+            bubbleOriginX = gutter + petSize.width + horizontalGap
         }
 
         let petOriginY: CGFloat
         let bubbleOriginY: CGFloat
         if resolvedPlacement.isBubbleAbovePet {
-            bubbleOriginY = 0
-            petOriginY = max(0, bubbleSize.height + verticalGap - topPlacementVerticalAdjustment)
+            bubbleOriginY = gutter
+            petOriginY = max(gutter, gutter + bubbleSize.height + verticalGap - topPlacementVerticalAdjustment)
         } else {
-            petOriginY = 0
+            petOriginY = gutter
             bubbleOriginY = max(
-                0,
-                petSize.height + verticalGap - bottomPlacementVerticalAdjustment
+                gutter,
+                gutter + petSize.height + verticalGap - bottomPlacementVerticalAdjustment
             )
         }
 
