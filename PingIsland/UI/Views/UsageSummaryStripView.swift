@@ -8,10 +8,22 @@ struct UsageSummaryStripView: View {
         case preferredBattery
     }
 
+    enum BatteryHoverDetailStyle {
+        case allProviders
+        case currentWindow
+    }
+
+    enum BatteryPopoverPlacement {
+        case below
+        case above
+    }
+
     let providers: [UsageSummaryProvider]
     var inline = false
     var alignment: HorizontalAlignment = .leading
     var displayStyle: DisplayStyle = .numeric
+    var batteryHoverDetailStyle: BatteryHoverDetailStyle = .allProviders
+    var batteryPopoverPlacement: BatteryPopoverPlacement = .below
     var locale: Locale = .current
     @State private var hoveredBatteryProviderID: String?
 
@@ -147,14 +159,11 @@ struct UsageSummaryStripView: View {
         )
         .overlay(alignment: batteryPopoverAlignment) {
             if hoveredBatteryProviderID == hoverID(provider: provider, window: window) {
-                UsageBatteryDetailPopover(
-                    providers: providers,
-                    locale: locale
-                )
-                .offset(x: 0, y: 24)
-                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
-                .allowsHitTesting(false)
-                .zIndex(100)
+                batteryPopover(provider: provider, window: window)
+                    .offset(x: 0, y: batteryPopoverOffsetY)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: batteryPopoverScaleAnchor)))
+                    .allowsHitTesting(false)
+                    .zIndex(100)
             }
         }
         .onHover { hovering in
@@ -213,7 +222,100 @@ struct UsageSummaryStripView: View {
     }
 
     private var batteryPopoverAlignment: Alignment {
-        alignment == .trailing ? .topTrailing : .topLeading
+        switch (batteryPopoverPlacement, alignment) {
+        case (.above, .trailing):
+            return .bottomTrailing
+        case (.above, _):
+            return .bottomLeading
+        case (.below, .trailing):
+            return .topTrailing
+        case (.below, _):
+            return .topLeading
+        }
+    }
+
+    private var batteryPopoverOffsetY: CGFloat {
+        switch batteryPopoverPlacement {
+        case .above:
+            return -18
+        case .below:
+            return 24
+        }
+    }
+
+    private var batteryPopoverScaleAnchor: UnitPoint {
+        switch (batteryPopoverPlacement, alignment) {
+        case (.above, .trailing):
+            return .bottomTrailing
+        case (.above, _):
+            return .bottomLeading
+        case (.below, .trailing):
+            return .topTrailing
+        case (.below, _):
+            return .topLeading
+        }
+    }
+
+    @ViewBuilder
+    private func batteryPopover(provider: UsageSummaryProvider, window: UsageSummaryWindow) -> some View {
+        switch batteryHoverDetailStyle {
+        case .allProviders:
+            UsageBatteryDetailPopover(
+                providers: providers,
+                locale: locale
+            )
+        case .currentWindow:
+            UsageBatteryCurrentWindowPopover(
+                provider: provider,
+                window: window,
+                locale: locale
+            )
+        }
+    }
+}
+
+private struct UsageBatteryCurrentWindowPopover: View {
+    let provider: UsageSummaryProvider
+    let window: UsageSummaryWindow
+    let locale: Locale
+
+    var body: some View {
+        Text(remainingText)
+            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .foregroundStyle(percentColor(for: window.remainingPercentage))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(OpaquePopoverBackground(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+            )
+            .compositingGroup()
+            .shadow(color: Color.black.opacity(0.42), radius: 12, y: 6)
+            .accessibilityLabel(Text("\(provider.title) \(window.label) \(remainingText)"))
+    }
+
+    private var remainingText: String {
+        let percentage = "\(Int(max(0, window.remainingPercentage).rounded()))%"
+        switch locale.language.languageCode?.identifier {
+        case "zh":
+            return "剩余：\(percentage)"
+        default:
+            return "Left: \(percentage)"
+        }
+    }
+
+    private func percentColor(for remainingPercentage: Double) -> Color {
+        if remainingPercentage > 30 {
+            return Color(red: 0.22, green: 0.86, blue: 0.45)
+        }
+        if remainingPercentage >= 10 {
+            return Color(red: 0.96, green: 0.75, blue: 0.24)
+        }
+        return Color(red: 0.96, green: 0.30, blue: 0.28)
     }
 }
 

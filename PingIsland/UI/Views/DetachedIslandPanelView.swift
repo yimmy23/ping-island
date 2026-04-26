@@ -788,6 +788,8 @@ struct DetachedIslandPanelView: View {
                             inline: true,
                             alignment: .trailing,
                             displayStyle: .battery,
+                            batteryHoverDetailStyle: .currentWindow,
+                            batteryPopoverPlacement: .above,
                             locale: settings.locale
                         )
                         .zIndex(200)
