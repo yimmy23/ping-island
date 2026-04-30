@@ -452,3 +452,6 @@
 "停止录制快捷键" = "Stop recording shortcut";
 "清空快捷键" = "Clear shortcut";
 "恢复默认快捷键" = "Restore default shortcut";
+"一键卸载所有 Hooks 配置文件" = "Uninstall all Hooks configuration files";
+"一键卸载所有 Hooks 配置文件？" = "Uninstall all Hooks configuration files?";
+"这会移除 Island 为所有本机集成写入的托管 Hooks 配置文件，包括自定义配置记录。" = "This removes the managed Hooks configuration files Island wrote for all local integrations, including custom configuration records.";

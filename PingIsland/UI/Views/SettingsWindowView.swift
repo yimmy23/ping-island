@@ -427,6 +427,15 @@ final class SettingsPanelViewModel: ObservableObject {
         refreshCustomHookInstallations()
     }
 
+    func uninstallAllHooks() {
+        HookInstaller.uninstall()
+        for installation in HookInstaller.customInstallations() {
+            HookInstaller.uninstallCustom(id: installation.id)
+        }
+        refreshHookInstallationStates()
+        refreshCustomHookInstallations()
+    }
+
     func refreshCustomHookInstallations() {
         customHookInstallations = HookInstaller.customInstallations()
     }
@@ -718,6 +727,7 @@ private struct SettingsPanelContentView: View {
     @State private var selectedCategory: SettingsCategory? = .general
     @State private var nativeRuntimePreviewUnlockState = NativeRuntimePreviewUnlockState()
     @State private var pendingHookReinstallProfile: ManagedHookClientProfile?
+    @State private var showingUninstallAllHooksConfirmation = false
     @State private var showingCustomHookInstallSheet = false
     @State private var showingRemoteHostSheet = false
     @State private var remotePasswordPromptRequest: RemotePasswordPromptRequest?
@@ -787,6 +797,17 @@ private struct SettingsPanelContentView: View {
             }
         } message: { profile in
             Text(verbatim: AppLocalization.format(profile.reinstallDescriptionFormat, profile.title))
+        }
+        .alert(
+            AppLocalization.string("一键卸载所有 Hooks 配置文件？"),
+            isPresented: $showingUninstallAllHooksConfirmation
+        ) {
+            Button(AppLocalization.string("取消"), role: .cancel) {}
+            Button(AppLocalization.string("一键卸载所有 Hooks 配置文件"), role: .destructive) {
+                viewModel.uninstallAllHooks()
+            }
+        } message: {
+            Text(appLocalized: "这会移除 Island 为所有本机集成写入的托管 Hooks 配置文件，包括自定义配置记录。")
         }
         .sheet(isPresented: $showingCustomHookInstallSheet) {
             CustomHookInstallSheet(viewModel: viewModel) {
@@ -1580,6 +1601,21 @@ private struct SettingsPanelContentView: View {
                     NativeRuntimePreviewSection(viewModel: viewModel)
                 }
             }
+
+            Button(action: { showingUninstallAllHooksConfirmation = true }) {
+                HStack(spacing: 7) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(appLocalized: "一键卸载所有 Hooks 配置文件")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(TerminalColors.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(appLocalized: "一键卸载所有 Hooks 配置文件"))
         }
     }
 
