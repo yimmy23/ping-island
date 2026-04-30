@@ -144,7 +144,7 @@ final class AppLaunchConfigurationTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
     }
 
-    func testNotchDetachmentHintExperienceOnlyAppliesUpgradePromptOncePerVersion() {
+    func testNotchDetachmentHintExperienceOnlyAppliesUpgradePromptOnce() {
         let defaults = makeDefaults()
 
         NotchDetachmentHintExperience.prepareForLaunch(
@@ -163,7 +163,7 @@ final class AppLaunchConfigurationTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
     }
 
-    func testNotchDetachmentHintExperienceSchedulesAgainForNextVersionUpgrade() {
+    func testNotchDetachmentHintExperienceDoesNotScheduleAgainForNextVersionUpgrade() {
         let defaults = makeDefaults()
 
         NotchDetachmentHintExperience.prepareForLaunch(
@@ -179,7 +179,7 @@ final class AppLaunchConfigurationTests: XCTestCase {
             currentVersion: "0.5.1"
         )
 
-        XCTAssertTrue(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
+        XCTAssertFalse(defaults.bool(forKey: AppSettingsDefaultKeys.notchDetachmentHintPending))
     }
 
     func testNotchDetachmentHintExperienceSkipsWhenPreviousVersionMatchesCurrentVersion() {
@@ -197,6 +197,31 @@ final class AppLaunchConfigurationTests: XCTestCase {
     func testNotchDetachmentHintExperienceUsesInjectedPendingMarkerForUpgrades() {
         let defaults = makeDefaults()
         var injectedMarkerInvocationCount = 0
+
+        NotchDetachmentHintExperience.prepareForLaunch(
+            defaults: defaults,
+            previousVersion: "0.5.0",
+            currentVersion: "0.5.1",
+            markHintsPending: {
+                injectedMarkerInvocationCount += 1
+            }
+        )
+
+        XCTAssertEqual(injectedMarkerInvocationCount, 1)
+    }
+
+    func testNotchDetachmentHintExperienceSkipsInjectedPendingMarkerAfterFirstPreparation() {
+        let defaults = makeDefaults()
+        var injectedMarkerInvocationCount = 0
+
+        NotchDetachmentHintExperience.prepareForLaunch(
+            defaults: defaults,
+            previousVersion: "0.4.1",
+            currentVersion: "0.5.0",
+            markHintsPending: {
+                injectedMarkerInvocationCount += 1
+            }
+        )
 
         NotchDetachmentHintExperience.prepareForLaunch(
             defaults: defaults,

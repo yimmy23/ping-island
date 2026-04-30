@@ -80,9 +80,9 @@ struct NotchDetachmentHintExperience {
             return
         }
 
-        let lastPreparedVersion = defaults.string(forKey: preparedVersionDefaultsKey)?
+        let preparedVersion = defaults.string(forKey: preparedVersionDefaultsKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard lastPreparedVersion != normalizedCurrentVersion else {
+        guard preparedVersion.isEmpty else {
             return
         }
 
