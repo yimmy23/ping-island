@@ -1406,6 +1406,24 @@ final class SessionStateTests: XCTestCase {
         )
     }
 
+    func testTerminalFallbackActivationRestoresGhosttyFamilyWindows() {
+        XCTAssertTrue(
+            SessionLauncher.shouldActivateAllWindowsForTerminalFallback(
+                bundleIdentifier: "com.cmuxterm.app"
+            )
+        )
+        XCTAssertTrue(
+            SessionLauncher.shouldActivateAllWindowsForTerminalFallback(
+                bundleIdentifier: "com.mitchellh.ghostty"
+            )
+        )
+        XCTAssertFalse(
+            SessionLauncher.shouldActivateAllWindowsForTerminalFallback(
+                bundleIdentifier: "com.googlecode.iterm2"
+            )
+        )
+    }
+
     func testTerminalHostedCodexDoesNotFallBackToCodexAppNavigation() {
         let terminalHostedCodex = SessionClientInfo(
             kind: .codexApp,

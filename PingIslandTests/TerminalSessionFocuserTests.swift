@@ -62,6 +62,18 @@ final class TerminalSessionFocuserTests: XCTestCase {
         XCTAssertTrue(script.contains("set titleMatches to every terminal whose name contains remoteTitleHint"))
     }
 
+    func testGhosttySelectionScriptCanTargetCmuxBundle() {
+        let lines = TerminalSessionFocuser.ghosttySelectionScriptLines(
+            terminalSessionIdentifier: "65a2028f-a93c-48e0-b46a-3f4c20c94b81",
+            workspacePath: "/tmp/demo",
+            bundleIdentifier: "com.cmuxterm.app"
+        )
+        let script = lines.joined(separator: "\n")
+
+        XCTAssertEqual(lines.first, "tell application id \"com.cmuxterm.app\"")
+        XCTAssertFalse(script.contains("tell application id \"com.mitchellh.ghostty\""))
+    }
+
     func testGhosttyFrontmostTerminalSnapshotScriptTargetsFocusedTerminal() {
         let lines = TerminalSessionFocuser.ghosttyFrontmostTerminalSnapshotScriptLines()
         let script = lines.joined(separator: "\n")
@@ -70,6 +82,17 @@ final class TerminalSessionFocuserTests: XCTestCase {
         XCTAssertTrue(script.contains("set targetTab to selected tab of targetWindow"))
         XCTAssertTrue(script.contains("set targetTerminal to focused terminal of targetTab"))
         XCTAssertTrue(script.contains("return targetTerminalID & linefeed & targetWorkingDirectory & linefeed & targetTerminalName"))
+    }
+
+    func testGhosttyFrontmostTerminalSnapshotScriptCanTargetCmuxBundle() {
+        let lines = TerminalSessionFocuser.ghosttyFrontmostTerminalSnapshotScriptLines(
+            bundleIdentifier: "com.cmuxterm.app"
+        )
+        let script = lines.joined(separator: "\n")
+
+        XCTAssertEqual(lines.first, "tell application id \"com.cmuxterm.app\"")
+        XCTAssertTrue(script.contains("set targetTerminal to focused terminal of targetTab"))
+        XCTAssertFalse(script.contains("tell application id \"com.mitchellh.ghostty\""))
     }
 
     func testParseGhosttyTerminalSnapshotReadsIdentifierWorkingDirectoryAndTitle() {

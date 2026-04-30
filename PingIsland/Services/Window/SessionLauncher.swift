@@ -95,7 +95,12 @@ actor SessionLauncher {
         }
 
         if let terminalBundleIdentifier = session.clientInfo.terminalBundleIdentifier,
-           await activateApplication(bundleIdentifier: terminalBundleIdentifier, activateAllWindows: false) {
+           await activateApplication(
+               bundleIdentifier: terminalBundleIdentifier,
+               activateAllWindows: Self.shouldActivateAllWindowsForTerminalFallback(
+                   bundleIdentifier: terminalBundleIdentifier
+               )
+           ) {
             Self.logger.debug("Activated session \(session.sessionId, privacy: .public) via terminal bundle \(terminalBundleIdentifier, privacy: .public)")
             return true
         }
@@ -528,7 +533,12 @@ actor SessionLauncher {
         await FocusDiagnosticsStore.shared.record(
             "SessionLauncher process-terminal fallback-app session=\(sessionId) pid=\(pid) terminalPid=\(resolvedTerminalPid)"
         )
-        return await activateApplication(processIdentifier: resolvedTerminalPid, activateAllWindows: false)
+        return await activateTerminalFallbackApplication(
+            terminalPid: resolvedTerminalPid,
+            clientInfo: clientInfo,
+            sessionId: sessionId,
+            source: "process-terminal"
+        )
     }
 
     private func activateTerminal(
@@ -577,7 +587,12 @@ actor SessionLauncher {
         await FocusDiagnosticsStore.shared.record(
             "SessionLauncher tty-terminal fallback-app session=\(sessionId) tty=\(tty) terminalPid=\(resolvedTerminalPid)"
         )
-        return await activateApplication(processIdentifier: resolvedTerminalPid, activateAllWindows: false)
+        return await activateTerminalFallbackApplication(
+            terminalPid: resolvedTerminalPid,
+            clientInfo: clientInfo,
+            sessionId: sessionId,
+            source: "tty-terminal"
+        )
     }
 
     private func activateRemoteCarrierTerminal(_ session: SessionState) async -> Bool {
@@ -615,7 +630,12 @@ actor SessionLauncher {
                     return true
                 }
 
-                return await activateApplication(processIdentifier: resolvedTerminalPid, activateAllWindows: false)
+                return await activateTerminalFallbackApplication(
+                    terminalPid: resolvedTerminalPid,
+                    clientInfo: session.clientInfo,
+                    sessionId: session.sessionId,
+                    source: "remote-carrier-fallback"
+                )
             }
 
             await FocusDiagnosticsStore.shared.record(
@@ -658,7 +678,54 @@ actor SessionLauncher {
             return true
         }
 
-        return await activateApplication(processIdentifier: resolvedTerminalPid, activateAllWindows: false)
+        return await activateTerminalFallbackApplication(
+            terminalPid: resolvedTerminalPid,
+            clientInfo: session.clientInfo,
+            sessionId: session.sessionId,
+            source: "remote-carrier"
+        )
+    }
+
+    private func activateTerminalFallbackApplication(
+        terminalPid: Int,
+        clientInfo: SessionClientInfo,
+        sessionId: String,
+        source: String
+    ) async -> Bool {
+        if let bundleIdentifier = clientInfo.terminalBundleIdentifier?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !bundleIdentifier.isEmpty,
+           Self.shouldActivateAllWindowsForTerminalFallback(bundleIdentifier: bundleIdentifier) {
+            let normalizedBundleIdentifier = TerminalAppRegistry.normalizedHostBundleIdentifier(for: bundleIdentifier)
+            await FocusDiagnosticsStore.shared.record(
+                "SessionLauncher \(source) fallback-bundle session=\(sessionId) bundle=\(normalizedBundleIdentifier)"
+            )
+            if await activateApplication(
+                bundleIdentifier: normalizedBundleIdentifier,
+                activateAllWindows: true
+            ) {
+                return true
+            }
+        }
+
+        return await activateApplication(processIdentifier: terminalPid, activateAllWindows: false)
+    }
+
+    nonisolated static func shouldActivateAllWindowsForTerminalFallback(
+        bundleIdentifier: String?
+    ) -> Bool {
+        guard let trimmedBundleIdentifier = bundleIdentifier?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmedBundleIdentifier.isEmpty else {
+            return false
+        }
+        let normalizedBundleIdentifier = TerminalAppRegistry.normalizedHostBundleIdentifier(
+            for: trimmedBundleIdentifier
+        )
+        .lowercased()
+
+        return normalizedBundleIdentifier == "com.mitchellh.ghostty"
+            || normalizedBundleIdentifier == "com.cmuxterm.app"
     }
 
     private func resolvedTerminalApplicationPID(

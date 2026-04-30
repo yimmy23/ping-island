@@ -53,6 +53,31 @@ func mapsGhosttyTerminalContextFromEnvironment() throws {
 }
 
 @Test
+func mapsCmuxTerminalContextFromEnvironment() throws {
+    let payload = """
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "cmux-1"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: ["island-bridge", "--source", "claude"],
+        environment: [
+            "TERM_PROGRAM": "cmux",
+            "TERM_SESSION_ID": "65a2028f-a93c-48e0-b46a-3f4c20c94b81",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.terminalContext.terminalProgram == "cmux")
+    #expect(envelope.terminalContext.terminalBundleID == "com.cmuxterm.app")
+    #expect(envelope.terminalContext.terminalSessionID == "65a2028f-a93c-48e0-b46a-3f4c20c94b81")
+}
+
+@Test
 func opencodePermissionRequestCreatesApprovalIntervention() throws {
     let payload = """
     {

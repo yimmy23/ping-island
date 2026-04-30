@@ -120,9 +120,13 @@ actor TerminalAutomationPermissionCoordinator {
             "AutomationPermission \(phase)-start session=\(sessionId ?? "nil") bundle=\(bundleIdentifier) pid=\(runningApplication.processIdentifier) prompt=\(askUserIfNeeded)"
         )
 
-        let targetDescriptor = NSAppleEventDescriptor(
-            processIdentifier: runningApplication.processIdentifier
-        )
+        guard let targetDescriptor = automationTargetDescriptor(for: runningApplication) else {
+            await FocusDiagnosticsStore.shared.record(
+                "AutomationPermission \(phase)-skip-no-descriptor session=\(sessionId ?? "nil") bundle=\(bundleIdentifier) pid=\(runningApplication.processIdentifier)"
+            )
+            return OSStatus(procNotFound)
+        }
+
         guard let address = targetDescriptor.aeDesc else {
             await FocusDiagnosticsStore.shared.record(
                 "AutomationPermission \(phase)-skip-no-descriptor session=\(sessionId ?? "nil") bundle=\(bundleIdentifier) pid=\(runningApplication.processIdentifier)"
@@ -140,6 +144,89 @@ actor TerminalAutomationPermissionCoordinator {
         await FocusDiagnosticsStore.shared.record(
             "AutomationPermission \(phase)-result session=\(sessionId ?? "nil") bundle=\(bundleIdentifier) pid=\(runningApplication.processIdentifier) status=\(status)"
         )
+        guard status != noErr, askUserIfNeeded else {
+            return status
+        }
+
+        let probeStatus = await runAuthorizationProbe(
+            bundleIdentifier: bundleIdentifier,
+            phase: phase,
+            sessionId: sessionId
+        )
+        if probeStatus == noErr {
+            await FocusDiagnosticsStore.shared.record(
+                "AutomationPermission \(phase)-probe-authorized session=\(sessionId ?? "nil") bundle=\(bundleIdentifier)"
+            )
+            return noErr
+        }
+
         return status
+    }
+
+    private func automationTargetDescriptor(
+        for runningApplication: NSRunningApplication
+    ) -> NSAppleEventDescriptor? {
+        if let bundleIdentifier = runningApplication.bundleIdentifier?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !bundleIdentifier.isEmpty {
+            return NSAppleEventDescriptor(bundleIdentifier: bundleIdentifier)
+        }
+
+        return NSAppleEventDescriptor(processIdentifier: runningApplication.processIdentifier)
+    }
+
+    private func runAuthorizationProbe(
+        bundleIdentifier: String,
+        phase: String,
+        sessionId: String?
+    ) async -> OSStatus {
+        let trimmedBundleIdentifier = bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedBundleIdentifier.isEmpty, trimmedBundleIdentifier != "unknown" else {
+            return OSStatus(procNotFound)
+        }
+
+        let source = """
+        tell application id \(Self.appleScriptStringLiteral(trimmedBundleIdentifier))
+            get name
+        end tell
+        """
+
+        return await MainActor.run {
+            var errorInfo: NSDictionary?
+            guard let script = NSAppleScript(source: source) else {
+                Task {
+                    await FocusDiagnosticsStore.shared.record(
+                        "AutomationPermission \(phase)-probe-create-failed session=\(sessionId ?? "nil") bundle=\(trimmedBundleIdentifier)"
+                    )
+                }
+                return OSStatus(paramErr)
+            }
+
+            _ = script.executeAndReturnError(&errorInfo)
+            if let errorInfo {
+                let errorNumber = (errorInfo[NSAppleScript.errorNumber] as? NSNumber)?.int32Value
+                let status = errorNumber.map { OSStatus($0) } ?? OSStatus(errAEEventNotPermitted)
+                Task {
+                    await FocusDiagnosticsStore.shared.record(
+                        "AutomationPermission \(phase)-probe-error session=\(sessionId ?? "nil") bundle=\(trimmedBundleIdentifier) status=\(status)"
+                    )
+                }
+                return status
+            }
+
+            Task {
+                await FocusDiagnosticsStore.shared.record(
+                    "AutomationPermission \(phase)-probe-result session=\(sessionId ?? "nil") bundle=\(trimmedBundleIdentifier) status=0"
+                )
+            }
+            return noErr
+        }
+    }
+
+    private static func appleScriptStringLiteral(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
     }
 }

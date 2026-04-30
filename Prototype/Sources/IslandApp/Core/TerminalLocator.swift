@@ -33,6 +33,8 @@ actor AppleTerminalLocator: TerminalLocator {
             return "com.apple.Terminal"
         case "ghostty":
             return "com.mitchellh.ghostty"
+        case "cmux":
+            return "com.cmuxterm.app"
         case "alacritty":
             return "io.alacritty"
         case "kitty":

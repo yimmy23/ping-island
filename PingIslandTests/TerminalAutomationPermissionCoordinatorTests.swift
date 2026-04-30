@@ -53,6 +53,11 @@ final class TerminalAutomationPermissionCoordinatorTests: XCTestCase {
                 bundleIdentifier: "com.mitchellh.ghostty"
             )
         )
+        XCTAssertTrue(
+            TerminalAutomationPermissionCoordinator.isAutomationPermissionRequired(
+                bundleIdentifier: "com.cmuxterm.app"
+            )
+        )
         XCTAssertFalse(
             TerminalAutomationPermissionCoordinator.isAutomationPermissionRequired(
                 bundleIdentifier: "com.todesktop.230313mzl4w4u92"

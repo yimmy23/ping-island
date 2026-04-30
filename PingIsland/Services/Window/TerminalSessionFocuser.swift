@@ -174,6 +174,7 @@ actor TerminalSessionFocuser {
                 return false
             }
             return await focusGhosttyTerminal(
+                bundleIdentifier: bundleIdentifier,
                 terminalPid: terminalPid,
                 terminalSessionIdentifier: ghosttyTerminalIdentifier,
                 workspacePath: workspacePath,
@@ -197,6 +198,7 @@ actor TerminalSessionFocuser {
                 return false
             }
             return await focusGhosttyTerminal(
+                bundleIdentifier: bundleIdentifier,
                 terminalPid: terminalPid,
                 terminalSessionIdentifier: cmuxTerminalIdentifier,
                 workspacePath: workspacePath,
@@ -341,12 +343,19 @@ actor TerminalSessionFocuser {
             NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         }
         // cmux is based on Ghostty and uses the same AppleScript interface
-        let isGhosttyFrontmost = frontmostBundleId == "com.mitchellh.ghostty" || frontmostBundleId == "com.cmuxterm.app"
+        guard let frontmostBundleId else {
+            return nil
+        }
+        let normalizedFrontmostBundleId = frontmostBundleId.lowercased()
+        let isGhosttyFrontmost = normalizedFrontmostBundleId == "com.mitchellh.ghostty"
+            || normalizedFrontmostBundleId == "com.cmuxterm.app"
         guard isGhosttyFrontmost else {
             return nil
         }
 
-        guard let output = await runAppleScriptWithOutput(lines: Self.ghosttyFrontmostTerminalSnapshotScriptLines()),
+        guard let output = await runAppleScriptWithOutput(
+            lines: Self.ghosttyFrontmostTerminalSnapshotScriptLines(bundleIdentifier: frontmostBundleId)
+        ),
               output != "not-found" else {
             return nil
         }
@@ -416,6 +425,7 @@ actor TerminalSessionFocuser {
     }
 
     private func focusGhosttyTerminal(
+        bundleIdentifier: String,
         terminalPid: Int,
         terminalSessionIdentifier: String?,
         workspacePath: String?,
@@ -424,10 +434,11 @@ actor TerminalSessionFocuser {
         let result = await runAppleScript(lines: Self.ghosttySelectionScriptLines(
             terminalSessionIdentifier: Self.normalizedGhosttyTerminalIdentifier(terminalSessionIdentifier),
             workspacePath: workspacePath,
-            titleHint: titleHint
+            titleHint: titleHint,
+            bundleIdentifier: bundleIdentifier
         ))
         await FocusDiagnosticsStore.shared.record(
-            "TerminalFocus ghostty select-result terminalPid=\(terminalPid) success=\(result)"
+            "TerminalFocus ghostty select-result terminalPid=\(terminalPid) bundle=\(bundleIdentifier) success=\(result)"
         )
         return result
     }
@@ -670,10 +681,11 @@ actor TerminalSessionFocuser {
     static func ghosttySelectionScriptLines(
         terminalSessionIdentifier: String?,
         workspacePath: String?,
-        titleHint: String? = nil
+        titleHint: String? = nil,
+        bundleIdentifier: String = "com.mitchellh.ghostty"
     ) -> [String] {
         var lines = [
-            "tell application id \"com.mitchellh.ghostty\""
+            "tell application id \(appleScriptStringLiteral(bundleIdentifier))"
         ]
 
         if let terminalSessionIdentifier = normalizedGhosttyTerminalIdentifier(terminalSessionIdentifier) {
@@ -734,9 +746,11 @@ actor TerminalSessionFocuser {
         return lines
     }
 
-    static func ghosttyFrontmostTerminalSnapshotScriptLines() -> [String] {
+    static func ghosttyFrontmostTerminalSnapshotScriptLines(
+        bundleIdentifier: String = "com.mitchellh.ghostty"
+    ) -> [String] {
         [
-            "tell application id \"com.mitchellh.ghostty\"",
+            "tell application id \(appleScriptStringLiteral(bundleIdentifier))",
             "try",
             "set targetWindow to front window",
             "set targetTab to selected tab of targetWindow",

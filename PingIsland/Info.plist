@@ -15,7 +15,7 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Ping Island uses Apple Events to focus the matching iTerm, Ghostty, or Terminal window for a session.</string>
+    <string>Ping Island uses Apple Events to focus the matching iTerm, Ghostty, cmux, or Terminal window for a session.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright 2025. All rights reserved.</string>
 
