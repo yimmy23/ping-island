@@ -379,6 +379,10 @@ actor SessionStore {
             newPhase: newPhase,
             currentIntervention: session.intervention
         )
+        let shouldPreserveQoderCLIQuestionIntervention = shouldPreserveQoderCLIQuestionIntervention(
+            for: event,
+            currentIntervention: session.intervention
+        )
         let preservedPendingApproval = preservedPendingApprovalContext(
             for: event,
             session: session,
@@ -438,6 +442,8 @@ actor SessionStore {
                 session.phase = .waitingForInput
             }
         } else if shouldPreserveQwenQuestionIntervention {
+            session.phase = .waitingForInput
+        } else if shouldPreserveQoderCLIQuestionIntervention {
             session.phase = .waitingForInput
         } else if shouldClearIntervention(for: event, newPhase: newPhase, currentIntervention: session.intervention) {
             session.intervention = nil
@@ -1666,6 +1672,31 @@ actor SessionStore {
         return true
     }
 
+    private func shouldPreserveQoderCLIQuestionIntervention(
+        for event: HookEvent,
+        currentIntervention: SessionIntervention?
+    ) -> Bool {
+        guard currentIntervention?.kind == .question,
+              event.provider == .claude,
+              event.event == "PostToolUse",
+              event.clientInfo.normalizedForClaudeRouting().profileID == "qoder-cli" else {
+            return false
+        }
+
+        let normalizedTool = event.tool?
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        guard normalizedTool == "askuserquestion" || normalizedTool == "askfollowupquestion" else {
+            return false
+        }
+
+        if let toolUseId = event.toolUseId {
+            return currentIntervention?.matchesResolvedToolUseId(toolUseId) == true
+        }
+        return true
+    }
+
     /// Prevent a Notification-derived approval from overriding an existing
     /// intervention (question or real PermissionRequest approval).
     private func shouldPreserveExistingQwenIntervention(
@@ -2688,7 +2719,8 @@ actor SessionStore {
 
     private func applyClaudeTranscriptQuestionFallback(to session: inout SessionState) {
         guard session.provider == .claude,
-              session.clientInfo.brand == .claude,
+              (session.clientInfo.brand == .claude
+                || session.clientInfo.normalizedForClaudeRouting().profileID == "qoder-cli"),
               session.ingress != .remoteBridge else { return }
 
         let fallbackSource = "claudeTranscriptQuestion"

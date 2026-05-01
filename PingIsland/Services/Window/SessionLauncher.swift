@@ -283,6 +283,9 @@ actor SessionLauncher {
         guard !isTerminalHostedCodexSession(provider: provider, clientInfo: clientInfo) else {
             return false
         }
+        guard !isTerminalHostedQoderCLISession(provider: provider, clientInfo: clientInfo) else {
+            return false
+        }
         return clientInfo.kind != .codexCLI
     }
 
@@ -306,6 +309,30 @@ actor SessionLauncher {
 
         return TerminalAppRegistry.isTerminalBundle(normalizedBundleIdentifier)
             || TerminalAppRegistry.isIDEBundle(normalizedBundleIdentifier)
+    }
+
+    nonisolated static func isTerminalHostedQoderCLISession(
+        provider: SessionProvider,
+        clientInfo: SessionClientInfo
+    ) -> Bool {
+        guard provider == .claude else { return false }
+
+        let normalizedClientInfo = clientInfo.normalizedForClaudeRouting()
+        guard normalizedClientInfo.profileID == "qoder-cli",
+              let terminalBundleIdentifier = normalizedClientInfo.terminalBundleIdentifier?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              !terminalBundleIdentifier.isEmpty else {
+            return false
+        }
+
+        let normalizedBundleIdentifier = TerminalAppRegistry.normalizedHostBundleIdentifier(
+            for: terminalBundleIdentifier
+        )
+        guard !TerminalAppRegistry.isIDEBundle(normalizedBundleIdentifier) else {
+            return false
+        }
+
+        return TerminalAppRegistry.isTerminalBundle(normalizedBundleIdentifier)
     }
 
     private func activateHostedIDEFallback(for session: SessionState) async -> Bool {

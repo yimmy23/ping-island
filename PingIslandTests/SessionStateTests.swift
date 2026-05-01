@@ -1450,6 +1450,33 @@ final class SessionStateTests: XCTestCase {
         )
     }
 
+    func testTerminalHostedQoderCLIDoesNotFallBackToQoderAppNavigation() {
+        let terminalHostedQoderCLI = SessionClientInfo(
+            kind: .qoder,
+            profileID: "qoder-cli",
+            name: "Qoder CLI",
+            origin: "cli",
+            originator: "Qoder",
+            terminalBundleIdentifier: "com.googlecode.iterm2",
+            terminalProgram: "iTerm.app",
+            terminalSessionIdentifier: "w3t0p0:82B6B83C-9817-47EB-B42B-EDC2AAB96556",
+            iTermSessionIdentifier: "w3t0p0:82B6B83C-9817-47EB-B42B-EDC2AAB96556"
+        )
+
+        XCTAssertTrue(
+            SessionLauncher.isTerminalHostedQoderCLISession(
+                provider: .claude,
+                clientInfo: terminalHostedQoderCLI
+            )
+        )
+        XCTAssertFalse(
+            SessionLauncher.allowsAppFallback(
+                provider: .claude,
+                clientInfo: terminalHostedQoderCLI
+            )
+        )
+    }
+
     func testNativeCodexAppStillAllowsAppNavigation() {
         let codexApp = SessionClientInfo.codexApp(threadId: "thread-123")
 

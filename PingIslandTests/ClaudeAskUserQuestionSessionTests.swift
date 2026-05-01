@@ -68,6 +68,21 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testQoderCLIPostToolUseDoesNotImmediatelyClearPendingQuestion() async {
+        let sessionId = "qoder-cli-post-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(makeQoderCLIQuestionEvent(sessionId: sessionId)))
+        await store.process(.hookReceived(makeQoderCLIPostToolUseEvent(sessionId: sessionId)))
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertEqual(session?.intervention?.kind, .question)
+        XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["Strict", "Balanced"])
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     func testHistoryLoadedQuestionToolSynthesizesClaudeIntervention() async {
         let sessionId = "claude-history-\(UUID().uuidString)"
         let store = SessionStore.shared
@@ -290,6 +305,76 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
             toolUseId: nil,
             notificationType: nil,
             message: nil
+        )
+    }
+
+    private func makeQoderCLIQuestionEvent(sessionId: String) -> HookEvent {
+        HookEvent(
+            sessionId: sessionId,
+            cwd: "/tmp/project",
+            event: "PreToolUse",
+            status: "waiting_for_input",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "qoder-cli",
+                name: "Qoder CLI",
+                origin: "cli"
+            ),
+            pid: nil,
+            tty: nil,
+            tool: "AskUserQuestion",
+            toolInput: [
+                "questions": AnyCodable([
+                    [
+                        "id": "permission",
+                        "header": "Permission Mode",
+                        "question": "Which permission mode would you prefer?",
+                        "options": [
+                            ["label": "Strict"],
+                            ["label": "Balanced"]
+                        ]
+                    ]
+                ])
+            ],
+            toolUseId: "call_\(sessionId)",
+            notificationType: nil,
+            message: nil
+        )
+    }
+
+    private func makeQoderCLIPostToolUseEvent(sessionId: String) -> HookEvent {
+        HookEvent(
+            sessionId: sessionId,
+            cwd: "/tmp/project",
+            event: "PostToolUse",
+            status: "processing",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "qoder-cli",
+                name: "Qoder CLI",
+                origin: "cli"
+            ),
+            pid: nil,
+            tty: nil,
+            tool: "AskUserQuestion",
+            toolInput: [
+                "questions": AnyCodable([
+                    [
+                        "id": "permission",
+                        "header": "Permission Mode",
+                        "question": "Which permission mode would you prefer?",
+                        "options": [
+                            ["label": "Strict"],
+                            ["label": "Balanced"]
+                        ]
+                    ]
+                ])
+            ],
+            toolUseId: "call_\(sessionId)",
+            notificationType: nil,
+            message: "User dismissed AskUserQuestion dialog without answering."
         )
     }
 

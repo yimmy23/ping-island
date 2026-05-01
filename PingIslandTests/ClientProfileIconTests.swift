@@ -45,4 +45,26 @@ final class ClientProfileIconTests: XCTestCase {
             XCTAssertTrue(profile.prefersBundledLogoOverAppIcon)
         }
     }
+
+    func testQoderCLIHookProfileMatchesClaudeCodeHooks() throws {
+        let qoderProfile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "qoder-hooks"))
+        let qoderEvents = Set(qoderProfile.events.map(\.name))
+        let claudeProfile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "claude-hooks"))
+        let claudeEvents = Set(claudeProfile.events.map(\.name))
+
+        XCTAssertEqual(qoderEvents, claudeEvents)
+        XCTAssertEqual(
+            qoderProfile.events.first { $0.name == "PreToolUse" }?.timeout,
+            86_400
+        )
+        XCTAssertEqual(
+            qoderProfile.bridgeExtraArguments,
+            [
+                "--client-kind", "qoder-cli",
+                "--client-name", "Qoder CLI",
+                "--client-origin", "cli",
+                "--client-originator", "Qoder"
+            ]
+        )
+    }
 }

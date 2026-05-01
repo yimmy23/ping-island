@@ -289,15 +289,20 @@ final class SettingsPanelViewModel: ObservableObject {
     @Published var nativeRuntimeRemoteControlURL: String?
     @Published private(set) var nativeRuntimeLaunchingProvider: SessionProvider?
     @Published private(set) var nativeRuntimeActiveSessionIDs: [String: String] = [:]
+    @Published private(set) var qoderCLIHookRefreshStatus: HookInstaller.QoderCLIHookRefreshStatus?
 
     private var hookFeedbackClearTasks: [String: Task<Void, Never>] = [:]
     private let runtimeLauncher: any NativeRuntimeLaunching
     private let fileExists: @Sendable (String) -> Bool
     private let setFeatureFlagEnabled: @Sendable (Bool, SessionProvider) -> Void
+    private let qoderCLIHookRefreshStatusProvider: @MainActor () -> HookInstaller.QoderCLIHookRefreshStatus?
 
     init(
         runtimeLauncher: (any NativeRuntimeLaunching)? = nil,
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+        qoderCLIHookRefreshStatusProvider: @escaping @MainActor () -> HookInstaller.QoderCLIHookRefreshStatus? = {
+            HookInstaller.qoderCLIHookRefreshStatus()
+        },
         setFeatureFlagEnabled: @escaping @Sendable (Bool, SessionProvider) -> Void = { enabled, provider in
             switch provider {
             case .claude:
@@ -311,17 +316,23 @@ final class SettingsPanelViewModel: ObservableObject {
     ) {
         self.runtimeLauncher = runtimeLauncher ?? SharedRuntimeLauncher()
         self.fileExists = fileExists
+        self.qoderCLIHookRefreshStatusProvider = qoderCLIHookRefreshStatusProvider
         self.setFeatureFlagEnabled = setFeatureFlagEnabled
     }
 
     var visibleHookProfiles: [ManagedHookClientProfile] {
         let profiles = ClientProfileRegistry.managedHookProfiles.filter { profile in
             profile.alwaysVisibleInSettings
+                || (profile.id == "qoder-hooks" && qoderCLIHookRefreshStatus != nil)
                 || ClientAppLocator.isInstalled(bundleIdentifiers: profile.localAppBundleIdentifiers)
         }
 
         return profiles.filter { $0.id != "gemini-hooks" }
             + profiles.filter { $0.id == "gemini-hooks" }
+    }
+
+    var hasIntegrationNotice: Bool {
+        qoderCLIHookRefreshStatus != nil
     }
 
     var visibleIDEExtensionProfiles: [ManagedIDEExtensionProfile] {
@@ -339,6 +350,7 @@ final class SettingsPanelViewModel: ObservableObject {
         refreshHookInstallationStates()
         refreshIDEExtensionInstallationStates()
         refreshCustomHookInstallations()
+        refreshQoderCLIHookRefreshStatus()
         accessibilityEnabled = AXIsProcessTrusted()
         ScreenSelector.shared.refreshScreens()
         SoundPackCatalog.shared.refresh()
@@ -350,6 +362,10 @@ final class SettingsPanelViewModel: ObservableObject {
     func refreshLocalizedState() {
         guard !isExportingLogs else { return }
         logExportStatus = AppLocalization.string("导出最近 10 分钟的 Island 诊断日志与配置")
+    }
+
+    func refreshQoderCLIHookRefreshStatus() {
+        qoderCLIHookRefreshStatus = qoderCLIHookRefreshStatusProvider()
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {
@@ -469,6 +485,18 @@ final class SettingsPanelViewModel: ObservableObject {
 
     func hookReinstallFeedback(for profile: ManagedHookClientProfile) -> HookReinstallFeedback? {
         hookReinstallFeedbacks[profile.id]
+    }
+
+    func hookNotice(for profile: ManagedHookClientProfile) -> String? {
+        guard profile.id == "qoder-hooks",
+              let status = qoderCLIHookRefreshStatus else {
+            return nil
+        }
+
+        return AppLocalization.format(
+            "检测到 Qoder CLI %@；启动时会覆盖并刷新 Island 托管的 ~/.qoder/settings.json hooks，并保留其他 JSON 配置。",
+            status.version
+        )
     }
 
     func authorizeIDEExtension(for profile: ManagedIDEExtensionProfile) {
@@ -946,7 +974,8 @@ private struct SettingsPanelContentView: View {
                                 } label: {
                                     SidebarItemView(
                                         category: category,
-                                        isSelected: selectedCategory == category
+                                        isSelected: selectedCategory == category,
+                                        showsNoticeDot: category == .integration && viewModel.hasIntegrationNotice
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -1514,6 +1543,7 @@ private struct SettingsPanelContentView: View {
                             isInstalled: viewModel.isHookInstalled(profile),
                             isReinstalling: viewModel.isReinstallingHooks(for: profile),
                             reinstallFeedback: viewModel.hookReinstallFeedback(for: profile),
+                            noticeMessage: viewModel.hookNotice(for: profile),
                             installAction: { viewModel.installHooks(for: profile) },
                             openConfigurationDirectoryAction: {
                                 viewModel.openHookConfigurationDirectory(for: profile)
@@ -2043,36 +2073,51 @@ struct NotchSettingsPopoverView: View {
 private struct SidebarItemView: View {
     let category: SettingsCategory
     let isSelected: Bool
+    var showsNoticeDot: Bool = false
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: category.icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(isSelected ? 0.95 : 1))
-                .frame(width: 24, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(
-                            isSelected
-                            ? LinearGradient(
-                                colors: [
-                                    category.tint.opacity(0.95),
-                                    category.tint.opacity(0.60)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: category.icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(isSelected ? 0.95 : 1))
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(
+                                isSelected
+                                ? LinearGradient(
+                                    colors: [
+                                        category.tint.opacity(0.95),
+                                        category.tint.opacity(0.60)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                                : LinearGradient(
+                                    colors: [
+                                        category.tint.opacity(0.92),
+                                        category.tint.opacity(0.74)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                            : LinearGradient(
-                                colors: [
-                                    category.tint.opacity(0.92),
-                                    category.tint.opacity(0.74)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                if showsNoticeDot {
+                    Circle()
+                        .fill(TerminalColors.amber)
+                        .frame(width: 7, height: 7)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(Color.black.opacity(0.42), lineWidth: 1)
                         )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .offset(x: 2, y: -2)
+                        .accessibilityLabel("有需要注意的集成提示")
+                }
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(appLocalized: category.title)
@@ -2181,6 +2226,7 @@ private struct HookManagementLine: View {
     let isInstalled: Bool
     let isReinstalling: Bool
     let reinstallFeedback: SettingsPanelViewModel.HookReinstallFeedback?
+    let noticeMessage: String?
     let installAction: () -> Void
     let openConfigurationDirectoryAction: () -> Void
     let reinstallAction: () -> Void
@@ -2200,6 +2246,23 @@ private struct HookManagementLine: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.58))
                         .fixedSize(horizontal: false, vertical: true)
+
+                    if let noticeMessage {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Circle()
+                                .fill(TerminalColors.amber)
+                                .frame(width: 6, height: 6)
+                                .alignmentGuide(.firstTextBaseline) { context in
+                                    context[VerticalAlignment.center]
+                                }
+
+                            Text(verbatim: noticeMessage)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(TerminalColors.amber.opacity(0.92))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.top, 2)
+                    }
                 }
 
                 Spacer(minLength: 12)

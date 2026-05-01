@@ -272,9 +272,11 @@ struct HookInstaller {
     func installQoderAssets() throws {
         try installQoderCompatibleAssets(
             relativePath: ".qoder/settings.json",
-            clientKind: "qoder",
-            clientName: "Qoder",
-            preToolUseTimeout: nil
+            clientKind: "qoder-cli",
+            clientName: "Qoder CLI",
+            clientOrigin: "cli",
+            clientOriginator: "Qoder",
+            preToolUseTimeout: 86_400
         )
     }
 
@@ -283,6 +285,8 @@ struct HookInstaller {
             relativePath: ".qoderwork/settings.json",
             clientKind: "qoderwork",
             clientName: "QoderWork",
+            clientOrigin: nil,
+            clientOriginator: "QoderWork",
             preToolUseTimeout: 86_400
         )
     }
@@ -291,37 +295,92 @@ struct HookInstaller {
         relativePath: String,
         clientKind: String,
         clientName: String,
+        clientOrigin: String?,
+        clientOriginator: String,
         preToolUseTimeout: Int?
     ) throws {
         try ensureSupportFiles()
         let fileURL = homeDirectory.appending(path: relativePath)
         let current = try readJSON(fileURL) ?? [:]
         var updated = current
-        var hooks = current["hooks"] as? [String: Any] ?? [:]
+        var hooks = removingIslandManagedHooks(from: current["hooks"] as? [String: Any] ?? [:])
 
-        let wildcardEvents = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest", "Notification"]
+        let isQoderCLI = clientKind == "qoder-cli"
+        let plainEvents = isQoderCLI
+            ? ["UserPromptSubmit", "Stop", "SubagentStop", "SessionStart", "SessionEnd"]
+            : ["UserPromptSubmit", "Stop"]
+        let wildcardEvents = isQoderCLI
+            ? ["PreToolUse", "PostToolUse", "PermissionRequest", "Notification"]
+            : ["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest", "Notification"]
+        let compactMatchers = isQoderCLI ? ["auto", "manual"] : []
+        var extraArguments = [
+            "--client-kind", clientKind,
+            "--client-name", clientName
+        ]
+        if let clientOrigin {
+            extraArguments += ["--client-origin", clientOrigin]
+        }
+        extraArguments += ["--client-originator", clientOriginator]
         let command = bridgeCommand(
             source: "claude",
-            extraArguments: [
-                "--client-kind", clientKind,
-                "--client-name", clientName,
-                "--client-originator", clientName
-            ]
+            extraArguments: extraArguments
         )
-        for event in ["UserPromptSubmit", "Stop"] {
-            hooks[event] = installHookArray(existing: hooks[event], command: command, matcher: nil)
+        for event in plainEvents {
+            hooks[event] = installHookArray(
+                existing: hooks[event],
+                command: command,
+                matcher: nil,
+                preferredFirst: isQoderCLI
+            )
         }
         for event in wildcardEvents {
             hooks[event] = installHookArray(
                 existing: hooks[event],
                 command: command,
                 timeout: event == "PermissionRequest" ? 86_400 : (event == "PreToolUse" ? preToolUseTimeout : nil),
-                matcher: "*"
+                matcher: "*",
+                preferredFirst: isQoderCLI
             )
+        }
+        if !compactMatchers.isEmpty {
+            var entries = hooks["PreCompact"]
+            for matcher in compactMatchers {
+                entries = installHookArray(
+                    existing: entries,
+                    command: command,
+                    matcher: matcher,
+                    preferredFirst: isQoderCLI
+                )
+            }
+            hooks["PreCompact"] = entries
         }
 
         updated["hooks"] = hooks
         try writeJSON(updated, to: fileURL)
+    }
+
+    private func removingIslandManagedHooks(from hooks: [String: Any]) -> [String: Any] {
+        var updated = hooks
+        for (event, value) in hooks {
+            guard var entries = value as? [[String: Any]] else { continue }
+            entries.removeAll { hook in
+                guard let hookCommands = hook["hooks"] as? [[String: Any]] else {
+                    return false
+                }
+
+                return hookCommands.contains { entry in
+                    let existingCommand = entry["command"] as? String ?? ""
+                    return Self.isIslandManagedHookCommand(existingCommand)
+                }
+            }
+
+            if entries.isEmpty {
+                updated.removeValue(forKey: event)
+            } else {
+                updated[event] = entries
+            }
+        }
+        return updated
     }
 
     private func installCodeBuddyCompatibleAssets(
@@ -484,9 +543,17 @@ struct HookInstaller {
     }
 
     private func bridgeCommand(source: String, extraArguments: [String] = []) -> String {
-        let base = "\(appSupportDirectory.appending(path: "bin/\(Self.bridgeLauncherName)").path()) --source \(source)"
-        guard !extraArguments.isEmpty else { return base }
-        return ([base] + extraArguments).joined(separator: " ")
+        ([appSupportDirectory.appending(path: "bin/\(Self.bridgeLauncherName)").path(), "--source", source] + extraArguments)
+            .map(shellQuotedIfNeeded)
+            .joined(separator: " ")
+    }
+
+    private func shellQuotedIfNeeded(_ string: String) -> String {
+        let safeCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+-=.,/:@%")
+        if string.rangeOfCharacter(from: safeCharacters.inverted) == nil {
+            return string
+        }
+        return "'" + string.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
     }
 
     private func statusLineCommand() -> String {
@@ -512,7 +579,8 @@ struct HookInstaller {
         existing: Any?,
         command: String,
         timeout: Int? = nil,
-        matcher: String? = "*"
+        matcher: String? = "*",
+        preferredFirst: Bool = false
     ) -> [[String: Any]] {
         var hooks = (existing as? [[String: Any]] ?? []).filter { hook in
             guard let hookCommands = hook["hooks"] as? [[String: Any]] else {
@@ -540,7 +608,11 @@ struct HookInstaller {
             ((hook["hooks"] as? [[String: Any]])?.first?["command"] as? String)
         }
         if !existingCommands.contains(command) {
-            hooks.append(hookBody)
+            if preferredFirst {
+                hooks.insert(hookBody, at: 0)
+            } else {
+                hooks.append(hookBody)
+            }
             return hooks
         }
 

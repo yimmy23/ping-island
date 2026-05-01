@@ -661,8 +661,9 @@ class SessionMonitor: ObservableObject {
     }
 
     private nonisolated static func answerEncodingStrategy(for clientInfo: SessionClientInfo?) -> HookAnswerEncodingStrategy {
-        let profileID = clientInfo?.profileID?.lowercased()
-        let bundleIdentifier = clientInfo?.bundleIdentifier?.lowercased()
+        let normalizedClientInfo = clientInfo?.normalizedForClaudeRouting()
+        let profileID = normalizedClientInfo?.profileID?.lowercased()
+        let bundleIdentifier = normalizedClientInfo?.bundleIdentifier?.lowercased()
 
         if profileID == "qoder"
             || profileID == "qoderwork"
@@ -754,16 +755,17 @@ class SessionMonitor: ObservableObject {
     nonisolated static func defaultQoderAutoAnswer(
         for event: HookEvent
     ) -> (toolUseId: String, answers: [String: [String]], updatedInput: [String: Any])? {
+        let normalizedClientInfo = event.clientInfo.normalizedForClaudeRouting()
         let isManagedQuestion =
-            event.clientInfo.profileID == "qoder"
-            || event.clientInfo.profileID == "qoderwork"
-            || event.clientInfo.profileID == "codebuddy"
-            || event.clientInfo.profileID == "workbuddy"
-            || event.clientInfo.bundleIdentifier == "com.qoder.ide"
-            || event.clientInfo.bundleIdentifier == "com.qoder.work"
-            || event.clientInfo.bundleIdentifier == "com.tencent.codebuddy"
-            || event.clientInfo.bundleIdentifier == "com.codebuddy.app"
-            || event.clientInfo.bundleIdentifier == "com.workbuddy.workbuddy"
+            normalizedClientInfo.profileID == "qoder"
+            || normalizedClientInfo.profileID == "qoderwork"
+            || normalizedClientInfo.profileID == "codebuddy"
+            || normalizedClientInfo.profileID == "workbuddy"
+            || normalizedClientInfo.bundleIdentifier == "com.qoder.ide"
+            || normalizedClientInfo.bundleIdentifier == "com.qoder.work"
+            || normalizedClientInfo.bundleIdentifier == "com.tencent.codebuddy"
+            || normalizedClientInfo.bundleIdentifier == "com.codebuddy.app"
+            || normalizedClientInfo.bundleIdentifier == "com.workbuddy.workbuddy"
 
         guard isManagedQuestion,
               let toolUseId = event.toolUseId,

@@ -149,12 +149,19 @@ private enum HookConfigParser {
 }
 
 struct HookInstaller {
+    struct QoderCLIHookRefreshStatus: Equatable, Sendable {
+        let version: String
+        let minimumVersion: String
+    }
+
     private static let preferredTargetsDefaultsKey = "HookInstaller.preferredTargets.v1"
     private static let qoderMigrationDefaultsKey = "HookInstaller.preferredTargets.qoder-default.v1"
     private static let qoderWorkMigrationDefaultsKey = "HookInstaller.preferredTargets.qoderwork-default.v1"
     private static let installedVersionDefaultsKey = "HookInstaller.installedVersion.v1"
     private static let firstLaunchDefaultsKey = "HookInstaller.isFirstLaunch.v1"
     private static let versionMetadataDefaultsKey = "HookInstaller.versionMetadata.v1"
+    private static let qoderCLIClaudeHooksMinimumVersion = "0.2.5"
+    private static let qoderCLIExecutableRelativePath = ".local/bin/qodercli"
     private static let supportDirectoryName = ".ping-island"
     private static let bridgeLauncherName = "ping-island-bridge"
     private static let bridgeBinaryName = "PingIslandBridge"
@@ -213,16 +220,25 @@ struct HookInstaller {
             markPresentationOnboardingPending: markPresentationOnboardingPending
         )
 
-        let preferredTargets = preferredTargets()
+        let qoderCLISupportsClaudeHooks = qoderCLIUsesClaudeCompatibleHooks()
+        var preferredTargets = preferredTargets()
+        if qoderCLISupportsClaudeHooks,
+           let qoderProfile = ClientProfileRegistry.managedHookProfile(id: "qoder-hooks") {
+            preferredTargets.insert(qoderProfile.id)
+            persistPreferredTargets(preferredTargets)
+        }
+
         installBridgeLauncherIfNeeded()
         removeLegacyTraeHooks()
 
         for profile in ClientProfileRegistry.managedHookProfiles {
+            let canManageProfile = canManage(profile)
+                || (profile.id == "qoder-hooks" && qoderCLISupportsClaudeHooks)
             // For first launch, auto-install all defaultEnabled profiles
-            if isFirstLaunch && profile.defaultEnabled && canManage(profile) {
-                install(profile, persistPreference: true)
-            } else if preferredTargets.contains(profile.id) && canManage(profile) {
-                install(profile, persistPreference: false)
+            if isFirstLaunch && profile.defaultEnabled && canManageProfile {
+                install(profile, persistPreference: true, bypassAvailabilityCheck: !canManage(profile))
+            } else if preferredTargets.contains(profile.id) && canManageProfile {
+                install(profile, persistPreference: false, bypassAvailabilityCheck: !canManage(profile))
             } else {
                 uninstall(profile, persistPreference: false)
             }
@@ -377,14 +393,18 @@ struct HookInstaller {
         persistPreferredTargets(Set<String>())
     }
 
-    private static func install(_ profile: ManagedHookClientProfile, persistPreference: Bool) {
+    private static func install(
+        _ profile: ManagedHookClientProfile,
+        persistPreference: Bool,
+        bypassAvailabilityCheck: Bool = false
+    ) {
         if persistPreference {
             var targets = preferredTargets()
             targets.insert(profile.id)
             persistPreferredTargets(targets)
         }
 
-        guard canManage(profile) else {
+        guard bypassAvailabilityCheck || canManage(profile) else {
             return
         }
 
@@ -447,6 +467,112 @@ struct HookInstaller {
     private static func canManage(_ profile: ManagedHookClientProfile) -> Bool {
         profile.alwaysVisibleInSettings
             || ClientAppLocator.isInstalled(bundleIdentifiers: profile.localAppBundleIdentifiers)
+    }
+
+    static func qoderCLIHookRefreshStatus() -> QoderCLIHookRefreshStatus? {
+        guard let version = qoderCLIInstalledVersion(),
+              compareSemanticVersions(version, qoderCLIClaudeHooksMinimumVersion) != .orderedAscending else {
+            return nil
+        }
+
+        return QoderCLIHookRefreshStatus(
+            version: version,
+            minimumVersion: qoderCLIClaudeHooksMinimumVersion
+        )
+    }
+
+    private static func qoderCLIUsesClaudeCompatibleHooks() -> Bool {
+        qoderCLIHookRefreshStatus() != nil
+    }
+
+    private static func qoderCLIInstalledVersion() -> String? {
+        guard let executableURL = qoderCLIExecutableURL(),
+              FileManager.default.isExecutableFile(atPath: executableURL.path),
+              let output = runProcessOutput(executableURL.path, arguments: ["-v"]) else {
+            return nil
+        }
+
+        return qoderCLIVersion(from: output)
+    }
+
+    static func qoderCLIExecutableURL(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> URL? {
+        homeDirectory.appendingPathComponent(qoderCLIExecutableRelativePath, isDirectory: false)
+    }
+
+    private static func runProcessOutput(
+        _ executable: String,
+        arguments: [String],
+        timeout: DispatchTimeInterval = .seconds(2)
+    ) -> String? {
+        let process = Process()
+        let stdout = Pipe()
+        let stderr = Pipe()
+        let finished = DispatchSemaphore(value: 0)
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardOutput = stdout
+        process.standardError = stderr
+        process.terminationHandler = { _ in
+            finished.signal()
+        }
+
+        do {
+            try process.run()
+            guard finished.wait(timeout: .now() + timeout) == .success else {
+                if process.isRunning {
+                    process.terminate()
+                }
+                return nil
+            }
+            guard process.terminationStatus == 0 else { return nil }
+            let data = stdout.fileHandleForReading.readDataToEndOfFile()
+            let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
+            return [
+                String(data: data, encoding: .utf8),
+                String(data: errorData, encoding: .utf8)
+            ]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+        } catch {
+            return nil
+        }
+    }
+
+    static func qoderCLIVersion(from output: String) -> String? {
+        let pattern = #"(?<!\d)(\d+(?:\.\d+){1,3})(?:[-+][0-9A-Za-z.-]+)?"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+        let range = NSRange(output.startIndex..., in: output)
+        guard let match = regex.firstMatch(in: output, range: range),
+              let versionRange = Range(match.range(at: 1), in: output) else {
+            return nil
+        }
+        return String(output[versionRange])
+    }
+
+    static func compareSemanticVersions(_ lhs: String, _ rhs: String) -> ComparisonResult {
+        let lhsComponents = numericVersionComponents(lhs)
+        let rhsComponents = numericVersionComponents(rhs)
+        let count = max(lhsComponents.count, rhsComponents.count)
+
+        for index in 0..<count {
+            let lhsValue = index < lhsComponents.count ? lhsComponents[index] : 0
+            let rhsValue = index < rhsComponents.count ? rhsComponents[index] : 0
+            if lhsValue < rhsValue { return .orderedAscending }
+            if lhsValue > rhsValue { return .orderedDescending }
+        }
+
+        return .orderedSame
+    }
+
+    private static func numericVersionComponents(_ version: String) -> [Int] {
+        version.split(separator: ".").map { component in
+            let numericPrefix = component.prefix { $0.isNumber }
+            return Int(numericPrefix) ?? 0
+        }
     }
 
     private static func preferredTargets() -> Set<String> {
@@ -801,11 +927,25 @@ struct HookInstaller {
 
     private static func normalizedHookEntries(
         _ existingEntries: [[String: Any]]?,
-        preferred: [[String: Any]]
+        preferred: [[String: Any]],
+        preferredFirst: Bool = false
     ) -> [[String: Any]] {
         let preservedEntries = (existingEntries ?? []).filter { !isIslandManagedHookEntry($0) }
+        return preferredFirst ? preferred + preservedEntries : preservedEntries + preferred
+    }
 
-        return preservedEntries + preferred
+    private static func removingIslandManagedHooks(from hooks: [String: Any]) -> [String: Any] {
+        var updated = hooks
+        for (event, value) in hooks {
+            guard var entries = value as? [[String: Any]] else { continue }
+            entries.removeAll { isIslandManagedHookEntry($0) }
+            if entries.isEmpty {
+                updated.removeValue(forKey: event)
+            } else {
+                updated[event] = entries
+            }
+        }
+        return updated
     }
 
     private static func updateHooks(at url: URL, profile: ManagedHookClientProfile) {
@@ -819,7 +959,7 @@ struct HookInstaller {
             // GitHub Copilot expects flat command entries and does not include the
             // hook event name in stdin, so we bind the event explicitly here.
             json["version"] = 1
-            var hooks = json["hooks"] as? [String: Any] ?? [:]
+            var hooks = removingIslandManagedHooks(from: json["hooks"] as? [String: Any] ?? [:])
             for event in profile.events {
                 let command = bridgeCommand(
                     source: profile.bridgeSource,
@@ -837,13 +977,15 @@ struct HookInstaller {
         }
 
         let command = bridgeCommand(source: profile.bridgeSource, extraArguments: profile.bridgeExtraArguments)
+        let preferredFirst = profile.id == "qoder-hooks"
 
-        var hooks = json["hooks"] as? [String: Any] ?? [:]
+        var hooks = removingIslandManagedHooks(from: json["hooks"] as? [String: Any] ?? [:])
         for event in profile.events {
             let existingEvent = hooks[event.name] as? [[String: Any]]
             hooks[event.name] = normalizedHookEntries(
                 existingEvent,
-                preferred: makeHookEntries(command: command, event: event)
+                preferred: makeHookEntries(command: command, event: event),
+                preferredFirst: preferredFirst
             )
         }
 
@@ -1045,12 +1187,13 @@ struct HookInstaller {
     }
 
     private static func bridgeCommand(source: String, extraArguments: [String] = []) -> String {
-        let base = islandSupportDirectory()
+        let launcherPath = islandSupportDirectory()
             .appendingPathComponent("bin", isDirectory: true)
             .appendingPathComponent(bridgeLauncherName)
-            .path + " --source \(source)"
-        guard !extraArguments.isEmpty else { return base }
-        return ([base] + extraArguments).joined(separator: " ")
+            .path
+        return ([launcherPath, "--source", source] + extraArguments)
+            .map(shellQuotedIfNeeded)
+            .joined(separator: " ")
     }
 
     private static func containsManagedHooks(at url: URL) -> Bool {
@@ -2552,6 +2695,8 @@ struct HookInstaller {
         case .jsonHooks:
             var hooks = json["hooks"] as? [String: Any] ?? [:]
             if installing {
+                hooks = removingIslandManagedHooks(from: hooks)
+                let preferredFirst = profile.id == "qoder-hooks"
                 for event in profile.events {
                     let existingEvent = sanitizedHookEntries(
                         hooks[event.name] as? [[String: Any]],
@@ -2559,7 +2704,8 @@ struct HookInstaller {
                     )
                     hooks[event.name] = normalizedHookEntries(
                         existingEvent,
-                        preferred: makeHookEntries(command: customCommand, event: event)
+                        preferred: makeHookEntries(command: customCommand, event: event),
+                        preferredFirst: preferredFirst
                     )
                 }
             } else {
@@ -2737,6 +2883,14 @@ struct HookInstaller {
 
     private nonisolated static func shellQuoted(_ string: String) -> String {
         "'" + string.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
+    private nonisolated static func shellQuotedIfNeeded(_ string: String) -> String {
+        let safeCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+-=.,/:@%")
+        if string.rangeOfCharacter(from: safeCharacters.inverted) == nil {
+            return string
+        }
+        return shellQuoted(string)
     }
 
     nonisolated static func isManagedPluginEnabled(existingData: Data?, pluginURL: URL) -> Bool {

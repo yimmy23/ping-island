@@ -538,9 +538,9 @@ private extension BridgeEnvelope {
             metadata["client_bundle_id"],
             metadata["source_bundle_id"]
         )
-        let terminalBundleID = firstNonEmpty(
-            terminalContext.ideBundleID,
-            terminalContext.terminalBundleID
+        let terminalBundleID = HookSocketServer.resolvedTerminalHostBundleIdentifier(
+            terminalBundleID: terminalContext.terminalBundleID,
+            ideBundleID: terminalContext.ideBundleID
         )
         let explicitOrigin = firstNonEmpty(
             metadata["client_origin"],
@@ -893,6 +893,32 @@ class HookSocketServer {
         }
 
         return .codexApp
+    }
+
+    static func resolvedTerminalHostBundleIdentifier(
+        terminalBundleID: String?,
+        ideBundleID: String?
+    ) -> String? {
+        func nonEmpty(_ value: String?) -> String? {
+            guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty else {
+                return nil
+            }
+            return value
+        }
+
+        let terminalBundleID = nonEmpty(terminalBundleID)
+        let ideBundleID = nonEmpty(ideBundleID)
+
+        if let terminalBundleID,
+           let ideBundleID,
+           terminalBundleID.caseInsensitiveCompare(ideBundleID) != .orderedSame,
+           TerminalAppRegistry.isTerminalBundle(terminalBundleID),
+           !TerminalAppRegistry.isIDEBundle(terminalBundleID) {
+            return terminalBundleID
+        }
+
+        return ideBundleID ?? terminalBundleID
     }
 
     private var serverSocket: Int32 = -1

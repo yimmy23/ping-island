@@ -2,6 +2,26 @@ import XCTest
 @testable import Ping_Island
 
 final class HookSocketServerClientInfoTests: XCTestCase {
+    func testTerminalHostBundlePrefersStandaloneTerminalOverIDEHint() {
+        XCTAssertEqual(
+            HookSocketServer.resolvedTerminalHostBundleIdentifier(
+                terminalBundleID: "com.googlecode.iterm2",
+                ideBundleID: "com.qoder.ide"
+            ),
+            "com.googlecode.iterm2"
+        )
+    }
+
+    func testTerminalHostBundleKeepsIDEWhenTerminalIsIDEHost() {
+        XCTAssertEqual(
+            HookSocketServer.resolvedTerminalHostBundleIdentifier(
+                terminalBundleID: "com.qoder.ide",
+                ideBundleID: "com.qoder.ide"
+            ),
+            "com.qoder.ide"
+        )
+    }
+
     func testCodexITermContextInfersCLIOverDesktopHints() {
         let kind = HookSocketServer.inferredCodexClientKind(
             explicitKind: "codex-app",

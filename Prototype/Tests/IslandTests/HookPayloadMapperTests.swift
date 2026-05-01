@@ -665,30 +665,37 @@ func previewFallsBackToStructuredToolInput() throws {
 }
 
 @Test
-func qoderClientMetadataCanBeInjectedFromBridgeArguments() throws {
+func qoderCLIClientMetadataCanBeInjectedFromBridgeArguments() throws {
     let payload = """
     {
       "hook_event_name": "UserPromptSubmit",
-      "session_id": "qoder-123"
+      "session_id": "qoder-cli-123"
     }
     """.data(using: .utf8)!
 
     let envelope = HookPayloadMapper.makeEnvelope(
         source: .claude,
-        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoder", "--client-name", "Qoder", "--client-originator", "Qoder"],
+        arguments: [
+            "island-bridge", "--source", "claude",
+            "--client-kind", "qoder-cli",
+            "--client-name", "Qoder CLI",
+            "--client-origin", "cli",
+            "--client-originator", "Qoder"
+        ],
         environment: ["PWD": "/tmp/demo"],
         stdinData: payload
     )
 
     #expect(envelope.provider == .claude)
-    #expect(envelope.metadata["client_kind"] == "qoder")
-    #expect(envelope.metadata["client_name"] == "Qoder")
+    #expect(envelope.metadata["client_kind"] == "qoder-cli")
+    #expect(envelope.metadata["client_name"] == "Qoder CLI")
+    #expect(envelope.metadata["client_origin"] == "cli")
     #expect(envelope.metadata["client_originator"] == "Qoder")
-    #expect(envelope.sessionKey == "claude:qoder-123")
+    #expect(envelope.sessionKey == "claude:qoder-cli-123")
 }
 
 @Test
-func qoderPreToolUseQuestionUsesWaitingForInputWithoutBlockingHook() throws {
+func qoderPreToolUseQuestionSurfacesClaudeCompatibleIntervention() throws {
     let payload = """
     {
       "hook_event_name": "PreToolUse",
@@ -713,17 +720,55 @@ func qoderPreToolUseQuestionUsesWaitingForInputWithoutBlockingHook() throws {
 
     let envelope = HookPayloadMapper.makeEnvelope(
         source: .claude,
-        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoder"],
+        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoder-cli"],
         environment: ["PWD": "/tmp/demo"],
         stdinData: payload
     )
 
     #expect(envelope.eventType == "PreToolUse")
     #expect(envelope.status?.kind == .waitingForInput)
-    #expect(envelope.expectsResponse == false)
-    #expect(envelope.intervention == nil)
+    #expect(envelope.expectsResponse)
+    #expect(envelope.intervention?.kind == .question)
     #expect(envelope.metadata["tool_input_json"]?.contains("\"questions\"") == true)
     #expect(envelope.metadata["tool_name"] == "ask_user_question")
+}
+
+@Test
+func qoderCLIAnswerPayloadUsesClaudeCodeUpdatedInputDecision() throws {
+    let response = BridgeResponse(
+        requestID: UUID(),
+        decision: .answer([:]),
+        updatedInput: [
+            "questions": .array([
+                .object([
+                    "question": .string("Which model?"),
+                    "options": .array([
+                        .object(["label": .string("Lite")]),
+                        .object(["label": .string("Pro")])
+                    ])
+                ])
+            ]),
+            "answers": .object([
+                "Which model?": .string("Pro")
+            ])
+        ]
+    )
+
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: response,
+        eventType: "PreToolUse",
+        metadata: ["client_kind": "qoder-cli", "client_name": "Qoder CLI", "tool_name": "AskUserQuestion"]
+    )
+    let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    #expect(hookSpecificOutput["hookEventName"] as? String == "PreToolUse")
+    #expect(hookSpecificOutput["permissionDecision"] == nil)
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
+    let updatedInput = try #require(decision["updatedInput"] as? [String: Any])
+    let answers = try #require(updatedInput["answers"] as? [String: String])
+    #expect(answers["Which model?"] == "Pro")
 }
 
 @Test

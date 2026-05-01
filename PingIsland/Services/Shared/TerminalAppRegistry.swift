@@ -127,6 +127,14 @@ struct TerminalAppRegistry: Sendable {
         "dev.zed.Zed"
     ]
 
+    private nonisolated static let normalizedBundleIdentifiers = Set(
+        bundleIdentifiers.map { $0.lowercased() }
+    )
+
+    private nonisolated static let normalizedIDEBundleIdentifiers = Set(
+        ideBundleIdentifiers.map { $0.lowercased() }
+    )
+
     /// Check if an app name or command path is a known terminal
     nonisolated static func isTerminal(_ appNameOrCommand: String) -> Bool {
         let lower = appNameOrCommand.lowercased()
@@ -144,7 +152,9 @@ struct TerminalAppRegistry: Sendable {
 
     /// Check if a bundle identifier is a known terminal
     nonisolated static func isTerminalBundle(_ bundleId: String) -> Bool {
-        bundleIdentifiers.contains(bundleId)
+        normalizedBundleIdentifiers.contains(
+            normalizedHostBundleIdentifier(for: bundleId).lowercased()
+        )
     }
 
     nonisolated static func inferredBundleIdentifier(forTerminalProgram program: String?) -> String? {
@@ -226,7 +236,9 @@ struct TerminalAppRegistry: Sendable {
     }
 
     nonisolated static func isIDEBundle(_ bundleId: String) -> Bool {
-        ideBundleIdentifiers.contains(normalizedHostBundleIdentifier(for: bundleId))
+        normalizedIDEBundleIdentifiers.contains(
+            normalizedHostBundleIdentifier(for: bundleId).lowercased()
+        )
     }
 
     nonisolated static func normalizedHostBundleIdentifier(for bundleId: String) -> String {

@@ -495,22 +495,29 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
             || normalized.profileID == "qoderwork"
             || normalized.name?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "qoderwork"
             || normalized.name?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "qoder work"
+        let isExplicitQoderCLI =
+            normalized.profileID == "qoder-cli"
+            || normalized.name?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "qoder cli"
+            || normalized.origin?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "cli"
         let isIDEBundle = hostBundleIdentifier.map { TerminalAppRegistry.isIDEBundle($0) } ?? false
         let isTerminalHosted =
             (hostBundleIdentifier.map { TerminalAppRegistry.isTerminalBundle($0) } ?? false)
             && !isIDEBundle
             && !isQoderWorkHosted
         let isQoderIDEHosted =
-            hostBundleIdentifier == "com.qoder.ide"
-            || (
-                normalized.ideHostProfile?.id == "qoder-extension"
-                    && !isQoderWorkHosted
-            )
-            || normalized.profileID == "qoder"
-                && (
-                    normalized.terminalBundleIdentifier?.lowercased() == "com.qoder.ide"
-                        || normalized.bundleIdentifier?.lowercased() == "com.qoder.ide"
+            !isExplicitQoderCLI
+            && (
+                hostBundleIdentifier == "com.qoder.ide"
+                || (
+                    normalized.ideHostProfile?.id == "qoder-extension"
+                        && !isQoderWorkHosted
                 )
+                || normalized.profileID == "qoder"
+                    && (
+                        normalized.terminalBundleIdentifier?.lowercased() == "com.qoder.ide"
+                            || normalized.bundleIdentifier?.lowercased() == "com.qoder.ide"
+                    )
+            )
 
         if isTerminalHosted {
             normalized.profileID = "qoder-cli"
@@ -521,9 +528,7 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
         } else if isQoderIDEHosted {
             normalized.profileID = "qoder"
             normalized.name = "Qoder"
-        } else if normalized.profileID == "qoder-cli"
-            || normalized.name?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "qoder cli"
-            || normalized.origin?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "cli" {
+        } else if isExplicitQoderCLI {
             normalized.profileID = "qoder-cli"
             normalized.name = "Qoder CLI"
         } else if normalized.profileID == nil, normalized.name == nil {

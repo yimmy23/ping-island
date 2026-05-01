@@ -627,10 +627,6 @@ public enum HookPayloadMapper {
             ) else {
                 return nil
             }
-            if clientKind == "qoder",
-               isQoderQuestionToolEvent(eventType: eventType, payload: payload) {
-                return nil
-            }
             let options = questions.flatMap { question -> [InterventionOption] in
                 let baseID = (question["id"] as? String) ?? UUID().uuidString
                 let objectEntries = question["options"] as? [[String: Any]] ?? []

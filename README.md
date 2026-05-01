@@ -103,6 +103,8 @@ Ping Island focuses on the moments that actually interrupt coding flow, then kee
 
 Ping Island also ships VS Code-compatible focus extensions for VS Code, Cursor, CodeBuddy, WorkBuddy, and Qoder. `QoderWork` is hook-only today and does not participate in the IDE extension path.
 
+Qoder CLI uses the Claude Code-compatible hooks path through `~/.qoder/settings.json`, so Ping Island installs the same core lifecycle coverage there while preserving Qoder branding and terminal-vs-IDE routing. On launch, Ping Island checks `qodercli -v`; when the local CLI is newer than 0.2.5, it refreshes only the Ping Island-managed hook entries and leaves unrelated JSON settings intact. `QoderWork` stays on its separate `~/.qoderwork/settings.json` integration.
+
 Hermes Agent is integrated through a generated plugin directory at `~/.hermes/plugins/ping_island/`. Hermes' gateway hook directories under `~/.hermes/hooks/` do not run in the CLI, so Ping Island uses the official `ctx.register_hook()` plugin surface to observe prompt submission, tool activity, model replies, and session end events.
 
 Qwen Code is supported as a first-class hook client through `~/.qwen/settings.json`, and its built-in mascot is the mint-scarf capybara shown in the README GIF strip. The visual is meant to feel calm and dependable, while still carrying a small Qwen-tinted scarf and reply bubble instead of another generic bird or blob.

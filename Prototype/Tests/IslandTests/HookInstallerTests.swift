@@ -207,16 +207,28 @@ func installerDeduplicatesManagedHooksButKeepsUnrelatedHooks() throws {
     let qoderJSON = try #require(JSONSerialization.jsonObject(with: qoderData) as? [String: Any])
     let qoderHooks = try #require(qoderJSON["hooks"] as? [String: Any])
     let postToolUseFailure = try #require(qoderHooks["PostToolUseFailure"] as? [[String: Any]])
-    let qoderCommands = postToolUseFailure.compactMap { hook in
+    let qoderPostToolUseFailureCommands = postToolUseFailure.compactMap { hook in
         ((hook["hooks"] as? [[String: Any]])?.first?["command"] as? String)
     }
-    #expect(qoderCommands.contains("/usr/bin/printf qoder-keep"))
-    #expect(qoderCommands.contains { $0.contains("/.ping-island/bin/ping-island-bridge --source claude --client-kind qoder --client-name Qoder --client-originator Qoder") })
-    #expect(qoderCommands.filter { $0.contains("/.ping-island/bin/ping-island-bridge --source claude --client-kind qoder --client-name Qoder --client-originator Qoder") }.count == 1)
+    #expect(qoderPostToolUseFailureCommands == ["/usr/bin/printf qoder-keep"])
     #expect(qoderHooks["UserPromptSubmit"] != nil)
     #expect(qoderHooks["PermissionRequest"] != nil)
     #expect(qoderHooks["Notification"] != nil)
     #expect(qoderHooks["Stop"] != nil)
+    #expect(qoderHooks["SubagentStop"] != nil)
+    #expect(qoderHooks["SessionStart"] != nil)
+    #expect(qoderHooks["SessionEnd"] != nil)
+    #expect(qoderHooks["PreCompact"] != nil)
+    let qoderPreToolUse = try #require(qoderHooks["PreToolUse"] as? [[String: Any]])
+    let qoderCommands = qoderPreToolUse.compactMap { hook in
+        ((hook["hooks"] as? [[String: Any]])?.first?["command"] as? String)
+    }
+    let qoderCLICommand = "/.ping-island/bin/ping-island-bridge --source claude --client-kind qoder-cli --client-name 'Qoder CLI' --client-origin cli --client-originator Qoder"
+    #expect(qoderCommands.first?.contains(qoderCLICommand) == true)
+    #expect(qoderCommands.filter { $0.contains(qoderCLICommand) }.count == 1)
+    let qoderManagedPreToolUse = try #require(qoderPreToolUse.first)
+    let qoderManagedPreToolUseHook = try #require((qoderManagedPreToolUse["hooks"] as? [[String: Any]])?.first)
+    #expect(qoderManagedPreToolUseHook["timeout"] as? Int == 86_400)
 
     let qoderWorkData = try Data(contentsOf: qoderWorkSettingsURL)
     let qoderWorkJSON = try #require(JSONSerialization.jsonObject(with: qoderWorkData) as? [String: Any])

@@ -666,24 +666,32 @@ enum ClientProfileRegistry {
         ManagedHookClientProfile(
             id: "qoder-hooks",
             title: "Qoder",
-            subtitle: "管理 ~/.qoder/settings.json，支持 Qoder 会话、提问与权限提醒事件",
+            subtitle: "管理 ~/.qoder/settings.json，按 Claude Code hooks 协议支持 Qoder CLI / IDE 会话",
             logoAssetName: "QoderLogo",
             prefersBundledLogoOverAppIcon: true,
             localAppBundleIdentifiers: ["com.qoder.ide"],
             iconSymbolName: "bolt.horizontal.circle.fill",
             configurationRelativePath: ".qoder/settings.json",
             bridgeSource: "claude",
-            bridgeExtraArguments: ["--client-kind", "qoder"],
+            bridgeExtraArguments: [
+                "--client-kind", "qoder-cli",
+                "--client-name", "Qoder CLI",
+                "--client-origin", "cli",
+                "--client-originator", "Qoder"
+            ],
             defaultEnabled: true,
             brand: .qoder,
             events: [
                 HookInstallEventDescriptor(name: "UserPromptSubmit", templates: [.plain]),
-                HookInstallEventDescriptor(name: "PreToolUse", templates: [.matcher("*")]),
+                HookInstallEventDescriptor(name: "PreToolUse", templates: [.matcher("*")], timeout: 86_400),
                 HookInstallEventDescriptor(name: "PostToolUse", templates: [.matcher("*")]),
-                HookInstallEventDescriptor(name: "PostToolUseFailure", templates: [.matcher("*")]),
                 HookInstallEventDescriptor(name: "PermissionRequest", templates: [.matcher("*")], timeout: 86_400),
                 HookInstallEventDescriptor(name: "Notification", templates: [.matcher("*")]),
                 HookInstallEventDescriptor(name: "Stop", templates: [.plain]),
+                HookInstallEventDescriptor(name: "SubagentStop", templates: [.plain]),
+                HookInstallEventDescriptor(name: "SessionStart", templates: [.plain]),
+                HookInstallEventDescriptor(name: "SessionEnd", templates: [.plain]),
+                HookInstallEventDescriptor(name: "PreCompact", templates: [.matcher("auto"), .matcher("manual")]),
             ]
         ),
         ManagedHookClientProfile(

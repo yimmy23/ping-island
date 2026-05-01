@@ -1004,7 +1004,10 @@ private enum RemoteBridgeMessageBuilder {
                 transport: transport,
                 remoteHost: remoteHost,
                 sessionFilePath: firstNonEmpty(metadata["session_file_path"], metadata["rollout_path"], metadata["transcript_path"]),
-                terminalBundleIdentifier: firstNonEmpty(terminalContext.ideBundleID, terminalContext.terminalBundleID),
+                terminalBundleIdentifier: resolvedTerminalHostBundleIdentifier(
+                    terminalBundleID: terminalContext.terminalBundleID,
+                    ideBundleID: terminalContext.ideBundleID
+                ),
                 terminalProgram: terminalContext.terminalProgram,
                 terminalSessionIdentifier: terminalContext.terminalSessionID,
                 iTermSessionIdentifier: terminalContext.iTermSessionID,
@@ -1135,5 +1138,40 @@ private enum RemoteBridgeMessageBuilder {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
         }.first
+    }
+
+    private static func resolvedTerminalHostBundleIdentifier(
+        terminalBundleID: String?,
+        ideBundleID: String?
+    ) -> String? {
+        let terminalBundleID = firstNonEmpty(terminalBundleID)
+        let ideBundleID = firstNonEmpty(ideBundleID)
+
+        if let terminalBundleID,
+           let ideBundleID,
+           terminalBundleID.caseInsensitiveCompare(ideBundleID) != .orderedSame,
+           isStandaloneTerminalBundleIdentifier(terminalBundleID) {
+            return terminalBundleID
+        }
+
+        return ideBundleID ?? terminalBundleID
+    }
+
+    private static func isStandaloneTerminalBundleIdentifier(_ bundleIdentifier: String) -> Bool {
+        switch bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "com.apple.terminal",
+             "com.googlecode.iterm2",
+             "com.mitchellh.ghostty",
+             "com.cmuxterm.app",
+             "io.alacritty",
+             "org.alacritty",
+             "net.kovidgoyal.kitty",
+             "co.zeit.hyper",
+             "dev.warp.warp-stable",
+             "com.github.wez.wezterm":
+            return true
+        default:
+            return false
+        }
     }
 }
