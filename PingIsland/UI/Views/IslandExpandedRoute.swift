@@ -28,6 +28,18 @@ enum IslandExpandedRouteResolver {
         sessions: [SessionState],
         activeCompletionNotification: SessionCompletionNotification? = nil
     ) -> IslandExpandedRoute {
+        switch trigger {
+        case .notification:
+            if let session = highestPriorityAttentionSession(from: sessions) {
+                return .attentionNotification(session)
+            }
+            if let activeCompletionNotification {
+                return .completionNotification(activeCompletionNotification)
+            }
+        case .click, .hover, .pinnedList:
+            break
+        }
+
         if case .chat(let session) = contentType {
             return .chat(session)
         }
