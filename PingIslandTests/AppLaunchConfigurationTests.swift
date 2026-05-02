@@ -55,8 +55,24 @@ final class AppLaunchConfigurationTests: XCTestCase {
         XCTAssertEqual(configuration.activationPolicy, .accessory)
     }
 
-    func testDebuggerLaunchDisablesSingleInstanceEnforcement() {
+    func testDebuggerLaunchStillEnforcesSingleInstance() {
         let configuration = AppLaunchConfiguration(environment: [:], isDebuggerAttached: true)
+
+        XCTAssertFalse(configuration.isUITesting)
+        XCTAssertFalse(configuration.isRunningTests)
+        XCTAssertTrue(configuration.shouldInstallIntegrations)
+        XCTAssertTrue(configuration.shouldCreateNotchWindow)
+        XCTAssertTrue(configuration.shouldObserveScreens)
+        XCTAssertTrue(configuration.shouldEnforceSingleInstance)
+        XCTAssertFalse(configuration.shouldPresentSettingsWindowOnLaunch)
+        XCTAssertEqual(configuration.activationPolicy, .accessory)
+    }
+
+    func testExplicitMultipleInstanceOverrideDisablesSingleInstanceEnforcement() {
+        let configuration = AppLaunchConfiguration(
+            environment: ["PING_ISLAND_ALLOW_MULTIPLE_INSTANCES": "1"],
+            isDebuggerAttached: true
+        )
 
         XCTAssertFalse(configuration.isUITesting)
         XCTAssertFalse(configuration.isRunningTests)
