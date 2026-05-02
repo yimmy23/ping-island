@@ -17,7 +17,7 @@ final class IslandPresentationCoordinator {
         self.viewModel = Self.makeViewModel(for: screen)
         bindViewModel()
         bindSettings()
-        applySurfaceMode(AppSettings.surfaceMode, performBootAnimation: true)
+        applySurfaceMode(AppSettings.surfaceMode, activationPolicy: .silent)
     }
 
     func updateScreen(_ screen: NSScreen) {
@@ -88,13 +88,17 @@ final class IslandPresentationCoordinator {
 
     func applySurfaceMode(
         _ mode: IslandSurfaceMode,
-        performBootAnimation: Bool = false
+        performBootAnimation: Bool = false,
+        activationPolicy: IslandPresentationActivationPolicy = .interactive
     ) {
         switch mode {
         case .notch:
             showDockedIsland(performBootAnimation: performBootAnimation)
         case .floatingPet:
-            presentFloatingPet(playSound: false)
+            presentFloatingPet(
+                playSound: false,
+                activationPolicy: activationPolicy
+            )
         }
     }
 
@@ -152,7 +156,10 @@ final class IslandPresentationCoordinator {
         recreateDockedWindow(performBootAnimation: performBootAnimation)
     }
 
-    private func presentFloatingPet(playSound: Bool) {
+    private func presentFloatingPet(
+        playSound: Bool,
+        activationPolicy: IslandPresentationActivationPolicy = .interactive
+    ) {
         if viewModel.presentationMode == .detached, detachedWindowController != nil {
             return
         }
@@ -182,7 +189,11 @@ final class IslandPresentationCoordinator {
             in: visibleFrame,
             defaultWindowFrame: activeWindowFrame
         )
-        detachedWindowController.present(atPetAnchor: petAnchor)
+        detachedWindowController.present(
+            atPetAnchor: petAnchor,
+            activatesApplication: activationPolicy.activatesApplication,
+            presentsAutomaticContent: activationPolicy.presentsAutomaticContent
+        )
         detachedWindowController.activateInteraction()
     }
 

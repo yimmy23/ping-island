@@ -336,8 +336,7 @@ struct NotchView: View {
                 isVisible = !viewModel.shouldHideWindowPresentation
                 viewModel.setManualAttentionActive(hasManualAttentionIndicator)
                 handleProcessingChange()
-                handleManualAttentionChange(sessionMonitor.instances)
-                primeCompletionNotificationTracking(sessionMonitor.instances)
+                primeStartupPresentationState(sessionMonitor.instances)
                 scheduleDetachmentHintPresentationIfNeeded(delay: Self.startupDetachmentHintDelay)
             }
             .onDisappear {
@@ -853,6 +852,17 @@ struct NotchView: View {
         }
 
         previousPendingIds = currentIds
+    }
+
+    private func primeStartupPresentationState(_ instances: [SessionState]) {
+        previousPendingIds = Set(instances.filter(\.needsAttention).map(\.stableId))
+        previousWaitingForInputIds = Set(
+            instances
+                .filter { $0.phase == .waitingForInput }
+                .map(\.stableId)
+        )
+        _ = manualAttentionTracker.consumeNewAttentionSession(from: instances)
+        primeCompletionNotificationTracking(instances)
     }
 
     private func presentDetachmentHintIfNeeded(force: Bool = false) {

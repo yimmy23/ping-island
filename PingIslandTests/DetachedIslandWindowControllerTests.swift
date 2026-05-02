@@ -624,6 +624,53 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         wait(for: [bubblePresented], timeout: 1.0)
     }
 
+    func testSilentPresentPrimesExistingAttentionWithoutOpeningBubble() {
+        let viewModel = makeViewModel()
+        let attention = makeSession(
+            id: "attention",
+            phase: .waitingForInput,
+            intervention: makeIntervention(
+                id: "question-1",
+                kind: .question,
+                message: "Need your answer"
+            )
+        )
+        let sessionMonitor = makeSessionMonitor()
+        sessionMonitor.instances = [attention]
+
+        let controller = DetachedIslandWindowController(
+            viewModel: viewModel,
+            sessionMonitor: sessionMonitor,
+            onClose: {}
+        )
+        defer { controller.dismiss() }
+
+        controller.present(
+            atPetAnchor: CGPoint(x: 1200, y: 220),
+            activatesApplication: false,
+            presentsAutomaticContent: false
+        )
+        controller.applySessionSnapshotForTesting([attention])
+
+        XCTAssertEqual(controller.renderedBubbleStateForTesting, .hidden)
+        XCTAssertFalse(controller.isBubbleVisibleForTesting)
+
+        let freshAttention = makeSession(
+            id: "fresh-attention",
+            phase: .waitingForInput,
+            intervention: makeIntervention(
+                id: "question-2",
+                kind: .question,
+                message: "Need a new answer"
+            )
+        )
+        controller.applySessionSnapshotForTesting([attention, freshAttention])
+
+        XCTAssertEqual(controller.renderedBubbleStateForTesting, .hoverPreview)
+        XCTAssertTrue(controller.isBubbleVisibleForTesting)
+        XCTAssertEqual(controller.currentExpandedRoute, .attentionNotification(freshAttention))
+    }
+
     func testNewAttentionSessionAutoOpensBubbleInFloatingMode() {
         let viewModel = makeViewModel()
         let sessionMonitor = makeSessionMonitor()

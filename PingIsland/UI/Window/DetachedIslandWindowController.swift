@@ -300,7 +300,11 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         fatalError("init(coder:) has not been implemented")
     }
 
-    func present(at origin: CGPoint) {
+    func present(
+        at origin: CGPoint,
+        activatesApplication: Bool = true,
+        presentsAutomaticContent: Bool = true
+    ) {
         guard let window else { return }
         suppressInteraction()
         lastAppliedLayout = Self.windowLayout(
@@ -318,14 +322,23 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         )
         window.setFrame(initialFrame, display: false)
         updateBubblePlacementForCurrentWindow()
-        NSApp.activate(ignoringOtherApps: false)
-        showWindow(nil)
-        window.makeKeyAndOrderFront(nil)
-        presentExistingAttentionIfNeeded()
-        presentFloatingSettingsHintIfNeeded()
+        showWindow(
+            window,
+            activatesApplication: activatesApplication
+        )
+        if presentsAutomaticContent {
+            presentExistingAttentionIfNeeded()
+            presentFloatingSettingsHintIfNeeded()
+        } else {
+            primeExistingAttentionTracking()
+        }
     }
 
-    func present(atPetAnchor petAnchor: CGPoint) {
+    func present(
+        atPetAnchor petAnchor: CGPoint,
+        activatesApplication: Bool = true,
+        presentsAutomaticContent: Bool = true
+    ) {
         guard let window else { return }
         suppressInteraction()
         lastAppliedLayout = Self.windowLayout(
@@ -346,11 +359,35 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         let frame = NSRect(origin: origin, size: lastAppliedLayout.containerSize)
         window.setFrame(frame, display: false)
         updateBubblePlacementForCurrentWindow()
-        NSApp.activate(ignoringOtherApps: false)
-        showWindow(nil)
-        window.makeKeyAndOrderFront(nil)
-        presentExistingAttentionIfNeeded()
-        presentFloatingSettingsHintIfNeeded()
+        showWindow(
+            window,
+            activatesApplication: activatesApplication
+        )
+        if presentsAutomaticContent {
+            presentExistingAttentionIfNeeded()
+            presentFloatingSettingsHintIfNeeded()
+        } else {
+            primeExistingAttentionTracking()
+        }
+    }
+
+    private func showWindow(
+        _ window: NSWindow,
+        activatesApplication: Bool
+    ) {
+        if activatesApplication {
+            NSApp.activate(ignoringOtherApps: false)
+            showWindow(nil)
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            window.orderFront(nil)
+        }
+    }
+
+    private func primeExistingAttentionTracking() {
+        _ = manualAttentionTracker.consumeNewAttentionSession(
+            from: sessionMonitor.instances
+        )
     }
 
     var currentPetAnchor: CGPoint? {

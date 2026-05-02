@@ -11,6 +11,19 @@ enum IslandOpenedPresentationStyle: Equatable {
     case detached
 }
 
+enum IslandPresentationActivationPolicy: Equatable {
+    case interactive
+    case silent
+
+    var activatesApplication: Bool {
+        self == .interactive
+    }
+
+    var presentsAutomaticContent: Bool {
+        self == .interactive
+    }
+}
+
 enum DetachedIslandDisplayMode: Equatable {
     case compact
     case hoverExpanded
