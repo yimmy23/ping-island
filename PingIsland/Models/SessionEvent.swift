@@ -189,7 +189,8 @@ extension HookEvent {
     }
 
     private nonisolated var isExternalClientQuestionEvent: Bool {
-        (clientInfo.profileID == "qoderwork"
+        (isQoderIDEQuestionNotificationClient
+            || clientInfo.profileID == "qoderwork"
             || clientInfo.bundleIdentifier == "com.qoder.work"
             || clientInfo.profileID == "workbuddy"
             || clientInfo.bundleIdentifier == "com.workbuddy.workbuddy")
@@ -197,9 +198,28 @@ extension HookEvent {
             && !(questionPayloads?.isEmpty ?? true)
     }
 
+    private nonisolated var isQoderIDEQuestionNotificationClient: Bool {
+        let normalizedClientInfo = clientInfo.normalizedForClaudeRouting()
+        let bundleIdentifiers = [
+            normalizedClientInfo.terminalBundleIdentifier,
+            normalizedClientInfo.bundleIdentifier,
+            clientInfo.terminalBundleIdentifier,
+            clientInfo.bundleIdentifier
+        ]
+        let isQoderIDEHosted = bundleIdentifiers.contains { value in
+            value?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() == "com.qoder.ide"
+        }
+
+        return normalizedClientInfo.profileID == "qoder" && isQoderIDEHosted
+    }
+
     private nonisolated var externalClientQuestionInterventionID: String? {
         guard isExternalClientQuestionEvent else { return nil }
-        if let toolUseId, !toolUseId.isEmpty {
+        if !isQoderIDEQuestionNotificationClient,
+           let toolUseId,
+           !toolUseId.isEmpty {
             return toolUseId
         }
 
@@ -215,6 +235,8 @@ extension HookEvent {
         let prefix: String
         if clientInfo.profileID == "workbuddy" || clientInfo.bundleIdentifier == "com.workbuddy.workbuddy" {
             prefix = "workbuddy-question"
+        } else if isQoderIDEQuestionNotificationClient {
+            prefix = "qoder-question"
         } else {
             prefix = "qoderwork-question"
         }
@@ -278,6 +300,11 @@ extension HookEvent {
     }
 
     nonisolated var intervention: SessionIntervention? {
+        if let bridgeIntervention,
+           !isAskUserQuestionRequest {
+            return bridgeIntervention
+        }
+
         if provider == .codex,
            event == "PermissionRequest",
            expectsResponse,
@@ -464,6 +491,13 @@ extension HookEvent {
         }
 
         switch status {
+        case "waiting_for_approval":
+            return .waitingForApproval(PermissionContext(
+                toolUseId: toolUseId ?? "",
+                toolName: tool ?? "unknown",
+                toolInput: toolInput,
+                receivedAt: Date()
+            ))
         case "waiting_for_input":
             return .waitingForInput
         case "running_tool", "processing", "starting":

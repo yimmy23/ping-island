@@ -81,6 +81,7 @@ struct HookEvent: Sendable {
     let notificationType: String?
     let message: String?
     let ingress: SessionIngress
+    let bridgeIntervention: SessionIntervention?
 
     init(
         sessionId: String,
@@ -96,7 +97,8 @@ struct HookEvent: Sendable {
         toolUseId: String?,
         notificationType: String?,
         message: String?,
-        ingress: SessionIngress = .hookBridge
+        ingress: SessionIngress = .hookBridge,
+        bridgeIntervention: SessionIntervention? = nil
     ) {
         self.sessionId = sessionId
         self.cwd = cwd
@@ -112,6 +114,7 @@ struct HookEvent: Sendable {
         self.notificationType = notificationType
         self.message = message
         self.ingress = ingress
+        self.bridgeIntervention = bridgeIntervention
     }
 
     nonisolated var sessionPhase: SessionPhase {
@@ -139,9 +142,14 @@ struct HookEvent: Sendable {
     }
 
     nonisolated var expectsResponse: Bool {
+        if isQoderIDENotifyOnlyClient {
+            return false
+        }
+
         let normalizedTool = tool?
             .lowercased()
             .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
         return (event == "PermissionRequest" && status == "waiting_for_approval")
             || (event == "Notification" && status == "waiting_for_approval"
                 && clientInfo.isQwenCodeClient && notificationType == "permission_prompt")
@@ -151,6 +159,29 @@ struct HookEvent: Sendable {
                     && toolInput?["questions"] != nil
                     && !isAnsweredAskUserQuestionEvent
             )
+            || (
+                event == "PreToolUse"
+                    && normalizedTool == "exitplanmode"
+                    && clientInfo.normalizedForClaudeRouting().profileID == "qoder-cli"
+            )
+    }
+
+    private nonisolated var isQoderIDENotifyOnlyClient: Bool {
+        let normalizedClientInfo = clientInfo.normalizedForClaudeRouting()
+        if normalizedClientInfo.profileID == "qoder" {
+            return true
+        }
+
+        return [
+            normalizedClientInfo.terminalBundleIdentifier,
+            normalizedClientInfo.bundleIdentifier,
+            clientInfo.terminalBundleIdentifier,
+            clientInfo.bundleIdentifier
+        ].contains { value in
+            value?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() == "com.qoder.ide"
+        }
     }
 }
 
@@ -170,7 +201,8 @@ extension HookEvent {
             toolUseId: toolUseId,
             notificationType: notificationType,
             message: message,
-            ingress: ingress
+            ingress: ingress,
+            bridgeIntervention: bridgeIntervention
         )
     }
 
@@ -189,7 +221,8 @@ extension HookEvent {
             toolUseId: toolUseId,
             notificationType: notificationType,
             message: message,
-            ingress: ingress
+            ingress: ingress,
+            bridgeIntervention: bridgeIntervention
         )
     }
 }
@@ -244,6 +277,7 @@ private struct BridgeEnvelope: Codable, Sendable {
     let cwd: String?
     let status: BridgeStatus?
     let terminalContext: BridgeTerminalContext
+    let intervention: BridgeEnvelopeIntervention?
     let expectsResponse: Bool
     let metadata: [String: String]
     let sentAt: Date
@@ -258,6 +292,7 @@ private struct BridgeEnvelope: Codable, Sendable {
         case cwd
         case status
         case terminalContext
+        case intervention
         case expectsResponse
         case metadata
         case sentAt
@@ -289,6 +324,7 @@ private struct BridgeEnvelope: Codable, Sendable {
                 tmuxSession: nil,
                 tmuxPane: nil
             )
+        intervention = try container.decodeIfPresent(BridgeEnvelopeIntervention.self, forKey: .intervention)
 
         var decodedMetadata = try container.decodeIfPresent([String: String].self, forKey: .metadata) ?? [:]
         let expectation = try Self.decodeResponseExpectation(from: container)
@@ -348,6 +384,67 @@ private struct BridgeEnvelope: Codable, Sendable {
             return nil
         }
         return json
+    }
+}
+
+private struct BridgeEnvelopeIntervention: Codable, Sendable {
+    let id: String?
+    let kind: String
+    let title: String?
+    let message: String?
+    let options: [BridgeEnvelopeInterventionOption]?
+    let sessionID: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case title
+        case message
+        case options
+        case sessionID
+    }
+
+    func sessionIntervention(fallbackID: String?, metadata: [String: String]) -> SessionIntervention? {
+        guard let kind = SessionInterventionKind(rawValue: self.kind) else {
+            return nil
+        }
+
+        var interventionMetadata: [String: String] = [:]
+        for key in ["tool_name", "toolName", "tool_input_json", "toolInputJSON", "tool_use_id"] {
+            if let value = metadata[key], !value.isEmpty {
+                interventionMetadata[key] = value
+            }
+        }
+
+        return SessionIntervention(
+            id: id ?? fallbackID ?? UUID().uuidString,
+            kind: kind,
+            title: title ?? defaultTitle(for: kind),
+            message: message ?? "",
+            options: (options ?? []).map(\.sessionOption),
+            questions: [],
+            supportsSessionScope: false,
+            metadata: interventionMetadata
+        )
+    }
+
+    private func defaultTitle(for kind: SessionInterventionKind) -> String {
+        switch kind {
+        case .approval:
+            return "Approval Needed"
+        case .question:
+            return "Question"
+        }
+    }
+}
+
+private struct BridgeEnvelopeInterventionOption: Codable, Sendable {
+    let id: String
+    let title: String
+    let detail: String?
+
+    var sessionOption: SessionInterventionOption {
+        SessionInterventionOption(id: id, title: title, detail: detail)
     }
 }
 
@@ -446,6 +543,10 @@ private extension BridgeEnvelope {
                 eventType: eventType,
                 metadata: metadata,
                 preview: preview
+            ),
+            bridgeIntervention: intervention?.sessionIntervention(
+                fallbackID: metadata["tool_use_id"],
+                metadata: metadata
             )
         )
     }
@@ -580,12 +681,28 @@ private extension BridgeEnvelope {
             metadata["source_process_name"],
             metadata["process_name"]
         )
+        let hostBundleIdentifier = (explicitBundleID ?? terminalBundleID)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let effectiveExplicitKind: String?
+        let effectiveExplicitName: String?
+        switch hostBundleIdentifier {
+        case "com.qoder.ide":
+            effectiveExplicitKind = "qoder"
+            effectiveExplicitName = "Qoder"
+        case "com.qoder.work":
+            effectiveExplicitKind = "qoderwork"
+            effectiveExplicitName = "QoderWork"
+        default:
+            effectiveExplicitKind = explicitKind
+            effectiveExplicitName = explicitName
+        }
         let hasExplicitNonTerminalBundle = explicitBundleID.map { !TerminalAppRegistry.isTerminalBundle($0) } ?? false
         let providerKind = provider.sessionProvider
         let matchedProfile = ClientProfileRegistry.matchRuntimeProfile(
             provider: providerKind,
-            explicitKind: explicitKind,
-            explicitName: explicitName,
+            explicitKind: effectiveExplicitKind,
+            explicitName: effectiveExplicitName,
             explicitBundleIdentifier: explicitBundleID,
             terminalBundleIdentifier: terminalBundleID,
             origin: explicitOrigin,
@@ -644,8 +761,8 @@ private extension BridgeEnvelope {
         }
 
         let resolvedName: String?
-        if let explicitName {
-            resolvedName = explicitName
+        if let effectiveExplicitName {
+            resolvedName = effectiveExplicitName
         } else {
             resolvedName = resolvedProfile?.displayName
                 ?? (kind == .claudeCode ? "Claude Code" : nil)
@@ -1326,6 +1443,14 @@ class HookSocketServer {
             return
         }
 
+        if Self.shouldSkipQoderIDEEvent(envelope) {
+            logger.debug(
+                "Skipping Qoder IDE hook event=\(envelope.eventType, privacy: .public) session=\(envelope.resolvedSessionID.prefix(8), privacy: .public)"
+            )
+            close(clientSocket)
+            return
+        }
+
         let expectsResponse = envelope.expectsResponse || envelope.hookEvent.expectsResponse
         var event = envelope.hookEvent
         logger.debug("Received bridge envelope provider=\(envelope.provider.rawValue, privacy: .public) event=\(envelope.eventType, privacy: .public) session=\(event.sessionId.prefix(8), privacy: .public)")
@@ -1425,6 +1550,55 @@ class HookSocketServer {
 
         close(clientSocket)
         eventHandler?(event)
+    }
+
+    private static func shouldSkipQoderIDEEvent(_ envelope: BridgeEnvelope) -> Bool {
+        let clientKind = envelope.metadata["client_kind"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard clientKind == "qoder" || clientKind == "qoder-cli" else {
+            return false
+        }
+
+        let bundleIdentifiers = [
+            envelope.terminalContext.terminalBundleID,
+            envelope.terminalContext.ideBundleID,
+            envelope.metadata["terminal_bundle_id"],
+            envelope.metadata["client_bundle_id"]
+        ]
+        let isQoderIDEHosted = bundleIdentifiers.contains { value in
+            value?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() == "com.qoder.ide"
+        }
+        guard isQoderIDEHosted else {
+            return false
+        }
+        if envelope.hookEvent.isAskUserQuestionRequest
+            || isQoderIDEQuestionResolutionEvent(envelope.hookEvent) {
+            return false
+        }
+
+        switch envelope.eventType {
+        case "Notification", "SessionEnd", "Stop", "SubagentStop":
+            return false
+        default:
+            return true
+        }
+    }
+
+    private static func isQoderIDEQuestionResolutionEvent(_ event: HookEvent) -> Bool {
+        let normalizedTool = event.tool?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        guard normalizedTool == "askuserquestion" || normalizedTool == "askfollowupquestion" else {
+            return false
+        }
+
+        return event.isAnsweredAskUserQuestionEvent
+            || (event.event == "PostToolUse" && !(event.questionPayloads?.isEmpty ?? true))
     }
 
     private func bridgeDecision(for decision: String, updatedInput: [String: AnyCodable]? = nil) -> BridgeDecision? {

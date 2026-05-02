@@ -144,7 +144,8 @@ actor TerminalAutomationPermissionCoordinator {
         await FocusDiagnosticsStore.shared.record(
             "AutomationPermission \(phase)-result session=\(sessionId ?? "nil") bundle=\(bundleIdentifier) pid=\(runningApplication.processIdentifier) status=\(status)"
         )
-        guard status != noErr, askUserIfNeeded else {
+
+        guard askUserIfNeeded else {
             return status
         }
 
@@ -160,19 +161,16 @@ actor TerminalAutomationPermissionCoordinator {
             return noErr
         }
 
-        return status
+        await FocusDiagnosticsStore.shared.record(
+            "AutomationPermission \(phase)-probe-denied session=\(sessionId ?? "nil") bundle=\(bundleIdentifier) status=\(status) probeStatus=\(probeStatus)"
+        )
+        return probeStatus
     }
 
     private func automationTargetDescriptor(
         for runningApplication: NSRunningApplication
     ) -> NSAppleEventDescriptor? {
-        if let bundleIdentifier = runningApplication.bundleIdentifier?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           !bundleIdentifier.isEmpty {
-            return NSAppleEventDescriptor(bundleIdentifier: bundleIdentifier)
-        }
-
-        return NSAppleEventDescriptor(processIdentifier: runningApplication.processIdentifier)
+        NSAppleEventDescriptor(processIdentifier: runningApplication.processIdentifier)
     }
 
     private func runAuthorizationProbe(
@@ -187,7 +185,7 @@ actor TerminalAutomationPermissionCoordinator {
 
         let source = """
         tell application id \(Self.appleScriptStringLiteral(trimmedBundleIdentifier))
-            get name
+            count of windows
         end tell
         """
 

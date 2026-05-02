@@ -47,6 +47,17 @@ actor SessionLauncher {
             return true
         }
 
+        if shouldPrioritizeIDEChatSession(for: session),
+           await activateIDEChatSession(session) {
+            Self.logger.debug("Activated session \(session.sessionId, privacy: .public) via prioritized IDE chat session focus")
+            return true
+        }
+
+        if await activateTrackedTerminalSession(session) {
+            Self.logger.debug("Activated session \(session.sessionId, privacy: .public) via tracked terminal identifiers")
+            return true
+        }
+
         if !session.isInTmux,
            let tty = session.tty,
            await activateTerminal(
@@ -72,11 +83,6 @@ actor SessionLauncher {
             return true
         }
 
-        if await activateTrackedTerminalSession(session) {
-            Self.logger.debug("Activated session \(session.sessionId, privacy: .public) via tracked terminal identifiers")
-            return true
-        }
-
         if session.tty == nil,
            session.pid == nil,
            await activateIDEChatSession(session) {
@@ -94,15 +100,30 @@ actor SessionLauncher {
             return true
         }
 
-        if let terminalBundleIdentifier = session.clientInfo.terminalBundleIdentifier,
-           await activateApplication(
-               bundleIdentifier: terminalBundleIdentifier,
-               activateAllWindows: Self.shouldActivateAllWindowsForTerminalFallback(
-                   bundleIdentifier: terminalBundleIdentifier
-               )
-           ) {
-            Self.logger.debug("Activated session \(session.sessionId, privacy: .public) via terminal bundle \(terminalBundleIdentifier, privacy: .public)")
-            return true
+        if let terminalBundleIdentifier = session.clientInfo.terminalBundleIdentifier {
+            let canReportFallbackSuccess = Self.shouldUseProcessActivationForTerminalFallback(
+                bundleIdentifier: terminalBundleIdentifier
+            )
+            if await activateApplication(
+                   bundleIdentifier: terminalBundleIdentifier,
+                   activateAllWindows: Self.shouldActivateAllWindowsForTerminalFallback(
+                       bundleIdentifier: terminalBundleIdentifier
+                   )
+               ) {
+                guard canReportFallbackSuccess else {
+                    await FocusDiagnosticsStore.shared.record(
+                        "SessionLauncher terminal-bundle best-effort-activation session=\(session.sessionId) bundle=\(terminalBundleIdentifier)"
+                    )
+                    return false
+                }
+
+                Self.logger.debug("Activated session \(session.sessionId, privacy: .public) via terminal bundle \(terminalBundleIdentifier, privacy: .public)")
+                return true
+            }
+
+            await FocusDiagnosticsStore.shared.record(
+                "SessionLauncher terminal-bundle fallback-skipped session=\(session.sessionId) bundle=\(terminalBundleIdentifier)"
+            )
         }
 
         if allowsAppFallback,
@@ -129,11 +150,8 @@ actor SessionLauncher {
         guard !session.clientInfo.suppressesActivationNavigation else {
             return false
         }
-        if await activate(session) {
-            return true
-        }
 
-        let candidateBundleIdentifiers = clientApplicationBundleIdentifiers(for: session)
+        let candidateBundleIdentifiers = Self.clientApplicationBundleIdentifiers(for: session.clientInfo)
         let resolvedLaunchURL = session.clientInfo.launchURL
             ?? session.clientInfo.bundleIdentifier.flatMap {
                 SessionClientInfo.appLaunchURL(
@@ -142,6 +160,23 @@ actor SessionLauncher {
                     workspacePath: session.cwd
                 )
             }
+
+        if Self.shouldPrioritizeClientApplicationFallback(for: session.clientInfo) {
+            for bundleIdentifier in candidateBundleIdentifiers {
+                if await activateClientFallbackApplication(bundleIdentifier: bundleIdentifier) {
+                    return true
+                }
+            }
+
+            if let resolvedLaunchURL,
+               await activateURL(resolvedLaunchURL) {
+                return true
+            }
+        }
+
+        if await activate(session) {
+            return true
+        }
 
         for bundleIdentifier in candidateBundleIdentifiers {
             if await activateClientFallbackApplication(bundleIdentifier: bundleIdentifier) {
@@ -274,6 +309,10 @@ actor SessionLauncher {
 
     private func allowsAppFallback(for session: SessionState) -> Bool {
         Self.allowsAppFallback(provider: session.provider, clientInfo: session.clientInfo)
+    }
+
+    private func shouldPrioritizeIDEChatSession(for session: SessionState) -> Bool {
+        session.clientInfo.isQoderFamily && session.clientInfo.isHostedInIDE
     }
 
     nonisolated static func allowsAppFallback(
@@ -735,6 +774,16 @@ actor SessionLauncher {
             }
         }
 
+        guard Self.shouldUseProcessActivationForTerminalFallback(
+            bundleIdentifier: clientInfo.terminalBundleIdentifier
+        ) else {
+            let didActivate = await activateApplication(processIdentifier: terminalPid, activateAllWindows: false)
+            await FocusDiagnosticsStore.shared.record(
+                "SessionLauncher \(source) fallback-process-best-effort session=\(sessionId) bundle=\(clientInfo.terminalBundleIdentifier ?? "nil") activated=\(didActivate)"
+            )
+            return false
+        }
+
         return await activateApplication(processIdentifier: terminalPid, activateAllWindows: false)
     }
 
@@ -753,6 +802,24 @@ actor SessionLauncher {
 
         return normalizedBundleIdentifier == "com.mitchellh.ghostty"
             || normalizedBundleIdentifier == "com.cmuxterm.app"
+    }
+
+    nonisolated static func shouldUseProcessActivationForTerminalFallback(
+        bundleIdentifier: String?
+    ) -> Bool {
+        guard let trimmedBundleIdentifier = bundleIdentifier?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmedBundleIdentifier.isEmpty else {
+            return true
+        }
+
+        let normalizedBundleIdentifier = TerminalAppRegistry.normalizedHostBundleIdentifier(
+            for: trimmedBundleIdentifier
+        )
+        .lowercased()
+
+        return normalizedBundleIdentifier != "com.apple.terminal"
+            && normalizedBundleIdentifier != "com.googlecode.iterm2"
     }
 
     private func resolvedTerminalApplicationPID(
@@ -836,7 +903,11 @@ actor SessionLauncher {
         return nil
     }
 
-    private func activateApplication(processIdentifier pid: Int, activateAllWindows: Bool = true) async -> Bool {
+    private func activateApplication(
+        processIdentifier pid: Int,
+        activateAllWindows: Bool = true,
+        activateIgnoringOtherApps: Bool = false
+    ) async -> Bool {
         if let bundleIdentifier = await MainActor.run(body: {
             NSRunningApplication(processIdentifier: pid_t(pid))?.bundleIdentifier
         }) {
@@ -845,7 +916,8 @@ actor SessionLauncher {
                 Self.logger.debug("activateApplication(processIdentifier:) remapping helper bundle \(bundleIdentifier, privacy: .public) -> \(normalizedBundleIdentifier, privacy: .public)")
                 return await activateApplication(
                     bundleIdentifier: normalizedBundleIdentifier,
-                    activateAllWindows: activateAllWindows
+                    activateAllWindows: activateAllWindows,
+                    activateIgnoringOtherApps: activateIgnoringOtherApps
                 )
             }
         }
@@ -856,13 +928,21 @@ actor SessionLauncher {
                 return false
             }
 
-            let success = activateRunningApplication(app, activateAllWindows: activateAllWindows)
+            let success = activateRunningApplication(
+                app,
+                activateAllWindows: activateAllWindows,
+                activateIgnoringOtherApps: activateIgnoringOtherApps
+            )
             Self.logger.debug("activateApplication(processIdentifier:) pid=\(pid, privacy: .public) bundle=\(app.bundleIdentifier ?? "unknown", privacy: .public) success=\(success)")
             return success
         }
     }
 
-    private func activateApplication(bundleIdentifier: String, activateAllWindows: Bool = true) async -> Bool {
+    private func activateApplication(
+        bundleIdentifier: String,
+        activateAllWindows: Bool = true,
+        activateIgnoringOtherApps: Bool = false
+    ) async -> Bool {
         let normalizedBundleIdentifier = TerminalAppRegistry.normalizedHostBundleIdentifier(for: bundleIdentifier)
 
         if let runningActivation = await MainActor.run(resultType: Bool?.self, body: {
@@ -870,22 +950,21 @@ actor SessionLauncher {
                 return nil
             }
 
-            let didActivate = activateRunningApplication(app, activateAllWindows: activateAllWindows)
+            return activateRunningApplication(
+                app,
+                activateAllWindows: activateAllWindows,
+                activateIgnoringOtherApps: activateIgnoringOtherApps
+            )
+        }) {
             if activateAllWindows,
-               let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: normalizedBundleIdentifier) {
-                let configuration = NSWorkspace.OpenConfiguration()
-                configuration.activates = true
-                configuration.createsNewApplicationInstance = false
-                NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
-                    if let error {
-                        Self.logger.debug("Reopen running app \(normalizedBundleIdentifier, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
-                    }
-                }
+               await reopenRunningApplication(
+                   bundleIdentifier: normalizedBundleIdentifier,
+                   activateIgnoringOtherApps: activateIgnoringOtherApps
+               ) {
+                return true
             }
 
-            return didActivate
-        }), runningActivation {
-            return true
+            return runningActivation
         }
 
         guard let appURL = await MainActor.run(body: {
@@ -910,7 +989,8 @@ actor SessionLauncher {
                         if let app {
                             didActivate = self.activateRunningApplication(
                                 app,
-                                activateAllWindows: activateAllWindows
+                                activateAllWindows: activateAllWindows,
+                                activateIgnoringOtherApps: activateIgnoringOtherApps
                             )
                         } else {
                             didActivate = true
@@ -925,22 +1005,72 @@ actor SessionLauncher {
     private func activateClientFallbackApplication(bundleIdentifier: String) async -> Bool {
         await activateApplication(
             bundleIdentifier: bundleIdentifier,
-            activateAllWindows: Self.shouldActivateAllWindowsForClientFallback(bundleIdentifier: bundleIdentifier)
+            activateAllWindows: Self.shouldActivateAllWindowsForClientFallback(bundleIdentifier: bundleIdentifier),
+            activateIgnoringOtherApps: true
         )
     }
 
+    private func reopenRunningApplication(
+        bundleIdentifier: String,
+        activateIgnoringOtherApps: Bool
+    ) async -> Bool {
+        guard let appURL = await MainActor.run(body: {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
+        }) else {
+            return false
+        }
+
+        return await withCheckedContinuation { continuation in
+            Task { @MainActor in
+                let configuration = NSWorkspace.OpenConfiguration()
+                configuration.activates = true
+                configuration.createsNewApplicationInstance = false
+                NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { app, error in
+                    if let error {
+                        Self.logger.debug("Reopen running app \(bundleIdentifier, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                        continuation.resume(returning: false)
+                        return
+                    }
+
+                    Task { @MainActor in
+                        guard let app else {
+                            continuation.resume(returning: true)
+                            return
+                        }
+
+                        continuation.resume(returning: self.activateRunningApplication(
+                            app,
+                            activateAllWindows: true,
+                            activateIgnoringOtherApps: activateIgnoringOtherApps
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
     @MainActor
-    private func activateRunningApplication(_ app: NSRunningApplication, activateAllWindows: Bool = true) -> Bool {
+    private func activateRunningApplication(
+        _ app: NSRunningApplication,
+        activateAllWindows: Bool = true,
+        activateIgnoringOtherApps: Bool = false
+    ) -> Bool {
         if app.isHidden {
             app.unhide()
         }
 
-        if activateAllWindows {
-            restoreMiniaturizedWindows(for: app)
-            return app.activate(options: [.activateAllWindows])
+        var options: NSApplication.ActivationOptions = []
+        if activateIgnoringOtherApps {
+            options.insert(.activateIgnoringOtherApps)
         }
 
-        return app.activate(options: [])
+        if activateAllWindows {
+            restoreMiniaturizedWindows(for: app)
+            options.insert(.activateAllWindows)
+            return app.activate(options: options)
+        }
+
+        return app.activate(options: options)
     }
 
     @MainActor
@@ -1079,19 +1209,45 @@ actor SessionLauncher {
         )
     }
 
-    private func clientApplicationBundleIdentifiers(for session: SessionState) -> [String] {
+    nonisolated static func shouldPrioritizeClientApplicationFallback(for clientInfo: SessionClientInfo) -> Bool {
+        let normalizedProfileID = clientInfo.profileID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedBundleIdentifier = clientInfo.bundleIdentifier?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedTerminalBundleIdentifier = clientInfo.terminalBundleIdentifier?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedName = clientInfo.name?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "")
+
+        return normalizedProfileID == "qoderwork"
+            || normalizedBundleIdentifier == "com.qoder.work"
+            || normalizedTerminalBundleIdentifier == "com.qoder.work"
+            || normalizedName == "qoderwork"
+    }
+
+    nonisolated static func clientApplicationBundleIdentifiers(for clientInfo: SessionClientInfo) -> [String] {
         var candidates: [String] = []
 
-        if session.clientInfo.profileID == "qoderwork"
-            || session.clientInfo.bundleIdentifier == "com.qoder.work"
-            || session.clientInfo.terminalBundleIdentifier == "com.qoder.work" {
+        if shouldPrioritizeClientApplicationFallback(for: clientInfo) {
             candidates.append("com.qoder.work")
         }
 
         candidates.append(contentsOf: [
-            session.clientInfo.bundleIdentifier,
-            session.clientInfo.terminalBundleIdentifier
-        ].compactMap { $0 })
+            clientInfo.bundleIdentifier,
+            clientInfo.terminalBundleIdentifier
+        ].compactMap { rawValue in
+            guard let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !trimmed.isEmpty else {
+                return nil
+            }
+            return trimmed
+        })
 
         return Self.orderedUniqueBundleIdentifiers(
             candidates.map(TerminalAppRegistry.normalizedHostBundleIdentifier(for:))
@@ -1106,6 +1262,9 @@ actor SessionLauncher {
         }
 
         let normalizedBundleIdentifier = TerminalAppRegistry.normalizedHostBundleIdentifier(for: bundleIdentifier)
+        if normalizedBundleIdentifier.caseInsensitiveCompare("com.qoder.work") == .orderedSame {
+            return true
+        }
         return !TerminalAppRegistry.isTerminalBundle(normalizedBundleIdentifier)
     }
 

@@ -695,7 +695,79 @@ func qoderCLIClientMetadataCanBeInjectedFromBridgeArguments() throws {
 }
 
 @Test
-func qoderPreToolUseQuestionSurfacesClaudeCompatibleIntervention() throws {
+func qoderCLIExitPlanModePreToolUseBecomesBlockingApproval() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "qoder-cli-plan",
+      "permission_mode": "plan",
+      "tool_name": "ExitPlanMode",
+      "tool_input": {
+        "plan": "# Plan\\nImplement the requested feature.",
+        "allowedPrompts": [{"tool": "Bash", "prompt": "Run tests"}]
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder-cli",
+            "--client-name", "Qoder CLI",
+            "--client-origin", "cli",
+            "--client-originator", "Qoder"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "PreToolUse")
+    #expect(envelope.status?.kind == .waitingForApproval)
+    #expect(envelope.expectsResponse == true)
+    #expect(envelope.intervention?.kind == .approval)
+    #expect(envelope.intervention?.title == "Qoder CLI needs plan approval")
+    #expect(envelope.intervention?.message.contains("Implement the requested feature.") == true)
+    #expect(envelope.metadata["tool_input_json"]?.contains("allowedPrompts") == true)
+    #expect(envelope.preview?.hasPrefix("ExitPlanMode ") == true)
+}
+
+@Test
+func qoderCLIExitPlanModeDefaultPermissionModeStillBlocksForReview() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "qoder-cli-default-plan",
+      "permission_mode": "default",
+      "tool_name": "ExitPlanMode",
+      "tool_input": {}
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder-cli",
+            "--client-name", "Qoder CLI",
+            "--client-origin", "cli",
+            "--client-originator", "Qoder"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "PreToolUse")
+    #expect(envelope.status?.kind == .waitingForApproval)
+    #expect(envelope.expectsResponse == true)
+    #expect(envelope.intervention?.kind == .approval)
+    #expect(envelope.intervention?.title == "Qoder CLI needs plan approval")
+}
+
+@Test
+func qoderPreToolUseQuestionUsesWaitingForInputWithoutBlockingHook() throws {
     let payload = """
     {
       "hook_event_name": "PreToolUse",
@@ -720,21 +792,414 @@ func qoderPreToolUseQuestionSurfacesClaudeCompatibleIntervention() throws {
 
     let envelope = HookPayloadMapper.makeEnvelope(
         source: .claude,
-        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoder-cli"],
+        arguments: ["island-bridge", "--source", "claude", "--client-kind", "qoder"],
         environment: ["PWD": "/tmp/demo"],
         stdinData: payload
     )
 
     #expect(envelope.eventType == "PreToolUse")
     #expect(envelope.status?.kind == .waitingForInput)
-    #expect(envelope.expectsResponse)
-    #expect(envelope.intervention?.kind == .question)
+    #expect(envelope.expectsResponse == false)
+    #expect(envelope.intervention == nil)
     #expect(envelope.metadata["tool_input_json"]?.contains("\"questions\"") == true)
     #expect(envelope.metadata["tool_name"] == "ask_user_question")
 }
 
 @Test
-func qoderCLIAnswerPayloadUsesClaudeCodeUpdatedInputDecision() throws {
+func qoderCLIHooksExecutedInsideQoderIDEStayNotifyOnly() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "qoder-ide-question",
+      "tool_name": "AskUserQuestion",
+      "tool_input": {
+        "questions": [
+          {
+            "header": "Next Step",
+            "question": "What should happen inside Qoder IDE?",
+            "options": [{"label": "Stay notify only"}]
+          }
+        ]
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder-cli",
+            "--client-name", "Qoder CLI",
+            "--client-origin", "cli",
+            "--client-originator", "Qoder"
+        ],
+        environment: [
+            "TERM_PROGRAM": "vscode",
+            "__CFBundleIdentifier": "com.qoder.ide",
+            "VSCODE_GIT_IPC_HANDLE": "/Applications/Qoder.app/Contents/Resources/app/out/vs/workbench",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.metadata["client_kind"] == "qoder-cli")
+    #expect(envelope.metadata["terminal_bundle_id"] == "com.qoder.ide")
+    #expect(envelope.expectsResponse == false)
+    #expect(envelope.status?.kind == .waitingForInput)
+    #expect(envelope.intervention == nil)
+    #expect(HookPayloadMapper.shouldDeliverEnvelope(envelope))
+}
+
+@Test
+func qoderCLINonQuestionHooksExecutedInsideQoderIDESkipDelivery() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "qoder-ide-bash",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "pwd"
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder-cli",
+            "--client-name", "Qoder CLI",
+            "--client-origin", "cli",
+            "--client-originator", "Qoder"
+        ],
+        environment: [
+            "__CFBundleIdentifier": "com.qoder.ide",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.metadata["client_kind"] == "qoder-cli")
+    #expect(envelope.metadata["terminal_bundle_id"] == "com.qoder.ide")
+    #expect(envelope.eventType == "PreToolUse")
+    #expect(envelope.expectsResponse == false)
+    #expect(HookPayloadMapper.shouldDeliverEnvelope(envelope) == false)
+}
+
+@Test
+func qoderCLIHooksExecutedInsideQoderIDEStillForwardCompletion() throws {
+    let payload = """
+    {
+      "hook_event_name": "Stop",
+      "session_id": "qoder-ide-stop",
+      "last_assistant_message": "Done from Qoder IDE."
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder-cli",
+            "--client-name", "Qoder CLI",
+            "--client-origin", "cli",
+            "--client-originator", "Qoder"
+        ],
+        environment: [
+            "__CFBundleIdentifier": "com.qoder.ide",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.metadata["client_kind"] == "qoder-cli")
+    #expect(envelope.metadata["terminal_bundle_id"] == "com.qoder.ide")
+    #expect(envelope.eventType == "Stop")
+    #expect(envelope.expectsResponse == false)
+    #expect(HookPayloadMapper.shouldDeliverEnvelope(envelope))
+}
+
+@Test
+func qoderIDEPermissionRequestForwardsQuestionNotification() throws {
+    let payload = """
+    {
+      "hook_event_name": "PermissionRequest",
+      "session_id": "qoder-ide-native-question",
+      "tool_name": "ask_user_question",
+      "tool_input": {
+        "question": "Pick the next action",
+        "questions": [
+          {
+            "header": "Next Step",
+            "question": "What should happen inside Qoder IDE?",
+            "options": [{"label": "Use IDE card"}]
+          }
+        ]
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder",
+            "--client-name", "Qoder",
+            "--client-originator", "Qoder"
+        ],
+        environment: [
+            "__CFBundleIdentifier": "com.qoder.ide",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.metadata["client_kind"] == "qoder")
+    #expect(envelope.metadata["terminal_bundle_id"] == "com.qoder.ide")
+    #expect(envelope.eventType == "PermissionRequest")
+    #expect(envelope.expectsResponse == false)
+    #expect(envelope.status?.kind == .waitingForApproval)
+    #expect(envelope.intervention == nil)
+    #expect(HookPayloadMapper.shouldDeliverEnvelope(envelope))
+}
+
+@Test
+func qoderIDEAnsweredQuestionForwardsCleanupWithoutNewIntervention() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "qoder-ide-native-answer",
+      "tool_name": "ask_user_question",
+      "tool_input": {
+        "questions": [
+          {
+            "header": "Next Step",
+            "question": "What should happen inside Qoder IDE?",
+            "options": [{"label": "Use IDE card"}]
+          }
+        ],
+        "answers": {
+          "What should happen inside Qoder IDE?": "Use IDE card"
+        }
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder",
+            "--client-name", "Qoder",
+            "--client-originator", "Qoder"
+        ],
+        environment: [
+            "__CFBundleIdentifier": "com.qoder.ide",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.metadata["client_kind"] == "qoder")
+    #expect(envelope.eventType == "PreToolUse")
+    #expect(envelope.expectsResponse == false)
+    #expect(envelope.status?.kind == .runningTool)
+    #expect(envelope.intervention == nil)
+    #expect(HookPayloadMapper.shouldDeliverEnvelope(envelope))
+}
+
+@Test
+func qoderIDEPostToolUseResolvedQuestionForwardsCleanup() throws {
+    let payload = """
+    {
+      "hook_event_name": "PostToolUse",
+      "session_id": "qoder-ide-native-post-answer",
+      "tool_name": "ask_user_question",
+      "tool_input": {
+        "questions": [
+          {
+            "header": "Next Step",
+            "question": "What should happen inside Qoder IDE?",
+            "options": [{"label": "Use IDE card"}]
+          }
+        ]
+      },
+      "tool_response": "User has answered your questions."
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder",
+            "--client-name", "Qoder",
+            "--client-originator", "Qoder"
+        ],
+        environment: [
+            "__CFBundleIdentifier": "com.qoder.ide",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.metadata["client_kind"] == "qoder")
+    #expect(envelope.eventType == "PostToolUse")
+    #expect(envelope.expectsResponse == false)
+    #expect(envelope.status?.kind == .active)
+    #expect(envelope.intervention == nil)
+    #expect(HookPayloadMapper.shouldDeliverEnvelope(envelope))
+}
+
+@Test
+func qoderIDEStillForwardsCompletion() throws {
+    let payload = """
+    {
+      "hook_event_name": "Stop",
+      "session_id": "qoder-ide-native-stop",
+      "last_assistant_message": "Done from Qoder IDE."
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder",
+            "--client-name", "Qoder",
+            "--client-originator", "Qoder"
+        ],
+        environment: [
+            "__CFBundleIdentifier": "com.qoder.ide",
+            "PWD": "/tmp/demo"
+        ],
+        stdinData: payload
+    )
+
+    #expect(envelope.metadata["client_kind"] == "qoder")
+    #expect(envelope.metadata["terminal_bundle_id"] == "com.qoder.ide")
+    #expect(envelope.eventType == "Stop")
+    #expect(envelope.expectsResponse == false)
+    #expect(HookPayloadMapper.shouldDeliverEnvelope(envelope))
+}
+
+@Test
+func legacyQoderCLIHookMetadataStillSurfacesClaudeCompatibleIntervention() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "qoder-cli-legacy-kind",
+      "tool_name": "ask_user_question",
+      "tool_input": {
+        "questions": [
+          {
+            "header": "开发领域",
+            "question": "您目前主要从事哪个领域的开发工作?",
+            "options": [{"label": "前端/后端开发"}]
+          }
+        ]
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder",
+            "--client-name", "Qoder CLI",
+            "--client-origin", "cli",
+            "--client-originator", "Qoder"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.metadata["client_kind"] == "qoder")
+    #expect(envelope.status?.kind == .waitingForInput)
+    #expect(envelope.expectsResponse == true)
+    #expect(envelope.intervention?.kind == .question)
+}
+
+@Test
+func qoderIDEProcessMetadataDoesNotPromoteToQoderCLI() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "qoder-cli-legacy-process",
+      "source_process_name": "/Users/example/.qoder/bin/qodercli/qodercli-0.2.5",
+      "tool_name": "AskUserQuestion",
+      "tool_input": {
+        "questions": [
+          {
+            "header": "Next Step",
+            "question": "What would you like to do first?",
+            "options": [{"label": "Read a file"}]
+          }
+        ]
+      }
+    }
+    """.data(using: .utf8)!
+
+    let notifyOnlyPayload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "qoder-cli-legacy-process",
+      "tool_name": "AskUserQuestion",
+      "tool_input": {
+        "questions": [
+          {
+            "header": "Next Step",
+            "question": "What would you like to do first?",
+            "options": [{"label": "Read a file"}]
+          }
+        ]
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder",
+            "--client-name", "Qoder",
+            "--client-originator", "Qoder"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: notifyOnlyPayload
+    )
+
+    let envelopeWithProcess = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qoder",
+            "--client-name", "Qoder",
+            "--client-originator", "Qoder"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.expectsResponse == false)
+    #expect(envelopeWithProcess.status?.kind == .waitingForInput)
+    #expect(envelopeWithProcess.expectsResponse == false)
+    #expect(envelopeWithProcess.intervention == nil)
+}
+
+@Test
+func qoderCLIAnswerPayloadIncludesTopLevelUpdatedInputForQoderParser() throws {
     let response = BridgeResponse(
         requestID: UUID(),
         decision: .answer([:]),
@@ -763,7 +1228,73 @@ func qoderCLIAnswerPayloadUsesClaudeCodeUpdatedInputDecision() throws {
     let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
     let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
     #expect(hookSpecificOutput["hookEventName"] as? String == "PreToolUse")
-    #expect(hookSpecificOutput["permissionDecision"] == nil)
+    #expect(hookSpecificOutput["permissionDecision"] as? String == "allow")
+    let topLevelUpdatedInput = try #require(hookSpecificOutput["updatedInput"] as? [String: Any])
+    let topLevelAnswers = try #require(topLevelUpdatedInput["answers"] as? [String: String])
+    #expect(topLevelAnswers["Which model?"] == "Pro")
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
+    let updatedInput = try #require(decision["updatedInput"] as? [String: Any])
+    let answers = try #require(updatedInput["answers"] as? [String: String])
+    #expect(answers["Which model?"] == "Pro")
+}
+
+@Test
+func qoderCLIExitPlanModeApprovalPayloadUsesPreToolUseEventName() throws {
+    let response = BridgeResponse(
+        requestID: UUID(),
+        decision: .approve
+    )
+
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: response,
+        eventType: "PreToolUse",
+        metadata: [
+            "client_kind": "qoder-cli",
+            "client_name": "Qoder CLI",
+            "permission_mode": "default",
+            "tool_name": "ExitPlanMode"
+        ]
+    )
+
+    let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    #expect(hookSpecificOutput["hookEventName"] as? String == "PreToolUse")
+    #expect(hookSpecificOutput["permissionDecision"] as? String == "allow")
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
+}
+
+@Test
+func qoderCLIAnswerPayloadUsesTopLevelShapeWhenClientKindIsMissing() throws {
+    let response = BridgeResponse(
+        requestID: UUID(),
+        decision: .answer([:]),
+        updatedInput: [
+            "answers": .object([
+                "Which model?": .string("Pro")
+            ])
+        ]
+    )
+
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: response,
+        eventType: "PermissionRequest",
+        metadata: [
+            "client_name": "Qoder CLI",
+            "client_origin": "cli",
+            "client_originator": "Qoder",
+            "tool_name": "AskUserQuestion"
+        ]
+    )
+
+    let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    #expect(hookSpecificOutput["hookEventName"] as? String == "PermissionRequest")
+    #expect(hookSpecificOutput["permissionDecision"] as? String == "allow")
+    #expect(hookSpecificOutput["updatedInput"] != nil)
     let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
     #expect(decision["behavior"] as? String == "allow")
     let updatedInput = try #require(decision["updatedInput"] as? [String: Any])

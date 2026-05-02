@@ -10,6 +10,12 @@ public enum HookPayloadMapper {
         "askuserquestion",
         "askfollowupquestion"
     ]
+    private static let qoderIDEForwardedEvents: Set<String> = [
+        "Notification",
+        "SessionEnd",
+        "Stop",
+        "SubagentStop"
+    ]
 
     public static func makeEnvelope(
         source: AgentProvider,
@@ -60,6 +66,16 @@ public enum HookPayloadMapper {
         )
     }
 
+    public static func shouldDeliverEnvelope(_ envelope: BridgeEnvelope) -> Bool {
+        guard isQoderIDEHostedEnvelope(envelope) else {
+            return true
+        }
+
+        return qoderIDEForwardedEvents.contains(envelope.eventType)
+            || isQuestionNotificationEnvelope(envelope)
+            || isQuestionResolutionEnvelope(envelope)
+    }
+
     public static func stdoutPayload(
         for provider: AgentProvider,
         response: BridgeResponse,
@@ -73,6 +89,13 @@ public enum HookPayloadMapper {
         switch provider {
         case .claude:
             let clientKind = normalizedClientKind(from: metadata)
+            if clientKind == "qoder-cli",
+               isQoderCLIPlanExitApproval(
+                   eventType: eventType,
+                   toolName: metadata["tool_name"]
+               ) {
+                return qoderCLIPermissionPayload(response: response, decision: decision, eventType: eventType)
+            }
             if isCodeBuddyFamilyHookClient(clientKind) {
                 return codeBuddyStdoutPayload(response: response, decision: decision)
             }
@@ -90,6 +113,13 @@ public enum HookPayloadMapper {
                 {"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"Denied from Island"}}}
                 """#
             case .answer(let answers):
+                if clientKind == "qoder-cli" {
+                    return qoderCLIAnswerPayload(
+                        response: response,
+                        eventType: eventType,
+                        answers: answers
+                    )
+                }
                 if clientKind == "qoderwork" {
                     return qoderWorkAnswerPayload(
                         response: response,
@@ -619,12 +649,31 @@ public enum HookPayloadMapper {
             return nil
         }
 
+        if clientKind == "qoder-cli",
+           isQoderCLIPlanExitApproval(eventType: eventType, payload: payload) {
+            return InterventionRequest(
+                sessionID: sessionKey,
+                kind: .approval,
+                title: "Qoder CLI needs plan approval",
+                message: qoderCLIPlanApprovalMessage(from: payload),
+                options: [
+                    InterventionOption(id: "approve", title: "Allow Once"),
+                    InterventionOption(id: "deny", title: "Deny")
+                ],
+                rawContext: flattenMetadata(payload: payload)
+            )
+        }
+
         if let questions = questionPayloads(from: payload), !questions.isEmpty {
             guard shouldSurfaceQuestionIntervention(
                 eventType: eventType,
                 payload: payload,
                 clientKind: clientKind
             ) else {
+                return nil
+            }
+            if clientKind == "qoder",
+               isQoderQuestionToolEvent(eventType: eventType, payload: payload) {
                 return nil
             }
             let options = questions.flatMap { question -> [InterventionOption] in
@@ -950,13 +999,6 @@ public enum HookPayloadMapper {
     }
 
     private static func normalizedClientKind(from metadata: [String: String]) -> String? {
-        if let explicitClientKind = metadata["client_kind"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased(),
-           !explicitClientKind.isEmpty {
-            return explicitClientKind
-        }
-
         let bundleIdentifier = metadata["client_bundle_id"]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
@@ -968,6 +1010,22 @@ public enum HookPayloadMapper {
             return "qoderwork"
         case "com.qoder.ide":
             return "qoder"
+        default:
+            break
+        }
+
+        if let explicitClientKind = metadata["client_kind"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+           !explicitClientKind.isEmpty {
+            if explicitClientKind == "qoder",
+               metadataLooksLikeQoderCLI(metadata) {
+                return "qoder-cli"
+            }
+            return explicitClientKind
+        }
+
+        switch bundleIdentifier {
         case "com.tencent.codebuddy", "com.codebuddy.app":
             return "codebuddy"
         case "com.workbuddy.workbuddy":
@@ -983,6 +1041,9 @@ public enum HookPayloadMapper {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .lowercased()
         if let nameHint {
+            if nameHint.contains("qoder cli") || nameHint.contains("qoder-cli") {
+                return "qoder-cli"
+            }
             if nameHint.contains("qoderwork") || nameHint.contains("qoder work") {
                 return "qoderwork"
             }
@@ -998,6 +1059,127 @@ public enum HookPayloadMapper {
         }
 
         return nil
+    }
+
+    private static func isQoderIDEHostedEnvelope(_ envelope: BridgeEnvelope) -> Bool {
+        let clientKind = envelope.metadata["client_kind"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard clientKind == "qoder" || clientKind == "qoder-cli" else {
+            return false
+        }
+
+        return [
+            envelope.terminalContext.terminalBundleID,
+            envelope.terminalContext.ideBundleID,
+            envelope.metadata["terminal_bundle_id"],
+            envelope.metadata["client_bundle_id"]
+        ].contains { value in
+            value?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() == "com.qoder.ide"
+        }
+    }
+
+    private static func isQuestionNotificationEnvelope(_ envelope: BridgeEnvelope) -> Bool {
+        guard envelope.eventType == "PreToolUse" || envelope.eventType == "PermissionRequest" else {
+            return false
+        }
+        guard !isQuestionResolutionEnvelope(envelope) else {
+            return false
+        }
+
+        guard isQuestionToolEnvelope(envelope) else {
+            return false
+        }
+
+        return !decodedQuestionPayloads(from: envelope).isEmpty
+    }
+
+    private static func isQuestionResolutionEnvelope(_ envelope: BridgeEnvelope) -> Bool {
+        guard isQuestionToolEnvelope(envelope) else {
+            return false
+        }
+
+        if hasAnsweredQuestionPayload(in: envelope) {
+            return true
+        }
+
+        if envelope.eventType == "PostToolUse",
+           !decodedQuestionPayloads(from: envelope).isEmpty {
+            return true
+        }
+
+        return false
+    }
+
+    private static func isQuestionToolEnvelope(_ envelope: BridgeEnvelope) -> Bool {
+        let normalizedTool = envelope.metadata["tool_name"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        return normalizedTool == "askuserquestion" || normalizedTool == "askfollowupquestion"
+    }
+
+    private static func decodedQuestionPayloads(from envelope: BridgeEnvelope) -> [[String: Any]] {
+        guard let toolInputJSON = envelope.metadata["tool_input_json"],
+              let data = toolInputJSON.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let questions = payload["questions"] as? [[String: Any]] else {
+            return []
+        }
+
+        return questions
+    }
+
+    private static func hasAnsweredQuestionPayload(in envelope: BridgeEnvelope) -> Bool {
+        guard let toolInputJSON = envelope.metadata["tool_input_json"],
+              let data = toolInputJSON.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return envelope.metadata["tool_response"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }
+
+        let answersCandidate = payload["answers"]
+        if let answers = answersCandidate as? [String: Any] {
+            return !answers.isEmpty
+        }
+        if let answers = answersCandidate as? [String: String] {
+            return !answers.isEmpty
+        }
+
+        return envelope.metadata["tool_response"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    private static func metadataLooksLikeQoderCLI(_ metadata: [String: String]) -> Bool {
+        let normalizedOrigin = metadata["client_origin"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedBundleIdentifier = (
+            metadata["client_bundle_id"]
+                ?? metadata["terminal_bundle_id"]
+        )?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if normalizedBundleIdentifier == "com.qoder.ide"
+            || normalizedBundleIdentifier == "com.qoder.work" {
+            return false
+        }
+
+        let nameHints = [
+            metadata["client_name"],
+            metadata["client_originator"],
+            metadata["client"]
+        ].compactMap {
+            $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }
+
+        if nameHints.contains(where: { $0.contains("qoder cli") || $0.contains("qoder-cli") }) {
+            return true
+        }
+
+        return normalizedOrigin == "cli"
+            && nameHints.contains(where: { $0 == "qoder" || $0.contains("qoder ") })
     }
 
     private static func isCodeBuddyFamilyHookClient(_ clientKind: String?) -> Bool {
@@ -1166,6 +1348,39 @@ public enum HookPayloadMapper {
             .lowercased()
     }
 
+    private static func isQoderCLIPlanExitApproval(eventType: String, payload: [String: Any]) -> Bool {
+        isQoderCLIPlanExitApproval(
+            eventType: eventType,
+            toolName: payload["tool_name"] as? String
+        )
+    }
+
+    private static func isQoderCLIPlanExitApproval(
+        eventType: String,
+        toolName: String?
+    ) -> Bool {
+        eventType == "PreToolUse"
+            && normalizedToolName(toolName) == "exitplanmode"
+    }
+
+    private static func qoderCLIPlanApprovalMessage(from payload: [String: Any]) -> String {
+        if let toolInput = payload["tool_input"] as? [String: Any],
+           let plan = nonEmpty(toolInput["plan"] as? String) {
+            return plan
+        }
+
+        return "Qoder CLI wants to exit plan mode and start coding."
+    }
+
+    private static func normalizedToolName(_ toolName: String?) -> String? {
+        guard let toolName else { return nil }
+        return toolName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .lowercased()
+    }
+
     private static func shouldRequestCodeBuddyApproval(
         eventType: String,
         payload: [String: Any],
@@ -1243,6 +1458,77 @@ public enum HookPayloadMapper {
             }
         }
 
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+
+        return string
+    }
+
+    private static func qoderCLIAnswerPayload(
+        response: BridgeResponse,
+        eventType: String,
+        answers: [String: String]
+    ) -> String {
+        let updatedInput = response.updatedInput?.mapValues(\.foundationObject)
+            ?? ["answers": answers]
+        let payload: [String: Any] = [
+            "hookSpecificOutput": [
+                "hookEventName": eventType,
+                "permissionDecision": "allow",
+                "decision": [
+                    "behavior": "allow",
+                    "updatedInput": updatedInput
+                ],
+                "updatedInput": updatedInput
+            ]
+        ]
+
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+
+        return string
+    }
+
+    private static func qoderCLIPermissionPayload(
+        response: BridgeResponse,
+        decision: InterventionDecision,
+        eventType: String
+    ) -> String {
+        let behavior: String
+        var decisionOutput: [String: Any]
+
+        switch decision {
+        case .approve, .approveForSession:
+            behavior = "allow"
+            decisionOutput = ["behavior": "allow"]
+        case .deny, .cancel:
+            behavior = "deny"
+            decisionOutput = [
+                "behavior": "deny",
+                "message": response.reason ?? "Denied from Island"
+            ]
+        case .answer:
+            behavior = "allow"
+            decisionOutput = ["behavior": "allow"]
+        }
+
+        var hookSpecificOutput: [String: Any] = [
+            "hookEventName": eventType,
+            "permissionDecision": behavior,
+            "decision": decisionOutput
+        ]
+
+        if behavior == "deny" {
+            hookSpecificOutput["permissionDecisionReason"] = response.reason ?? "Denied from Island"
+        }
+
+        let payload: [String: Any] = ["hookSpecificOutput": hookSpecificOutput]
         guard JSONSerialization.isValidJSONObject(payload),
               let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
               let string = String(data: data, encoding: .utf8) else {

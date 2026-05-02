@@ -39,6 +39,7 @@ final class QoderWorkHookEventTimingTests: XCTestCase {
         XCTAssertEqual(event.intervention?.kind, .question)
         XCTAssertEqual(event.intervention?.id, "call_123")
         XCTAssertFalse(event.intervention?.supportsInlineResponse ?? true)
+        XCTAssertEqual(event.intervention?.metadata["responseMode"], "external_only")
         XCTAssertTrue(event.intervention?.message.contains("暂不支持直接提交") ?? false)
         XCTAssertEqual(event.determinePhase(), .waitingForInput)
     }
@@ -83,7 +84,68 @@ final class QoderWorkHookEventTimingTests: XCTestCase {
             "qoderwork-question-qoderwork-session-topic"
         )
         XCTAssertFalse(event.intervention?.supportsInlineResponse ?? true)
+        XCTAssertEqual(event.intervention?.metadata["responseMode"], "external_only")
         XCTAssertEqual(event.determinePhase(), .waitingForInput)
+    }
+
+    func testQoderWorkBridgeQuestionUsesToolInputForExternalModeAndDefaultAnswer() {
+        let bridgeIntervention = SessionIntervention(
+            id: "call_bridge",
+            kind: .question,
+            title: "Claude needs input",
+            message: "Choose one",
+            options: [
+                .init(id: "topic:0", title: "A 方案", detail: nil),
+                .init(id: "topic:1", title: "B 方案", detail: nil)
+            ],
+            questions: [],
+            supportsSessionScope: false,
+            metadata: ["tool_name": "AskUserQuestion"]
+        )
+        let event = HookEvent(
+            sessionId: "qoderwork-session",
+            cwd: "/tmp/project",
+            event: "PreToolUse",
+            status: "waiting_for_input",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "qoderwork",
+                name: "QoderWork",
+                bundleIdentifier: "com.qoder.work"
+            ),
+            pid: nil,
+            tty: nil,
+            tool: "AskUserQuestion",
+            toolInput: [
+                "questions": AnyCodable([
+                    [
+                        "id": "topic",
+                        "header": "主题",
+                        "question": "先选一个主题",
+                        "options": [
+                            ["label": "A 方案"],
+                            ["label": "B 方案"]
+                        ]
+                    ]
+                ])
+            ],
+            toolUseId: "call_bridge",
+            notificationType: nil,
+            message: nil,
+            bridgeIntervention: bridgeIntervention
+        )
+
+        XCTAssertEqual(event.intervention?.metadata["responseMode"], "external_only")
+        XCTAssertFalse(event.intervention?.supportsInlineResponse ?? true)
+        XCTAssertEqual(event.intervention?.questions.first?.options.first?.title, "A 方案")
+
+        let autoAnswer = SessionMonitor.defaultQoderAutoAnswer(for: event)
+        XCTAssertEqual(autoAnswer?.toolUseId, "call_bridge")
+        XCTAssertEqual(autoAnswer?.answers["topic"], ["A 方案"])
+        let answers = autoAnswer?.updatedInput["answers"] as? [String: Any]
+        XCTAssertEqual(answers?["topic"] as? String, "A 方案")
+        XCTAssertEqual(answers?["先选一个主题"] as? String, "A 方案")
     }
 
     func testWorkBuddyPreToolUseQuestionUsesExternalClientMode() {
@@ -313,6 +375,48 @@ final class QoderWorkHookEventTimingTests: XCTestCase {
         )
 
         XCTAssertNil(SessionMonitor.defaultQoderAutoAnswer(for: event))
+    }
+
+    func testQoderCLIWithGenericQoderProfileStillRequiresResponse() {
+        let event = HookEvent(
+            sessionId: "qoder-cli-session",
+            cwd: "/tmp/project",
+            event: "PreToolUse",
+            status: "waiting_for_input",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "qoder",
+                name: "Qoder CLI",
+                origin: "cli",
+                originator: "Qoder"
+            ),
+            pid: nil,
+            tty: nil,
+            tool: "AskUserQuestion",
+            toolInput: [
+                "questions": AnyCodable([
+                    [
+                        "id": "topic",
+                        "header": "主题",
+                        "question": "先选一个主题",
+                        "options": [
+                            ["label": "A 方案"],
+                            ["label": "B 方案"]
+                        ]
+                    ]
+                ])
+            ],
+            toolUseId: "call_cli",
+            notificationType: nil,
+            message: nil
+        )
+
+        XCTAssertEqual(event.clientInfo.normalizedForClaudeRouting().profileID, "qoder-cli")
+        XCTAssertTrue(event.isAskUserQuestionRequest)
+        XCTAssertEqual(event.intervention?.kind, .question)
+        XCTAssertTrue(event.expectsResponse)
+        XCTAssertEqual(event.determinePhase(), .waitingForInput)
     }
 
     func testQoderWorkAutoAnswerUsesFirstOptionForEveryQuestion() {

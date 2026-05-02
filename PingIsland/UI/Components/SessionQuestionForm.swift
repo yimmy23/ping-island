@@ -8,26 +8,13 @@ struct SessionQuestionForm: View {
     var onSecondaryAction: (() -> Void)? = nil
     var isEditable: Bool = true
 
+    @ObservedObject private var settings = AppSettings.shared
     @State private var answers: [String: [String]] = [:]
     @State private var otherAnswers: [String: String] = [:]
+    @State private var measuredQuestionContentHeight: CGFloat = 0
 
     private var displayQuestions: [SessionInterventionQuestion] {
         intervention.resolvedQuestions
-    }
-
-    nonisolated static func shouldUseScrollableQuestionList(
-        for questions: [SessionInterventionQuestion]
-    ) -> Bool {
-        if questions.count > 1 {
-            return true
-        }
-
-        return questions.contains { question in
-            let weightedOptions = question.options.reduce(0) { partial, option in
-                partial + (option.detail == nil ? 1 : 2)
-            }
-            return weightedOptions >= 3 || question.allowsOther || question.isSecret
-        }
     }
 
     nonisolated static func optionColumns(
@@ -49,8 +36,73 @@ struct SessionQuestionForm: View {
         }
     }
 
-    private var shouldUseScrollableQuestionList: Bool {
-        Self.shouldUseScrollableQuestionList(for: displayQuestions)
+    nonisolated static func questionListMaximumHeight(for maxPanelHeight: Double) -> CGFloat {
+        let minimumQuestionListHeight: CGFloat = 230
+        let reservedPanelChromeHeight: CGFloat = 250
+        let outerScrollSafetyInset: CGFloat = 80
+
+        return max(
+            minimumQuestionListHeight,
+            CGFloat(maxPanelHeight) - reservedPanelChromeHeight - outerScrollSafetyInset
+        )
+    }
+
+    nonisolated static func questionListHeight(
+        contentHeight: CGFloat,
+        maximumHeight: CGFloat
+    ) -> CGFloat {
+        guard contentHeight > 0 else {
+            return maximumHeight
+        }
+
+        return min(contentHeight, maximumHeight)
+    }
+
+    nonisolated static func optionSequenceLabel(for index: Int) -> String {
+        guard index >= 0 else { return "" }
+
+        var remaining = index
+        var label = ""
+
+        repeat {
+            let scalarValue = 65 + remaining % 26
+            if let scalar = UnicodeScalar(scalarValue) {
+                label.insert(Character(scalar), at: label.startIndex)
+            }
+            remaining = remaining / 26 - 1
+        } while remaining >= 0
+
+        return label
+    }
+
+    nonisolated static func nextQuestionIDToReveal(
+        after questionID: String,
+        in questions: [SessionInterventionQuestion],
+        answeredQuestionIDs: Set<String>
+    ) -> String? {
+        guard questions.count > 1,
+              let currentIndex = questions.firstIndex(where: { $0.id == questionID })
+        else {
+            return nil
+        }
+
+        let laterQuestions = questions[questions.index(after: currentIndex)...]
+        if let nextUnansweredQuestion = laterQuestions.first(where: { !answeredQuestionIDs.contains($0.id) }) {
+            return nextUnansweredQuestion.id
+        }
+
+        return laterQuestions.first?.id
+    }
+
+    private var questionListMaximumHeight: CGFloat {
+        Self.questionListMaximumHeight(for: settings.maxPanelHeight)
+    }
+
+    private var questionListHeight: CGFloat {
+        Self.questionListHeight(
+            contentHeight: measuredQuestionContentHeight,
+            maximumHeight: questionListMaximumHeight
+        )
     }
 
     init(
@@ -73,18 +125,16 @@ struct SessionQuestionForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Group {
-                if shouldUseScrollableQuestionList {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        questionsContent
-                            .padding(.vertical, 1)
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .frame(maxHeight: 230)
-                } else {
-                    questionsContent
+            ScrollViewReader { scrollProxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    questionsContent(scrollProxy: scrollProxy)
+                        .padding(.vertical, 1)
+                        .readHeight { measuredQuestionContentHeight = $0 }
                 }
+                .scrollBounceBehavior(.basedOnSize)
             }
+            .frame(height: questionListHeight)
+            .clipped()
 
             HStack(spacing: 8) {
                 if let submitLabel {
@@ -112,7 +162,7 @@ struct SessionQuestionForm: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var questionsContent: some View {
+    private func questionsContent(scrollProxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(displayQuestions) { question in
                 VStack(alignment: .leading, spacing: 8) {
@@ -144,24 +194,42 @@ struct SessionQuestionForm: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
-                    questionInput(question)
+                    questionInput(question, scrollProxy: scrollProxy)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .id(question.id)
             }
         }
     }
 
     @ViewBuilder
-    private func questionInput(_ question: SessionInterventionQuestion) -> some View {
+    private func questionInput(
+        _ question: SessionInterventionQuestion,
+        scrollProxy: ScrollViewProxy
+    ) -> some View {
         if !question.options.isEmpty {
             let reservesDetailSpace = question.options.contains { optionDetail(for: $0) != nil }
             LazyVGrid(columns: Self.optionColumns(for: question), spacing: 8) {
-                ForEach(question.options) { option in
+                ForEach(Array(question.options.enumerated()), id: \.element.id) { optionIndex, option in
                     Button {
                         guard isEditable else { return }
                         toggle(option.title, for: question)
+                        revealNextQuestion(after: question, using: scrollProxy)
                     } label: {
                         HStack(alignment: .top, spacing: 8) {
+                            Text(Self.optionSequenceLabel(for: optionIndex))
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(isSelected(option.title, for: question) ? TerminalColors.blue : .white.opacity(0.62))
+                                .frame(width: 20, height: 20)
+                                .background(
+                                    Circle()
+                                        .fill(
+                                            isSelected(option.title, for: question)
+                                                ? TerminalColors.blue.opacity(0.16)
+                                                : Color.white.opacity(0.06)
+                                        )
+                                )
+
                             if question.allowsMultiple {
                                 Image(systemName: isSelected(option.title, for: question) ? "checkmark.square.fill" : "square")
                                     .font(.system(size: 15, weight: .semibold))
@@ -199,7 +267,7 @@ struct SessionQuestionForm: View {
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(
+                                .strokeBorder(
                                     isSelected(option.title, for: question)
                                         ? TerminalColors.blue.opacity(0.72)
                                         : Color.white.opacity(0.14),
@@ -224,7 +292,7 @@ struct SessionQuestionForm: View {
                 .disabled(!isEditable)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
                 )
             }
         } else if question.isSecret {
@@ -237,7 +305,7 @@ struct SessionQuestionForm: View {
             .disabled(!isEditable)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
             )
         } else {
             TextField("Answer", text: Binding(
@@ -249,7 +317,7 @@ struct SessionQuestionForm: View {
             .disabled(!isEditable)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
             )
         }
     }
@@ -260,6 +328,12 @@ struct SessionQuestionForm: View {
 
     private func isSelected(_ title: String, for question: SessionInterventionQuestion) -> Bool {
         answers[question.id, default: []].contains(title)
+    }
+
+    private var answeredQuestionIDs: Set<String> {
+        Set(displayQuestions.compactMap { question in
+            finalAnswers(for: question).isEmpty ? nil : question.id
+        })
     }
 
     private func toggle(_ title: String, for question: SessionInterventionQuestion) {
@@ -275,6 +349,27 @@ struct SessionQuestionForm: View {
         }
 
         answers[question.id] = [title]
+    }
+
+    private func revealNextQuestion(
+        after question: SessionInterventionQuestion,
+        using scrollProxy: ScrollViewProxy
+    ) {
+        guard !finalAnswers(for: question).isEmpty,
+              let nextQuestionID = Self.nextQuestionIDToReveal(
+                after: question.id,
+                in: displayQuestions,
+                answeredQuestionIDs: answeredQuestionIDs
+              )
+        else {
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.78, blendDuration: 0.08)) {
+                scrollProxy.scrollTo(nextQuestionID, anchor: .top)
+            }
+        }
     }
 
     private func finalAnswers(for question: SessionInterventionQuestion) -> [String] {
@@ -333,5 +428,27 @@ private struct SessionQuestionButtonStyle: ButtonStyle {
                         )
                     )
             )
+    }
+}
+
+private struct QuestionContentHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private extension View {
+    func readHeight(_ onChange: @escaping (CGFloat) -> Void) -> some View {
+        background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: QuestionContentHeightPreferenceKey.self,
+                    value: proxy.size.height
+                )
+            }
+        )
+        .onPreferenceChange(QuestionContentHeightPreferenceKey.self, perform: onChange)
     }
 }
