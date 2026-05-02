@@ -109,7 +109,7 @@ struct SessionHoverDashboardView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: density.containerSpacing) {
                 if displayedSessions.isEmpty {
-                    HoverEmptyPreviewView()
+                    HoverEmptyPreviewView(density: density)
                 }
 
                 ForEach(displayedSessions) { session in
@@ -1139,19 +1139,279 @@ private enum HoverConversationSnapshotBuilder {
 }
 
 struct HoverEmptyPreviewView: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("No active session")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
+    var density: HoverPreviewDensity = .regular
 
-            Text("Hover here to preview your active Agent sessions.")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white.opacity(0.56))
+    @ObservedObject private var settings = AppSettings.shared
+
+    private var visibleShortcutActions: [(GlobalShortcutAction, GlobalShortcut)] {
+        let actions: [GlobalShortcutAction] = [.openActiveSession, .openSessionList]
+        return actions.compactMap { action in
+            guard let shortcut = settings.shortcut(for: action) else { return nil }
+            return (action, shortcut)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 12)
-        .padding(.bottom, 18)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    var body: some View {
+        ZStack {
+            RadialGradient(
+                colors: [
+                    TerminalColors.green.opacity(0.16),
+                    Color.clear
+                ],
+                center: .center,
+                startRadius: 18,
+                endRadius: density == .detachedCompact ? 120 : 210
+            )
+            .allowsHitTesting(false)
+
+            VStack(alignment: .center, spacing: density == .detachedCompact ? 10 : 14) {
+                VStack(alignment: .center, spacing: density == .detachedCompact ? 6 : 9) {
+                    Text(appLocalized: "No active session")
+                        .font(.system(size: density == .detachedCompact ? 17 : 24, weight: .heavy))
+                        .foregroundColor(.white)
+                        .shadow(color: Color.black.opacity(0.30), radius: 6, y: 3)
+
+                    Text(appLocalized: "Hover to preview active sessions. Click the Island to open the session list.")
+                        .font(.system(size: density == .detachedCompact ? 10 : 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.58))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
+
+                interactionHints
+
+                if !visibleShortcutActions.isEmpty {
+                    VStack(alignment: .center, spacing: density == .detachedCompact ? 6 : 8) {
+                        HoverEmptySectionDivider(title: "快捷键")
+                        shortcutHints
+                    }
+                }
+
+                HoverEmptyFooterNote()
+            }
+            .padding(.horizontal, density == .detachedCompact ? 8 : 14)
+            .padding(.vertical, density == .detachedCompact ? 10 : 16)
+        }
+        .frame(maxWidth: .infinity, minHeight: density == .detachedCompact ? 190 : 260, alignment: .center)
+    }
+
+    @ViewBuilder
+    private var interactionHints: some View {
+        if density == .detachedCompact {
+            VStack(alignment: .center, spacing: 6) {
+                HoverEmptyInteractionHint(
+                    icon: "cursorarrow",
+                    label: "Hover",
+                    title: "快速预览当前会话",
+                    density: density
+                )
+                HoverEmptyInteractionHint(
+                    icon: "cursorarrow.rays",
+                    label: "Click",
+                    title: "展开全部会话列表",
+                    density: density
+                )
+            }
+        } else {
+            HStack(alignment: .center, spacing: 8) {
+                HoverEmptyInteractionHint(
+                    icon: "cursorarrow",
+                    label: "Hover",
+                    title: "快速预览当前会话",
+                    density: density
+                )
+                HoverEmptyInteractionHint(
+                    icon: "cursorarrow.rays",
+                    label: "Click",
+                    title: "展开全部会话列表",
+                    density: density
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var shortcutHints: some View {
+        if density == .detachedCompact {
+            VStack(alignment: .center, spacing: 6) {
+                shortcutHintRows
+            }
+        } else {
+            HStack(alignment: .center, spacing: 8) {
+                shortcutHintRows
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var shortcutHintRows: some View {
+        ForEach(visibleShortcutActions, id: \.0.id) { action, shortcut in
+            HoverEmptyShortcutHint(action: action, shortcut: shortcut, density: density)
+        }
+    }
+}
+
+private struct HoverEmptyInteractionHint: View {
+    let icon: String
+    let label: String
+    let title: String
+    var density: HoverPreviewDensity = .regular
+
+    private var iconCircleSize: CGFloat {
+        density == .detachedCompact ? 28 : 38
+    }
+
+    var body: some View {
+        HStack(spacing: density == .detachedCompact ? 7 : 9) {
+            ZStack {
+                Circle()
+                    .fill(TerminalColors.green.opacity(0.10))
+                    .overlay(
+                        Circle()
+                            .strokeBorder(TerminalColors.green.opacity(0.26), lineWidth: 1)
+                    )
+                    .shadow(color: TerminalColors.green.opacity(0.20), radius: 18)
+
+                Image(systemName: icon)
+                    .font(.system(size: density == .detachedCompact ? 12 : 16, weight: .bold))
+                    .foregroundStyle(TerminalColors.green)
+            }
+            .frame(width: iconCircleSize, height: iconCircleSize)
+
+            VStack(alignment: .leading, spacing: density == .detachedCompact ? 2 : 3) {
+                Text(appLocalized: label)
+                    .font(.system(size: density == .detachedCompact ? 11 : 13, weight: .bold))
+                    .foregroundColor(TerminalColors.green)
+
+                Text(appLocalized: title)
+                    .font(.system(size: density == .detachedCompact ? 10 : 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.62))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.84)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, density == .detachedCompact ? 8 : 10)
+        .padding(.vertical, density == .detachedCompact ? 6 : 8)
+        .frame(maxWidth: .infinity, minHeight: density == .detachedCompact ? 40 : 52)
+        .background(HoverEmptyGlassCardBackground(cornerRadius: 12, borderOpacity: 0.12))
+    }
+}
+
+private struct HoverEmptyShortcutHint: View {
+    let action: GlobalShortcutAction
+    let shortcut: GlobalShortcut
+    var density: HoverPreviewDensity = .regular
+
+    var body: some View {
+        HStack(spacing: density == .detachedCompact ? 6 : 8) {
+            Image(systemName: iconName)
+                .font(.system(size: density == .detachedCompact ? 10 : 12, weight: .bold))
+                .foregroundColor(TerminalColors.green)
+                .frame(width: density == .detachedCompact ? 14 : 16)
+
+            Text(appLocalized: action.shortTitle)
+                .font(.system(size: density == .detachedCompact ? 10 : 12, weight: .bold))
+                .foregroundColor(.white.opacity(0.9))
+
+            Spacer(minLength: 6)
+
+            ShortcutVisualLabel(
+                shortcut: shortcut,
+                fontSize: density == .detachedCompact ? 9 : 10,
+                foregroundColor: TerminalColors.green.opacity(0.95),
+                keyBackground: TerminalColors.green.opacity(0.12),
+                keyBorder: TerminalColors.green.opacity(0.28),
+                keyMinWidth: density == .detachedCompact ? 16 : 18,
+                keyHorizontalPadding: density == .detachedCompact ? 4 : 5,
+                keyVerticalPadding: density == .detachedCompact ? 2 : 3,
+                keyCornerRadius: 7
+            )
+        }
+        .padding(.horizontal, density == .detachedCompact ? 8 : 10)
+        .padding(.vertical, density == .detachedCompact ? 5 : 7)
+        .frame(maxWidth: .infinity, minHeight: density == .detachedCompact ? 32 : 38)
+        .background(HoverEmptyGlassCardBackground(cornerRadius: 11, borderOpacity: 0.24))
+    }
+
+    private var iconName: String {
+        switch action {
+        case .openActiveSession:
+            return "bolt.fill"
+        case .openSessionList:
+            return "list.bullet"
+        }
+    }
+}
+
+private struct HoverEmptySectionDivider: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            HoverEmptyDividerLine()
+            Circle()
+                .fill(TerminalColors.green.opacity(0.5))
+                .frame(width: 2.5, height: 2.5)
+            Text(appLocalized: title)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(TerminalColors.green)
+            Circle()
+                .fill(TerminalColors.green.opacity(0.5))
+                .frame(width: 2.5, height: 2.5)
+            HoverEmptyDividerLine()
+        }
+    }
+}
+
+private struct HoverEmptyFooterNote: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            HoverEmptyDividerLine()
+            Image(systemName: "lightbulb")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(TerminalColors.green.opacity(0.86))
+            Text(appLocalized: "新会话会显示在这里")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.white.opacity(0.42))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+            HoverEmptyDividerLine()
+        }
+    }
+}
+
+private struct HoverEmptyDividerLine: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.10))
+            .frame(height: 1)
+    }
+}
+
+private struct HoverEmptyGlassCardBackground: View {
+    let cornerRadius: CGFloat
+    let borderOpacity: Double
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Color.white.opacity(0.035))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(borderOpacity),
+                                TerminalColors.green.opacity(borderOpacity),
+                                Color.white.opacity(borderOpacity * 0.45)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: TerminalColors.green.opacity(0.10), radius: 18, y: 8)
     }
 }

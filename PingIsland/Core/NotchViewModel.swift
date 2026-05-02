@@ -169,7 +169,7 @@ class NotchViewModel: ObservableObject {
                 )
             }
         case .instances:
-            let fallbackHeight: CGFloat = openReason == .hover ? 180 : 200
+            let fallbackHeight: CGFloat = openReason == .hover ? 150 : 170
             let measuredHeight = openedMeasuredHeight ?? fallbackHeight
 
             switch style {

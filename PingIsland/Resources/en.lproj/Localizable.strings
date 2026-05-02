@@ -301,6 +301,16 @@
 
 "No active session" = "No active session";
 "Hover here to preview your active Agent sessions." = "Hover here to preview your active Agent sessions.";
+"Hover" = "Hover";
+"Click" = "Click";
+"Hover to preview active sessions. Click the Island to open the session list." = "Hover to preview. Click the Island for the list.";
+"将鼠标移至顶部，即可查看当前活跃会话" = "Hover to preview";
+"点击刘海区域，展开完整会话列表" = "Click for the list";
+"快速预览当前会话" = "Preview sessions";
+"展开全部会话列表" = "Open session list";
+"快捷操作" = "Quick actions";
+"新的会话开始后，将在此实时展示" = "New sessions appear here";
+"新会话会显示在这里" = "New sessions appear here";
 "当前操作" = "Current action";
 "批准后会继续执行当前会话。" = "Approving will continue the current session.";
 "%@ 请求批准" = "%@ requests approval";
