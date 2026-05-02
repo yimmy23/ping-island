@@ -884,6 +884,39 @@ struct SessionState: Equatable, Identifiable, Sendable {
         ingress == .nativeRuntime
     }
 
+    nonisolated var supportsTmuxCLIMessaging: Bool {
+        guard hasTmuxRoutingEvidence else { return false }
+
+        switch provider {
+        case .claude:
+            let normalizedClientInfo = clientInfo.normalizedForClaudeRouting()
+            let normalizedProfileID = normalizedClientInfo.profileID?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+
+            if normalizedProfileID == "qoder-cli" {
+                return true
+            }
+
+            return normalizedClientInfo.kind == .claudeCode
+                && !normalizedClientInfo.prefersAnsweredQuestionFollowupAction
+        case .codex:
+            return clientInfo.kind == .codexCLI
+        case .copilot:
+            return false
+        }
+    }
+
+    private nonisolated var hasTmuxRoutingEvidence: Bool {
+        isInTmux
+            || Self.hasContent(clientInfo.tmuxPaneIdentifier)
+            || Self.hasContent(clientInfo.tmuxSessionIdentifier)
+    }
+
+    private nonisolated static func hasContent(_ value: String?) -> Bool {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
     nonisolated var shouldShowTerminateActionInPrimaryUI: Bool {
         isNativeRuntimeSession && phase != .ended
     }

@@ -430,7 +430,7 @@ struct ChatView: View {
 
     /// Inline follow-up is available for native runtime sessions and terminal-backed tmux sessions.
     private var canSendMessages: Bool {
-        session.isNativeRuntimeSession || (session.isInTmux && session.tty != nil)
+        session.isNativeRuntimeSession || session.supportsTmuxCLIMessaging
     }
 
     private var messagePlaceholder: String {

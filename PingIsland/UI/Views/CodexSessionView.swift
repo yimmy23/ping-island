@@ -274,7 +274,9 @@ struct CodexThreadInspectorView: View {
         guard mode == .chat else { return false }
         guard session.phase != .ended else { return false }
         guard session.intervention == nil else { return false }
-        return session.clientInfo.kind == .codexCLI || session.isNativeRuntimeSession
+        return session.clientInfo.kind == .codexCLI
+            || session.isNativeRuntimeSession
+            || session.supportsTmuxCLIMessaging
     }
 
     private var followUpPlaceholder: String {

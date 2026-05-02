@@ -515,7 +515,7 @@ class SessionMonitor: ObservableObject {
         }
 
         if session.provider == .codex,
-           (session.ingress == .codexAppServer || session.ingress == .nativeRuntime) {
+           session.ingress == .nativeRuntime {
             try await continueCodexThread(
                 sessionId: sessionId,
                 expectedTurnId: expectedTurnId ?? "",
@@ -528,6 +528,36 @@ class SessionMonitor: ObservableObject {
             try await runtimeCoordinator.sendUserInput(
                 provider: session.provider,
                 sessionID: session.sessionId,
+                text: trimmed
+            )
+            return
+        }
+
+        if session.supportsTmuxCLIMessaging {
+            guard let target = await findTmuxTarget(for: session) else {
+                throw NSError(
+                    domain: "PingIsland.SessionMonitor",
+                    code: 404,
+                    userInfo: [NSLocalizedDescriptionKey: "Could not find the terminal pane for this session."]
+                )
+            }
+
+            guard await ToolApprovalHandler.shared.sendMessage(trimmed, to: target) else {
+                throw NSError(
+                    domain: "PingIsland.SessionMonitor",
+                    code: 500,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to send the follow-up message to the terminal session."]
+                )
+            }
+
+            return
+        }
+
+        if session.provider == .codex,
+           session.ingress == .codexAppServer {
+            try await continueCodexThread(
+                sessionId: sessionId,
+                expectedTurnId: expectedTurnId ?? "",
                 text: trimmed
             )
             return
@@ -640,6 +670,62 @@ class SessionMonitor: ObservableObject {
             }
         } catch {
             return nil
+        }
+
+        return nil
+    }
+
+    private func findTmuxTarget(for session: SessionState) async -> TmuxTarget? {
+        guard let tmuxPath = await TmuxPathFinder.shared.getTmuxPath() else {
+            return nil
+        }
+
+        let normalizedTTY = session.tty?
+            .replacingOccurrences(of: "/dev/", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPaneID = session.clientInfo.tmuxPaneIdentifier?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        do {
+            let output = try await ProcessExecutor.shared.run(
+                tmuxPath,
+                arguments: [
+                    "list-panes",
+                    "-a",
+                    "-F",
+                    "#{session_name}:#{window_index}.#{pane_index} #{pane_id} #{pane_tty}"
+                ]
+            )
+
+            for line in output.components(separatedBy: "\n") {
+                let parts = line.split(separator: " ", maxSplits: 2).map(String.init)
+                guard parts.count >= 2 else { continue }
+
+                let target = parts[0]
+                let paneID = parts[1]
+                let paneTTY = parts.count >= 3
+                    ? parts[2].replacingOccurrences(of: "/dev/", with: "")
+                    : ""
+
+                if normalizedPaneID?.isEmpty == false,
+                   paneID == normalizedPaneID,
+                   let target = TmuxTarget(from: target) {
+                    return target
+                }
+
+                if normalizedTTY?.isEmpty == false,
+                   paneTTY == normalizedTTY,
+                   let target = TmuxTarget(from: target) {
+                    return target
+                }
+            }
+        } catch {
+            // Fall back to the older pid/cwd matching path below.
+        }
+
+        if let pid = session.pid,
+           let target = await TmuxController.shared.findTmuxTarget(forClaudePid: pid) {
+            return target
         }
 
         return nil

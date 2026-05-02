@@ -81,6 +81,73 @@ final class SessionStateTests: XCTestCase {
         XCTAssertEqual(session.titleOnlySubagentDisplayTitle, "Agent · Read File README.md")
     }
 
+    func testTmuxCLIMessagingSupportsClaudeCodeCodexCLIAndQoderCLI() {
+        let claudeSession = SessionState(
+            sessionId: "claude-tmux",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(kind: .claudeCode, name: "Claude Code"),
+            tty: "ttys001",
+            isInTmux: true
+        )
+        let codexSession = SessionState(
+            sessionId: "codex-tmux",
+            cwd: "/tmp/project",
+            provider: .codex,
+            clientInfo: SessionClientInfo(
+                kind: .codexCLI,
+                profileID: "codex-cli",
+                name: "Codex CLI",
+                tmuxPaneIdentifier: "%3"
+            )
+        )
+        let qoderSession = SessionState(
+            sessionId: "qoder-cli-tmux",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "qoder-cli",
+                name: "Qoder CLI",
+                origin: "cli",
+                tmuxPaneIdentifier: "%4"
+            )
+        )
+
+        XCTAssertTrue(claudeSession.supportsTmuxCLIMessaging)
+        XCTAssertTrue(codexSession.supportsTmuxCLIMessaging)
+        XCTAssertTrue(qoderSession.supportsTmuxCLIMessaging)
+    }
+
+    func testTmuxCLIMessagingRejectsDesktopOrHostedIDEClients() {
+        let codexAppSession = SessionState(
+            sessionId: "codex-app-tmux",
+            cwd: "/tmp/project",
+            provider: .codex,
+            clientInfo: SessionClientInfo(
+                kind: .codexApp,
+                profileID: "codex-app",
+                name: "Codex App",
+                tmuxPaneIdentifier: "%3"
+            )
+        )
+        let qoderIDESession = SessionState(
+            sessionId: "qoder-ide-tmux",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "qoder",
+                name: "Qoder",
+                terminalBundleIdentifier: "com.qoder.ide",
+                tmuxPaneIdentifier: "%4"
+            )
+        )
+
+        XCTAssertFalse(codexAppSession.supportsTmuxCLIMessaging)
+        XCTAssertFalse(qoderIDESession.supportsTmuxCLIMessaging)
+    }
+
     func testQoderAgentPrefixedDisplayTitleUsesCodexStyleSubagentRendering() {
         let session = SessionState(
             sessionId: "qoder-agent-prefix",
