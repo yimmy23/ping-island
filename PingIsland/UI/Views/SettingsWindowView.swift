@@ -75,6 +75,25 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     }
 }
 
+struct QoderCLIHookRefreshNoticeGate {
+    private static let defaultsKey = "SettingsPanel.qoderCLIHookRefreshNoticeShown.v1"
+
+    let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func consumeShouldShowNotice() -> Bool {
+        guard !defaults.bool(forKey: Self.defaultsKey) else {
+            return false
+        }
+
+        defaults.set(true, forKey: Self.defaultsKey)
+        return true
+    }
+}
+
 @MainActor
 final class SettingsPanelViewModel: ObservableObject {
     struct HookReinstallFeedback: Equatable {
@@ -92,16 +111,22 @@ final class SettingsPanelViewModel: ObservableObject {
     @Published private(set) var hookReinstallFeedbacks: [String: HookReinstallFeedback] = [:]
     @Published private(set) var customHookInstallations: [HookInstaller.CustomHookInstallation] = []
     @Published private(set) var qoderCLIHookRefreshStatus: HookInstaller.QoderCLIHookRefreshStatus?
+    @Published private(set) var qoderCLIHookRefreshNoticeStatus: HookInstaller.QoderCLIHookRefreshStatus?
 
     private var hookFeedbackClearTasks: [String: Task<Void, Never>] = [:]
     private let qoderCLIHookRefreshStatusProvider: @MainActor () -> HookInstaller.QoderCLIHookRefreshStatus?
+    private let qoderCLIHookRefreshNoticeGate: QoderCLIHookRefreshNoticeGate
 
     init(
         qoderCLIHookRefreshStatusProvider: @escaping @MainActor () -> HookInstaller.QoderCLIHookRefreshStatus? = {
             HookInstaller.qoderCLIHookRefreshStatus()
-        }
+        },
+        qoderCLIHookRefreshNoticeDefaults: UserDefaults = .standard
     ) {
         self.qoderCLIHookRefreshStatusProvider = qoderCLIHookRefreshStatusProvider
+        qoderCLIHookRefreshNoticeGate = QoderCLIHookRefreshNoticeGate(
+            defaults: qoderCLIHookRefreshNoticeDefaults
+        )
     }
 
     var visibleHookProfiles: [ManagedHookClientProfile] {
@@ -116,7 +141,7 @@ final class SettingsPanelViewModel: ObservableObject {
     }
 
     var hasIntegrationNotice: Bool {
-        qoderCLIHookRefreshStatus != nil
+        qoderCLIHookRefreshNoticeStatus != nil
     }
 
     var visibleIDEExtensionProfiles: [ManagedIDEExtensionProfile] {
@@ -147,7 +172,24 @@ final class SettingsPanelViewModel: ObservableObject {
     }
 
     func refreshQoderCLIHookRefreshStatus() {
-        qoderCLIHookRefreshStatus = qoderCLIHookRefreshStatusProvider()
+        let status = qoderCLIHookRefreshStatusProvider()
+        qoderCLIHookRefreshStatus = status
+
+        guard let status else {
+            qoderCLIHookRefreshNoticeStatus = nil
+            return
+        }
+
+        if qoderCLIHookRefreshNoticeStatus != nil {
+            return
+        }
+
+        guard qoderCLIHookRefreshNoticeGate.consumeShouldShowNotice() else {
+            qoderCLIHookRefreshNoticeStatus = nil
+            return
+        }
+
+        qoderCLIHookRefreshNoticeStatus = status
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {
@@ -271,7 +313,7 @@ final class SettingsPanelViewModel: ObservableObject {
 
     func hookNotice(for profile: ManagedHookClientProfile) -> String? {
         guard profile.id == "qoder-cli-hooks",
-              let status = qoderCLIHookRefreshStatus else {
+              let status = qoderCLIHookRefreshNoticeStatus else {
             return nil
         }
 
