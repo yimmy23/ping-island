@@ -193,8 +193,238 @@ private func terminateDiagnosticsProcess(_ process: Process) {
     }
 }
 
+enum DiagnosticsLogRedactor {
+    nonisolated private static let sensitiveKeyFragments = [
+        "api_key",
+        "apikey",
+        "authorization",
+        "content",
+        "cookie",
+        "envelope",
+        "input",
+        "json",
+        "message",
+        "output",
+        "password",
+        "prompt",
+        "raw",
+        "secret",
+        "stderr",
+        "stdin",
+        "stdout",
+        "token",
+    ]
+
+    nonisolated static func sanitizedClaudeHookDebugLine(_ line: String) -> String? {
+        let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedLine.isEmpty else { return nil }
+
+        guard let data = trimmedLine.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return encodedLine([
+                "redacted": true,
+                "parseError": "invalid-json",
+                "rawByteCount": trimmedLine.utf8.count,
+            ])
+        }
+
+        var sanitized: [String: Any] = [
+            "redacted": true,
+        ]
+
+        sanitized["idHash"] = redactedIdentifier(stringValue(object["id"]))
+        sanitized["timestamp"] = stringValue(object["timestamp"])
+        sanitized["provider"] = stringValue(object["provider"])
+        sanitized["clientKind"] = stringValue(object["clientKind"])
+        sanitized["eventType"] = stringValue(object["eventType"])
+        sanitized["sessionKeyHash"] = redactedIdentifier(stringValue(object["sessionKey"]))
+        sanitized["expectsResponse"] = object["expectsResponse"] as? Bool
+        sanitized["statusKind"] = stringValue(object["statusKind"])
+        sanitized["title"] = textSummary(object["title"])
+        sanitized["preview"] = textSummary(object["preview"])
+        sanitized["arguments"] = argumentSummary(object["arguments"])
+        sanitized["environmentKeys"] = dictionaryKeys(object["environment"])
+        sanitized["metadata"] = metadataSummary(object["metadata"])
+        sanitized["stdinRaw"] = payloadSummary(object["stdinRaw"])
+        sanitized["envelopeJSON"] = payloadSummary(object["envelopeJSON"])
+        sanitized["socketPathPresent"] = hasNonEmptyString(object["socketPath"])
+        sanitized["deliveryOutcome"] = redactedExcerpt(stringValue(object["deliveryOutcome"]), limit: 120)
+
+        return encodedLine(sanitized)
+    }
+
+    nonisolated static func redactedPlainText(_ text: String, limit: Int) -> String {
+        redactedExcerpt(text, limit: limit) ?? ""
+    }
+
+    nonisolated private static func argumentSummary(_ value: Any?) -> [String: Any]? {
+        guard let arguments = value as? [Any] else { return nil }
+        let flags = arguments.compactMap { stringValue($0) }
+            .filter { $0.hasPrefix("--") }
+            .prefix(24)
+
+        return [
+            "count": arguments.count,
+            "flags": Array(flags),
+        ]
+    }
+
+    nonisolated private static func metadataSummary(_ value: Any?) -> [String: Any]? {
+        guard let metadata = value as? [String: Any] else { return nil }
+        let keys = metadata.keys.sorted()
+        let selectedValues = metadata.reduce(into: [String: Any]()) { partial, pair in
+            guard isSafeMetadataKey(pair.key),
+                  let value = redactedExcerpt(stringValue(pair.value), limit: 120)
+            else {
+                return
+            }
+            partial[pair.key] = value
+        }
+
+        return [
+            "keys": keys,
+            "selectedValues": selectedValues,
+        ]
+    }
+
+    nonisolated private static func payloadSummary(_ value: Any?) -> [String: Any] {
+        guard let text = stringValue(value), !text.isEmpty else {
+            return [
+                "present": false,
+                "byteCount": 0,
+            ]
+        }
+
+        return [
+            "present": true,
+            "byteCount": text.utf8.count,
+        ]
+    }
+
+    nonisolated private static func textSummary(_ value: Any?) -> [String: Any] {
+        guard let text = stringValue(value), !text.isEmpty else {
+            return [
+                "present": false,
+                "characterCount": 0,
+            ]
+        }
+
+        return [
+            "present": true,
+            "characterCount": text.count,
+        ]
+    }
+
+    nonisolated private static func dictionaryKeys(_ value: Any?) -> [String]? {
+        guard let dictionary = value as? [String: Any] else { return nil }
+        return dictionary.keys.sorted()
+    }
+
+    nonisolated private static func isSafeMetadataKey(_ key: String) -> Bool {
+        let lowercasedKey = key.lowercased()
+        if sensitiveKeyFragments.contains(where: { lowercasedKey.contains($0) }) {
+            return false
+        }
+
+        return [
+            "client_kind",
+            "client_name",
+            "client_originator",
+            "hook_event_name",
+            "notification_type",
+            "provider",
+            "source",
+            "status",
+            "tool_name",
+        ].contains(lowercasedKey)
+    }
+
+    nonisolated private static func redactedExcerpt(_ value: String?, limit: Int) -> String? {
+        guard var value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        if !homePath.isEmpty {
+            value = value.replacingOccurrences(of: homePath, with: "~")
+        }
+        value = redactingTokenLikeSubstrings(in: value)
+
+        if value.count > limit {
+            let prefix = value.prefix(limit)
+            return "\(prefix)... [truncated, \(value.count) chars]"
+        }
+
+        return value
+    }
+
+    nonisolated private static func redactingTokenLikeSubstrings(in value: String) -> String {
+        let patterns = [
+            #"(?i)\bsk-[A-Za-z0-9_-]{6,}\b"#,
+            #"(?i)\bsk-ant-[A-Za-z0-9_-]{6,}\b"#,
+            #"(?i)\bgh[pousr]_[A-Za-z0-9_]{8,}\b"#,
+            #"(?i)\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"#,
+        ]
+
+        return patterns.reduce(value) { current, pattern in
+            guard let expression = try? NSRegularExpression(pattern: pattern) else { return current }
+            let range = NSRange(current.startIndex..<current.endIndex, in: current)
+            return expression.stringByReplacingMatches(
+                in: current,
+                options: [],
+                range: range,
+                withTemplate: "[redacted]"
+            )
+        }
+    }
+
+    nonisolated private static func redactedIdentifier(_ value: String?) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        return "redacted:\(fnv1a64(value))"
+    }
+
+    nonisolated private static func fnv1a64(_ value: String) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in value.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return String(format: "%016llx", hash)
+    }
+
+    nonisolated private static func hasNonEmptyString(_ value: Any?) -> Bool {
+        guard let text = stringValue(value) else { return false }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    nonisolated private static func stringValue(_ value: Any?) -> String? {
+        switch value {
+        case let string as String:
+            return string
+        case let number as NSNumber:
+            return number.stringValue
+        default:
+            return nil
+        }
+    }
+
+    nonisolated private static func encodedLine(_ object: [String: Any]) -> String? {
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+}
+
 actor DiagnosticsExporter {
     static let shared = DiagnosticsExporter()
+
+    private static let maxDebugFilesPerDirectory = 3
+    private static let maxDebugFileBytes = 256 * 1024
+    private static let maxClaudeDebugJSONLLines = 120
 
     private let fileManager = FileManager.default
 
@@ -245,17 +475,17 @@ actor DiagnosticsExporter {
         }
 
         do {
-            try copyDirectoryContentsIfPresent(
+            try copySanitizedClaudeHookDebugLogs(
                 from: preferredClaudeHookDebugDirectory(),
                 toRelativeDirectory: "debug/claude-hooks",
                 under: exportRoot
             )
         } catch {
-            warnings.append("Failed to copy Claude-compatible hook debug logs: \(error.localizedDescription)")
+            warnings.append("Failed to export Claude-compatible hook debug summaries: \(error.localizedDescription)")
         }
 
         do {
-            try copyDirectoryContentsIfPresent(
+            try copyRecentDirectoryContentsIfPresent(
                 from: preferredCodexHookDebugDirectory(),
                 toRelativeDirectory: "debug/codex-hooks",
                 under: exportRoot
@@ -265,7 +495,7 @@ actor DiagnosticsExporter {
         }
 
         do {
-            try copyDirectoryContentsIfPresent(
+            try copyRecentDirectoryContentsIfPresent(
                 from: preferredCodeBuddyHookDebugDirectory(),
                 toRelativeDirectory: "debug/codebuddy-hooks",
                 under: exportRoot
@@ -275,7 +505,7 @@ actor DiagnosticsExporter {
         }
 
         do {
-            try copyDirectoryContentsIfPresent(
+            try copyRecentDirectoryContentsIfPresent(
                 from: preferredQoderHookDebugDirectory(),
                 toRelativeDirectory: "debug/qoder-hooks",
                 under: exportRoot
@@ -285,7 +515,7 @@ actor DiagnosticsExporter {
         }
 
         do {
-            try copyDirectoryContentsIfPresent(
+            try copyRecentDirectoryContentsIfPresent(
                 from: preferredQoderCLIHookDebugDirectory(),
                 toRelativeDirectory: "debug/qoder-cli-hooks",
                 under: exportRoot
@@ -295,7 +525,7 @@ actor DiagnosticsExporter {
         }
 
         do {
-            try copyDirectoryContentsIfPresent(
+            try copyRecentDirectoryContentsIfPresent(
                 from: preferredHermesHookDebugDirectory(),
                 toRelativeDirectory: "debug/hermes-hooks",
                 under: exportRoot
@@ -363,7 +593,7 @@ actor DiagnosticsExporter {
         try fileManager.copyItem(at: sourceURL, to: destinationURL)
     }
 
-    private func copyDirectoryContentsIfPresent(from sourceURL: URL, toRelativeDirectory relativePath: String, under rootURL: URL) throws {
+    private func copySanitizedClaudeHookDebugLogs(from sourceURL: URL, toRelativeDirectory relativePath: String, under rootURL: URL) throws {
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: sourceURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             return
@@ -372,19 +602,121 @@ actor DiagnosticsExporter {
         let destinationRoot = rootURL.appendingPathComponent(relativePath, isDirectory: true)
         try fileManager.createDirectory(at: destinationRoot, withIntermediateDirectories: true)
 
-        let contents = try fileManager.contentsOfDirectory(
-            at: sourceURL,
+        let files = try recentRegularFiles(in: sourceURL, maxCount: Self.maxDebugFilesPerDirectory)
+        for file in files {
+            let destinationURL = destinationRoot.appendingPathComponent(file.lastPathComponent)
+            if file.pathExtension.lowercased() == "jsonl" {
+                try writeSanitizedClaudeHookJSONL(from: file, to: destinationURL)
+            } else {
+                try writeRedactedTailCopy(from: file, to: destinationURL)
+            }
+        }
+
+        if !files.isEmpty {
+            let readmeURL = destinationRoot.appendingPathComponent("README.txt")
+            let note = """
+            Claude hook debug JSONL files are exported as redacted summaries only.
+            Full stdinRaw and envelopeJSON payloads are intentionally omitted; only counts, event metadata, and hashed identifiers remain.
+            Export is limited to the \(Self.maxDebugFilesPerDirectory) most recent files and the last \(Self.maxClaudeDebugJSONLLines) JSONL records per file.
+            """
+            try note.write(to: readmeURL, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private func copyRecentDirectoryContentsIfPresent(from sourceURL: URL, toRelativeDirectory relativePath: String, under rootURL: URL) throws {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: sourceURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return
+        }
+
+        let destinationRoot = rootURL.appendingPathComponent(relativePath, isDirectory: true)
+        try fileManager.createDirectory(at: destinationRoot, withIntermediateDirectories: true)
+
+        for item in try recentRegularFiles(in: sourceURL, maxCount: Self.maxDebugFilesPerDirectory) {
+            let destinationURL = destinationRoot.appendingPathComponent(item.lastPathComponent)
+            try writeTailCopy(from: item, to: destinationURL)
+        }
+    }
+
+    private func recentRegularFiles(in directoryURL: URL, maxCount: Int) throws -> [URL] {
+        try fileManager.contentsOfDirectory(
+            at: directoryURL,
             includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
             options: [.skipsHiddenFiles]
         )
-
-        for item in contents {
-            let destinationURL = destinationRoot.appendingPathComponent(item.lastPathComponent)
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                try fileManager.removeItem(at: destinationURL)
-            }
-            try fileManager.copyItem(at: item, to: destinationURL)
+        .filter { url in
+            let values = try? url.resourceValues(forKeys: [.isRegularFileKey])
+            return values?.isRegularFile == true
         }
+        .sorted { lhs, rhs in
+            let leftDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let rightDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return leftDate > rightDate
+        }
+        .prefix(maxCount)
+        .map { $0 }
+    }
+
+    private func writeSanitizedClaudeHookJSONL(from sourceURL: URL, to destinationURL: URL) throws {
+        let lines = try tailLines(
+            from: sourceURL,
+            maxLineCount: Self.maxClaudeDebugJSONLLines,
+            maxBytes: Self.maxDebugFileBytes
+        )
+        let sanitizedLines = lines.compactMap(DiagnosticsLogRedactor.sanitizedClaudeHookDebugLine)
+
+        try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try (sanitizedLines.joined(separator: "\n") + "\n").write(to: destinationURL, atomically: true, encoding: .utf8)
+    }
+
+    private func writeRedactedTailCopy(from sourceURL: URL, to destinationURL: URL) throws {
+        let result = try tailData(from: sourceURL, maxBytes: Self.maxDebugFileBytes)
+        let text = String(decoding: result.data, as: UTF8.self)
+        var output = result.wasTruncated
+            ? "[Ping Island diagnostics: file truncated to last \(Self.maxDebugFileBytes) bytes]\n"
+            : ""
+        output += DiagnosticsLogRedactor.redactedPlainText(text, limit: Self.maxDebugFileBytes)
+
+        try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try output.write(to: destinationURL, atomically: true, encoding: .utf8)
+    }
+
+    private func writeTailCopy(from sourceURL: URL, to destinationURL: URL) throws {
+        let result = try tailData(from: sourceURL, maxBytes: Self.maxDebugFileBytes)
+        var output = Data()
+        if result.wasTruncated {
+            output.append(Data("[Ping Island diagnostics: file truncated to last \(Self.maxDebugFileBytes) bytes]\n".utf8))
+        }
+        output.append(result.data)
+
+        try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try output.write(to: destinationURL, options: .atomic)
+    }
+
+    private func tailLines(from sourceURL: URL, maxLineCount: Int, maxBytes: Int) throws -> [String] {
+        let result = try tailData(from: sourceURL, maxBytes: maxBytes)
+        var lines = String(decoding: result.data, as: UTF8.self)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+        if result.wasTruncated, !lines.isEmpty {
+            lines.removeFirst()
+        }
+
+        return Array(lines.suffix(maxLineCount))
+    }
+
+    private func tailData(from sourceURL: URL, maxBytes: Int) throws -> (data: Data, wasTruncated: Bool) {
+        let handle = try FileHandle(forReadingFrom: sourceURL)
+        defer { try? handle.close() }
+
+        let endOffset = try handle.seekToEnd()
+        let byteCount = UInt64(max(0, maxBytes))
+        let startOffset = endOffset > byteCount ? endOffset - byteCount : 0
+        try handle.seek(toOffset: startOffset)
+        let data = try handle.readToEnd() ?? Data()
+        return (data, startOffset > 0)
     }
 
     private func copyRecentCrashReports(toRelativeDirectory relativePath: String, under rootURL: URL) throws {
