@@ -134,6 +134,13 @@ SSH 远程支持是 Ping Island 的正式能力，而不是额外脚本。它可
 <a id="installation"></a>
 ## 安装
 
+### 使用 Homebrew Cask 安装
+
+```bash
+brew tap erha19/tap
+brew install --cask ping-island
+```
+
 ### 下载发行版
 
 1. 先访问[官网](https://erha19.github.io/ping-island/)查看产品介绍和最新下载入口，或直接打开 [Releases](https://github.com/erha19/ping-island/releases)
@@ -142,13 +149,6 @@ SSH 远程支持是 Ping Island 的正式能力，而不是额外脚本。它可
 4. 启动应用，并打开你希望 Ping Island 监控的客户端
 
 > 首次启动时，macOS 可能会要求你确认应用，或授予辅助功能 / Apple Events 权限以支持聚焦能力。
-
-Homebrew 用户可以通过项目 tap 安装：
-
-```bash
-brew tap erha19/tap
-brew install --cask ping-island
-```
 
 <a id="build-from-source"></a>
 ### 从源码构建

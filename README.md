@@ -119,6 +119,13 @@ The OpenClaw feature poster in `docs/images/ping-island-openclaw-poster.png` is 
 <a id="installation"></a>
 ## Installation
 
+### Install with Homebrew Cask
+
+```bash
+brew tap erha19/tap
+brew install --cask ping-island
+```
+
 ### Download a Release
 
 1. Visit the [official website](https://erha19.github.io/ping-island/) for the product overview and latest download link, or go straight to [Releases](https://github.com/erha19/ping-island/releases).
@@ -127,13 +134,6 @@ The OpenClaw feature poster in `docs/images/ping-island-openclaw-poster.png` is 
 4. Launch the app and start the clients you want Ping Island to monitor.
 
 > On first launch, macOS may ask you to confirm the app or grant Accessibility / Apple Events permissions for focus features.
-
-Homebrew users can install from the project tap:
-
-```bash
-brew tap erha19/tap
-brew install --cask ping-island
-```
 
 <a id="build-from-source"></a>
 ### Build from Source
