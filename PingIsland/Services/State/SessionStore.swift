@@ -75,6 +75,9 @@ actor SessionStore {
     private var persistedAssociations: [String: PersistedSessionAssociation] = [:]
     private var didLoadPersistedAssociations = false
     private var pendingAssociationSave: Task<Void, Never>?
+    private var pendingHookResponseCancellationHandler: @Sendable (String, SessionIngress) -> Void = {
+        SessionStore.cancelPendingHookResponse(toolUseId: $0, ingress: $1)
+    }
 
     // MARK: - Published State (for UI)
 
@@ -187,6 +190,14 @@ actor SessionStore {
         }
 
         publishState()
+    }
+
+    func setPendingHookResponseCancellationHandlerForTesting(
+        _ handler: (@Sendable (String, SessionIngress) -> Void)?
+    ) {
+        pendingHookResponseCancellationHandler = handler ?? {
+            SessionStore.cancelPendingHookResponse(toolUseId: $0, ingress: $1)
+        }
     }
 
     // MARK: - Hook Event Processing
@@ -350,8 +361,15 @@ actor SessionStore {
             && session.intervention?.awaitsExternalContinuation == true
             && session.clientInfo.prefersAnsweredQuestionFollowupAction
 
+        let previousPendingHookResponse = pendingHookResponse(in: session)
+
         if event.status == "ended", !shouldPreserveEndedStopForAnsweredQuestion {
             markSessionEnded(&session)
+            cancelOrphanedPendingHookResponse(
+                previousPendingHookResponse,
+                in: &session,
+                reason: event.event
+            )
             sessions[sessionId] = session
             syncLinkedQoderChildSessions(for: session)
             if session.clientInfo.isQwenCodeClient {
@@ -392,6 +410,21 @@ actor SessionStore {
             for: event,
             session: session
         )
+        let shouldClearCurrentIntervention = shouldClearIntervention(
+            for: event,
+            newPhase: newPhase,
+            currentIntervention: session.intervention
+        )
+        let hasIncomingIntervention: Bool
+        if case .some = intervention {
+            hasIncomingIntervention = true
+        } else {
+            hasIncomingIntervention = false
+        }
+        let shouldPreserveActiveQuestionIntervention = session.intervention?.kind == .question
+            && !hasIncomingIntervention
+            && newPhase != .waitingForInput
+            && !shouldClearCurrentIntervention
 
         if let preservedPendingApproval {
             Self.logger.debug(
@@ -441,11 +474,13 @@ actor SessionStore {
             if intervention.kind == .question {
                 session.phase = .waitingForInput
             }
+        } else if shouldPreserveActiveQuestionIntervention {
+            session.phase = .waitingForInput
         } else if shouldPreserveQwenQuestionIntervention {
             session.phase = .waitingForInput
         } else if shouldPreserveQoderCLIQuestionIntervention {
             session.phase = .waitingForInput
-        } else if shouldClearIntervention(for: event, newPhase: newPhase, currentIntervention: session.intervention) {
+        } else if shouldClearCurrentIntervention {
             session.intervention = nil
         }
 
@@ -466,6 +501,11 @@ actor SessionStore {
         }
 
         associateQoderChildSessionIfNeeded(sessionId: sessionId, event: event, session: &session)
+        cancelOrphanedPendingHookResponse(
+            previousPendingHookResponse,
+            in: &session,
+            reason: event.event
+        )
 
         sessions[sessionId] = session
         syncLinkedQoderChildSessions(for: session)
@@ -767,6 +807,109 @@ actor SessionStore {
             toolInput: nil,
             receivedAt: pendingTool.timestamp
         )
+    }
+
+    private struct PendingHookResponse {
+        let toolUseId: String
+        let kind: SessionInterventionKind
+        let ingress: SessionIngress
+    }
+
+    private nonisolated static func cancelPendingHookResponse(
+        toolUseId: String,
+        ingress: SessionIngress
+    ) {
+        Task { @MainActor in
+            switch ingress {
+            case .remoteBridge:
+                RemoteConnectorManager.shared.respondToPermission(
+                    toolUseId: toolUseId,
+                    decision: "cancel"
+                )
+            case .hookBridge:
+                HookSocketServer.shared.cancelPendingPermission(toolUseId: toolUseId)
+            case .codexAppServer, .nativeRuntime:
+                break
+            }
+        }
+    }
+
+    private func pendingHookResponse(in session: SessionState) -> PendingHookResponse? {
+        if let activePermission = session.activePermission,
+           !activePermission.toolUseId.isEmpty {
+            return PendingHookResponse(
+                toolUseId: activePermission.toolUseId,
+                kind: .approval,
+                ingress: session.ingress
+            )
+        }
+
+        guard let intervention = session.intervention,
+              intervention.supportsInlineResponse,
+              let toolUseId = pendingHookResponseToolUseId(for: intervention) else {
+            return nil
+        }
+
+        return PendingHookResponse(
+            toolUseId: toolUseId,
+            kind: intervention.kind,
+            ingress: session.ingress
+        )
+    }
+
+    private func pendingHookResponseToolUseId(for intervention: SessionIntervention) -> String? {
+        [
+            intervention.metadata["originalToolUseId"],
+            intervention.metadata["toolUseId"],
+            intervention.metadata["tool_use_id"],
+            intervention.id
+        ]
+        .compactMap { value -> String? in
+            guard let value else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        .first
+    }
+
+    private func cancelOrphanedPendingHookResponse(
+        _ previous: PendingHookResponse?,
+        in session: inout SessionState,
+        reason: String
+    ) {
+        guard let previous,
+              !isPendingHookResponseVisible(previous, in: session) else {
+            return
+        }
+
+        let sessionIdPrefix = String(session.sessionId.prefix(8))
+        let toolUseIdPrefix = String(previous.toolUseId.prefix(12))
+        Self.logger.notice(
+            "Cancelling orphaned pending hook response session=\(sessionIdPrefix, privacy: .public) tool=\(toolUseIdPrefix, privacy: .public) reason=\(reason, privacy: .public)"
+        )
+        if previous.kind == .approval {
+            updateToolStatus(in: &session, toolId: previous.toolUseId, status: .error)
+            clearResolvedApprovalIntervention(in: &session, toolUseId: previous.toolUseId)
+        }
+        pendingHookResponseCancellationHandler(previous.toolUseId, previous.ingress)
+    }
+
+    private func isPendingHookResponseVisible(
+        _ pending: PendingHookResponse,
+        in session: SessionState
+    ) -> Bool {
+        if pending.kind == .approval,
+           session.activePermission?.toolUseId == pending.toolUseId {
+            return true
+        }
+
+        guard let intervention = session.intervention,
+              intervention.kind == pending.kind,
+              intervention.supportsInlineResponse else {
+            return false
+        }
+
+        return intervention.matchesResolvedToolUseId(pending.toolUseId)
     }
 
     private func processSubagentTracking(event: HookEvent, session: inout SessionState) {
@@ -1644,13 +1787,34 @@ actor SessionStore {
             }
             return false
         }
-        if event.event == "PostToolUse" || event.event == "Stop" || event.event == "SessionEnd" {
+        if event.event == "PostToolUse" {
+            return isQuestionToolPostToolUse(event, matching: currentIntervention)
+        }
+        if event.event == "Stop" || event.event == "SessionEnd" {
             return true
         }
         if event.isAskUserQuestionRequest {
             return false
         }
         return newPhase != .waitingForInput
+    }
+
+    private func isQuestionToolPostToolUse(
+        _ event: HookEvent,
+        matching intervention: SessionIntervention?
+    ) -> Bool {
+        guard event.event == "PostToolUse" else { return false }
+        let normalizedTool = event.tool?
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        guard normalizedTool == "askuserquestion" || normalizedTool == "askfollowupquestion" else {
+            return false
+        }
+        guard let toolUseId = event.toolUseId else {
+            return true
+        }
+        return intervention?.matchesResolvedToolUseId(toolUseId) == true
     }
 
     private func shouldPreserveQwenQuestionIntervention(

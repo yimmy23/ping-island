@@ -54,6 +54,25 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testUnrelatedPostToolUseDoesNotClearPendingClaudeQuestion() async {
+        let sessionId = "claude-question-posttool-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        await store.process(.hookReceived(makeClaudeQuestionEvent(sessionId: sessionId)))
+        await store.process(.hookReceived(makeClaudePostToolUseEvent(
+            sessionId: sessionId,
+            tool: "Bash",
+            toolUseId: "tool-bash"
+        )))
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertEqual(session?.intervention?.kind, .question)
+        XCTAssertEqual(session?.intervention?.metadata["originalToolUseId"], "toolu_\(sessionId)")
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     func testQoderWorkPermissionRequestStaysNotifyOnly() async {
         let sessionId = "qoderwork-permission-\(UUID().uuidString)"
         let store = SessionStore.shared
@@ -352,6 +371,33 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
                 ])
             ],
             toolUseId: "toolu_\(sessionId)",
+            notificationType: nil,
+            message: nil
+        )
+    }
+
+    private func makeClaudePostToolUseEvent(
+        sessionId: String,
+        tool: String,
+        toolUseId: String
+    ) -> HookEvent {
+        HookEvent(
+            sessionId: sessionId,
+            cwd: "/tmp/project",
+            event: "PostToolUse",
+            status: "processing",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .claudeCode,
+                profileID: "claude_code",
+                name: "Claude Code",
+                bundleIdentifier: "com.anthropic.claudecode"
+            ),
+            pid: nil,
+            tty: nil,
+            tool: tool,
+            toolInput: [:],
+            toolUseId: toolUseId,
             notificationType: nil,
             message: nil
         )

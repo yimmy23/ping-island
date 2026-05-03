@@ -109,6 +109,43 @@ final class ClaudeApprovalStateTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testSupersededPermissionRequestCancelsPreviousPendingHookResponse() async {
+        let sessionId = "claude-approval-superseded-\(UUID().uuidString)"
+        let store = SessionStore.shared
+        let recorder = PendingHookCancellationRecorder()
+
+        await store.setPendingHookResponseCancellationHandlerForTesting { toolUseId, ingress in
+            recorder.record(toolUseId: toolUseId, ingress: ingress)
+            Task { @MainActor in
+                if ingress == .hookBridge {
+                    HookSocketServer.shared.cancelPendingPermission(toolUseId: toolUseId)
+                }
+            }
+        }
+
+        await store.process(.hookReceived(makeToolEvent(
+            sessionId: sessionId,
+            event: "PermissionRequest",
+            status: "waiting_for_approval",
+            tool: "Read",
+            toolUseId: "tool-read"
+        )))
+        await store.process(.hookReceived(makeToolEvent(
+            sessionId: sessionId,
+            event: "PermissionRequest",
+            status: "waiting_for_approval",
+            tool: "Grep",
+            toolUseId: "tool-grep"
+        )))
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.activePermission?.toolUseId, "tool-grep")
+        XCTAssertEqual(recorder.toolUseIds, ["tool-read"])
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+        await store.setPendingHookResponseCancellationHandlerForTesting(nil)
+    }
+
     func testCachedToolUseIdClearsBridgeApprovalInterventionAfterApproval() async {
         let sessionId = "claude-approval-cached-\(UUID().uuidString)"
         let store = SessionStore.shared
@@ -210,5 +247,22 @@ final class ClaudeApprovalStateTests: XCTestCase {
             notificationType: nil,
             message: nil
         )
+    }
+}
+
+private final class PendingHookCancellationRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var records: [(toolUseId: String, ingress: SessionIngress)] = []
+
+    var toolUseIds: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return records.map(\.toolUseId)
+    }
+
+    func record(toolUseId: String, ingress: SessionIngress) {
+        lock.lock()
+        records.append((toolUseId, ingress))
+        lock.unlock()
     }
 }
