@@ -54,12 +54,16 @@ class NotchViewModel: ObservableObject {
 
     // MARK: - Geometry
 
-    let geometry: NotchGeometry
+    @Published private(set) var geometry: NotchGeometry
     let spacing: CGFloat = 12
-    let hasPhysicalNotch: Bool
+    @Published private(set) var hasPhysicalNotch: Bool
 
     private static let defaultClosedHeight = ScreenNotchMetrics.fallbackClosedHeight
     private static let defaultClosedWidth: CGFloat = 266
+    // Preserve the visible side rails that the default closed island has beyond
+    // the physical camera housing, so mascot/count content never sits under it.
+    private static let physicalNotchContentAllowance: CGFloat =
+        defaultClosedWidth - ScreenNotchMetrics.fallbackNotchWidth
     private static let clickedInstancesPanelWidthRatio: CGFloat = 0.44
     private static let clickedInstancesPanelMaximumWidth: CGFloat = 520
     private static let detachmentLongPressNarrowedWidthScale: CGFloat = 0.82
@@ -112,7 +116,7 @@ class NotchViewModel: ObservableObject {
         guard hasPhysicalNotch else { return defaultClosedWidth }
         let systemWidth = ceil(deviceNotchRect.width)
         guard systemWidth > 0 else { return defaultClosedWidth }
-        return max(defaultClosedWidth, systemWidth)
+        return max(defaultClosedWidth, systemWidth + physicalNotchContentAllowance)
     }
 
     private var narrowedClosedWidth: CGFloat {
@@ -335,6 +339,27 @@ class NotchViewModel: ObservableObject {
     // while destroying this view model in unit-test scope teardown.
     nonisolated deinit {}
     #endif
+
+    func updateScreenGeometry(
+        deviceNotchRect: CGRect,
+        screenRect: CGRect,
+        windowHeight: CGFloat,
+        hasPhysicalNotch: Bool
+    ) {
+        let updatedGeometry = NotchGeometry(
+            deviceNotchRect: deviceNotchRect,
+            screenRect: screenRect,
+            windowHeight: windowHeight
+        )
+        let geometryChanged = updatedGeometry != geometry || hasPhysicalNotch != self.hasPhysicalNotch
+        guard geometryChanged else { return }
+
+        geometry = updatedGeometry
+        self.hasPhysicalNotch = hasPhysicalNotch
+        openedMeasuredHeight = nil
+        syncClosedWidth(animated: false)
+        refreshFullscreenPresentationState()
+    }
 
     private func observeEnvironment() {
         let workspaceCenter = NSWorkspace.shared.notificationCenter

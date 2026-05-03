@@ -3,6 +3,8 @@ import Combine
 
 @MainActor
 final class IslandPresentationCoordinator {
+    private static let dockedWindowHeight: CGFloat = 750
+
     let sessionMonitor = SessionMonitor()
     let viewModel: NotchViewModel
 
@@ -22,6 +24,13 @@ final class IslandPresentationCoordinator {
 
     func updateScreen(_ screen: NSScreen) {
         self.screen = screen
+        let geometry = Self.makeDockedScreenGeometry(for: screen)
+        viewModel.updateScreenGeometry(
+            deviceNotchRect: geometry.deviceNotchRect,
+            screenRect: geometry.screenRect,
+            windowHeight: geometry.windowHeight,
+            hasPhysicalNotch: geometry.hasPhysicalNotch
+        )
         applySurfaceMode(AppSettings.surfaceMode, performBootAnimation: false)
     }
 
@@ -244,9 +253,26 @@ final class IslandPresentationCoordinator {
     }
 
     private static func makeViewModel(for screen: NSScreen) -> NotchViewModel {
+        let geometry = makeDockedScreenGeometry(for: screen)
+
+        return NotchViewModel(
+            deviceNotchRect: geometry.deviceNotchRect,
+            screenRect: geometry.screenRect,
+            windowHeight: geometry.windowHeight,
+            hasPhysicalNotch: geometry.hasPhysicalNotch
+        )
+    }
+
+    private struct DockedScreenGeometry {
+        let deviceNotchRect: CGRect
+        let screenRect: CGRect
+        let windowHeight: CGFloat
+        let hasPhysicalNotch: Bool
+    }
+
+    private static func makeDockedScreenGeometry(for screen: NSScreen) -> DockedScreenGeometry {
         let screenFrame = screen.frame
         let notchSize = screen.notchSize
-        let windowHeight: CGFloat = 750
         let deviceNotchRect = CGRect(
             x: (screenFrame.width - notchSize.width) / 2,
             y: 0,
@@ -254,10 +280,10 @@ final class IslandPresentationCoordinator {
             height: notchSize.height
         )
 
-        return NotchViewModel(
+        return DockedScreenGeometry(
             deviceNotchRect: deviceNotchRect,
             screenRect: screenFrame,
-            windowHeight: windowHeight,
+            windowHeight: dockedWindowHeight,
             hasPhysicalNotch: screen.hasPhysicalNotch
         )
     }

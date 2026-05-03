@@ -29,6 +29,24 @@ final class ScreenNotchMetricsTests: XCTestCase {
         XCTAssertEqual(metrics.closedHeight, 37)
     }
 
+    func testFallbackWidthDoesNotScaleWithDisplayResolution() {
+        let compactResolution = ScreenNotchMetrics.detect(
+            screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+            safeAreaTop: 38,
+            auxiliaryTopLeftWidth: nil,
+            auxiliaryTopRightWidth: nil
+        )
+        let moreSpaceResolution = ScreenNotchMetrics.detect(
+            screenFrame: CGRect(x: 0, y: 0, width: 1728, height: 1117),
+            safeAreaTop: 38,
+            auxiliaryTopLeftWidth: nil,
+            auxiliaryTopRightWidth: nil
+        )
+
+        XCTAssertEqual(compactResolution.size.width, ScreenNotchMetrics.fallbackNotchWidth)
+        XCTAssertEqual(moreSpaceResolution.size.width, ScreenNotchMetrics.fallbackNotchWidth)
+    }
+
     func testDetectFallsBackForNonNotchDisplays() {
         let metrics = ScreenNotchMetrics.detect(
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),

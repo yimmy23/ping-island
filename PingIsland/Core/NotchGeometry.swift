@@ -9,7 +9,7 @@ import CoreGraphics
 import Foundation
 
 /// Pure geometry calculations for the notch
-struct NotchGeometry: Sendable {
+struct NotchGeometry: Equatable, Sendable {
     let deviceNotchRect: CGRect
     let screenRect: CGRect
     let windowHeight: CGFloat

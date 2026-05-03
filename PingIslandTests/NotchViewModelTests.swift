@@ -101,11 +101,11 @@ final class NotchViewModelTests: XCTestCase {
             )
 
             XCTAssertEqual(viewModel.closedHeight, 38)
-            XCTAssertEqual(viewModel.closedSize, CGSize(width: 266, height: 38))
+            XCTAssertEqual(viewModel.closedSize, CGSize(width: 306, height: 38))
         }
     }
 
-    func testClosedWidthExpandsToCoverWiderDetectedSystemNotch() async {
+    func testClosedWidthExpandsBeyondWiderDetectedSystemNotch() async {
         await MainActor.run {
             let viewModel = NotchViewModel(
                 deviceNotchRect: CGRect(x: 0, y: 0, width: 312, height: 38),
@@ -117,8 +117,36 @@ final class NotchViewModelTests: XCTestCase {
                 fullscreenActivityProvider: { _ in false }
             )
 
-            XCTAssertEqual(viewModel.closedWidth, 312)
-            XCTAssertEqual(viewModel.closedSize, CGSize(width: 312, height: 38))
+            XCTAssertEqual(viewModel.closedWidth, 398)
+            XCTAssertEqual(viewModel.closedSize, CGSize(width: 398, height: 38))
+        }
+    }
+
+    func testScreenGeometryUpdateRefreshesClosedSizeAndPanelLimits() async {
+        await MainActor.run {
+            let viewModel = NotchViewModel(
+                deviceNotchRect: CGRect(x: 0, y: 0, width: 220, height: 38),
+                screenRect: CGRect(x: 0, y: 0, width: 1512, height: 982),
+                windowHeight: 320,
+                hasPhysicalNotch: true,
+                enableEventMonitoring: false,
+                observeSystemEnvironment: false,
+                fullscreenActivityProvider: { _ in false }
+            )
+
+            viewModel.updateOpenedMeasuredHeight(260)
+            viewModel.updateScreenGeometry(
+                deviceNotchRect: CGRect(x: 0, y: 0, width: 312, height: 42),
+                screenRect: CGRect(x: 0, y: 0, width: 1728, height: 1117),
+                windowHeight: 360,
+                hasPhysicalNotch: true
+            )
+
+            XCTAssertEqual(viewModel.screenRect, CGRect(x: 0, y: 0, width: 1728, height: 1117))
+            XCTAssertEqual(viewModel.windowHeight, 360)
+            XCTAssertEqual(viewModel.closedSize, CGSize(width: 398, height: 42))
+            XCTAssertNil(viewModel.openedMeasuredHeight)
+            XCTAssertEqual(viewModel.openedSize.width, 520)
         }
     }
 
