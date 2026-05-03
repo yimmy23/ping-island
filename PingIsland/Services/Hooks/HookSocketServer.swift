@@ -202,7 +202,7 @@ extension HookEvent {
             notificationType: notificationType,
             message: message,
             ingress: ingress,
-            bridgeIntervention: bridgeIntervention
+            bridgeIntervention: bridgeIntervention?.withResolvedToolUseId(toolUseId)
         )
     }
 
@@ -223,6 +223,28 @@ extension HookEvent {
             message: message,
             ingress: ingress,
             bridgeIntervention: bridgeIntervention
+        )
+    }
+}
+
+private extension SessionIntervention {
+    nonisolated func withResolvedToolUseId(_ toolUseId: String) -> SessionIntervention {
+        guard !toolUseId.isEmpty else { return self }
+
+        var metadata = self.metadata
+        metadata["toolUseId"] = toolUseId
+        metadata["tool_use_id"] = toolUseId
+        metadata["originalToolUseId"] = toolUseId
+
+        return SessionIntervention(
+            id: id,
+            kind: kind,
+            title: title,
+            message: message,
+            options: options,
+            questions: questions,
+            supportsSessionScope: supportsSessionScope,
+            metadata: metadata
         )
     }
 }

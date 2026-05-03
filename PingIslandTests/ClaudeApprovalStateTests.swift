@@ -109,6 +109,47 @@ final class ClaudeApprovalStateTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testCachedToolUseIdClearsBridgeApprovalInterventionAfterApproval() async {
+        let sessionId = "claude-approval-cached-\(UUID().uuidString)"
+        let store = SessionStore.shared
+        let bridgeIntervention = SessionIntervention(
+            id: "bridge-generated-approval-id",
+            kind: .approval,
+            title: "Claude needs approval",
+            message: "Write",
+            options: [],
+            questions: [],
+            supportsSessionScope: false,
+            metadata: ["tool_name": "Write"]
+        )
+
+        let permissionEvent = makeToolEvent(
+            sessionId: sessionId,
+            event: "PermissionRequest",
+            status: "waiting_for_approval",
+            tool: "Write",
+            toolUseId: "",
+            bridgeIntervention: bridgeIntervention
+        ).withToolUseId("toolu-write-1")
+
+        await store.process(.hookReceived(permissionEvent))
+
+        var session = await store.session(for: sessionId)
+        XCTAssertTrue(session?.needsApprovalResponse ?? false)
+        XCTAssertEqual(session?.activePermission?.toolUseId, "toolu-write-1")
+        XCTAssertEqual(session?.intervention?.id, "bridge-generated-approval-id")
+        XCTAssertEqual(session?.intervention?.metadata["tool_use_id"], "toolu-write-1")
+
+        await store.process(.permissionApproved(sessionId: sessionId, toolUseId: "toolu-write-1"))
+
+        session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .processing)
+        XCTAssertNil(session?.intervention)
+        XCTAssertFalse(session?.needsApprovalResponse ?? true)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     private func makeToolEvent(
         sessionId: String,
         event: String,
