@@ -128,6 +128,13 @@ The OpenClaw feature poster in `docs/images/ping-island-openclaw-poster.png` is 
 
 > On first launch, macOS may ask you to confirm the app or grant Accessibility / Apple Events permissions for focus features.
 
+Homebrew users can install from the project tap:
+
+```bash
+brew tap erha19/tap
+brew install --cask ping-island
+```
+
 <a id="build-from-source"></a>
 ### Build from Source
 
@@ -154,7 +161,7 @@ The script re-signs the built app bundle with a consistent ad-hoc signature befo
 The generated files land in `releases/unsigned/` as `PingIsland-<version>.dmg` and `PingIsland-<version>.zip`.
 The DMG uses the repo-tracked installer artwork at `docs/images/ping-island-dmg-installer-background.png` by default; set `PING_ISLAND_DMG_BACKGROUND_SOURCE` if you want to preview a different background locally.
 
-To create signed and notarized release packages in GitHub Actions, configure the release secrets described in [docs/sparkle-release.md](docs/sparkle-release.md) and run `.github/workflows/release-packages.yml` against a `v*` tag or the manual workflow dispatch input.
+To create signed and notarized release packages in GitHub Actions, configure the release secrets described in [docs/sparkle-release.md](docs/sparkle-release.md) and run `.github/workflows/release-packages.yml` against a `v*` tag or the manual workflow dispatch input. Homebrew Cask publishing is documented in [docs/homebrew-cask-release.md](docs/homebrew-cask-release.md).
 
 The same workflow also publishes a Linux `PingIslandBridge` asset that Ping Island can download when bootstrapping Linux SSH hosts.
 
