@@ -23,6 +23,24 @@ final class CodexAuxiliaryHookFilterTests: XCTestCase {
         )
     }
 
+    func testIgnoresCurrentCodexTitleGenerationPromptWording() {
+        var filter = CodexAuxiliaryHookFilter()
+        let prompt = """
+        You are a helpful assistant. You will be presented with a user prompt, and your job is to provide a short title for a task that will be created from that prompt. The tasks typically have to do with coding-related tasks, for example requests for bug fixes or questions about a codebase. The title you generate will be shown in the UI to represent the prompt. Generate a concise UI title (up to 36 characters) for this task.
+        """
+
+        XCTAssertTrue(
+            filter.shouldIgnore(
+                provider: .codex,
+                sessionId: "codex-current-title-helper",
+                eventType: "UserPromptSubmit",
+                title: "UserPromptSubmit",
+                preview: prompt,
+                metadata: ["prompt": prompt]
+            )
+        )
+    }
+
     func testIgnoresFollowupEventsForPreviouslyIgnoredTitleGenerationSession() {
         var filter = CodexAuxiliaryHookFilter()
         let prompt = """

@@ -58,6 +58,7 @@ actor SessionStore {
     private var pendingQoderConversationPolls: [String: (id: UUID, task: Task<Void, Never>)] = [:]
     private var pendingOpenClawConversationPolls: [String: (id: UUID, task: Task<Void, Never>)] = [:]
     private var codexSessionAliases: [String: String] = [:]
+    private var ignoredCodexAuxiliaryHookSessionIds: Set<String> = []
 
     /// Sync debounce interval (100ms)
     private let syncDebounceNs: UInt64 = 100_000_000
@@ -270,15 +271,22 @@ actor SessionStore {
     }
 
     private func processHookEvent(_ event: HookEvent) async {
-        let sessionId = event.provider == .codex
-            ? resolveOrAdoptCodexHookSession(event)
-            : event.sessionId
-        if shouldIgnoreCodexHookEvent(event, existingSession: sessions[sessionId]) {
+        if shouldDropIgnoredCodexAuxiliaryHookEvent(event) {
+            return
+        }
+        if shouldIgnoreCodexHookEvent(event, existingSession: sessions[event.sessionId]) {
+            ignoredCodexAuxiliaryHookSessionIds.insert(event.sessionId)
+            clearCodexSessionAliases(for: event.sessionId)
+            removeIgnoredCodexPlaceholderIfNeeded(sessionId: event.sessionId)
             Self.logger.notice(
-                "Ignoring weak Codex hook event session=\(sessionId, privacy: .public) event=\(event.event, privacy: .public) status=\(event.status, privacy: .public)"
+                "Ignoring auxiliary Codex hook event session=\(event.sessionId.prefix(8), privacy: .public) event=\(event.event, privacy: .public)"
             )
             return
         }
+
+        let sessionId = event.provider == .codex
+            ? resolveOrAdoptCodexHookSession(event)
+            : event.sessionId
         if shouldIgnoreClaudeAskUserQuestionPermissionRequest(event) {
             Self.logger.notice(
                 "Ignoring duplicate Claude AskUserQuestion permission session=\(sessionId, privacy: .public)"
@@ -3233,6 +3241,13 @@ actor SessionStore {
         guard resolvedSessionId == event.sessionId else {
             return resolvedSessionId
         }
+        // A bare SessionStart has no durable identity yet.  Rebinding it to a
+        // recent Codex thread can make auxiliary helper sessions, such as title
+        // generation, mutate the visible user session before their prompt can be
+        // filtered.
+        guard event.event != "SessionStart" else {
+            return event.sessionId
+        }
         guard !sessions.keys.contains(event.sessionId) else {
             return event.sessionId
         }
@@ -3553,12 +3568,43 @@ actor SessionStore {
         return loweredBundle.contains("codex") || loweredName.contains("codex")
     }
 
+    private func shouldDropIgnoredCodexAuxiliaryHookEvent(_ event: HookEvent) -> Bool {
+        guard event.provider == .codex,
+              ignoredCodexAuxiliaryHookSessionIds.contains(event.sessionId) else {
+            return false
+        }
+
+        clearCodexSessionAliases(for: event.sessionId)
+        removeIgnoredCodexPlaceholderIfNeeded(sessionId: event.sessionId)
+        if event.event == "Stop" || event.event == "SessionEnd" {
+            ignoredCodexAuxiliaryHookSessionIds.remove(event.sessionId)
+        }
+        Self.logger.notice(
+            "Ignoring follow-up auxiliary Codex hook event session=\(event.sessionId.prefix(8), privacy: .public) event=\(event.event, privacy: .public)"
+        )
+        return true
+    }
+
+    private func removeIgnoredCodexPlaceholderIfNeeded(sessionId: String) {
+        guard let session = sessions[sessionId],
+              isLikelyEmptyCodexPlaceholder(session) else {
+            return
+        }
+
+        sessions.removeValue(forKey: sessionId)
+        cancelPendingCodexPlaceholderPrune(sessionId: sessionId)
+    }
+
     private func shouldIgnoreCodexHookEvent(_ event: HookEvent, existingSession: SessionState?) -> Bool {
         guard event.provider == .codex else { return false }
-        guard case .none = existingSession else { return false }
         guard event.clientInfo.sessionFilePath?.isEmpty != false else { return false }
         guard !event.expectsResponse else { return false }
         guard case .none = event.intervention else { return false }
+        if let existingSession {
+            guard isLikelyEmptyCodexPlaceholder(existingSession) else {
+                return false
+            }
+        }
         guard let message = Self.normalizedHookMessage(event.message) else {
             return false
         }

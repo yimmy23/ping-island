@@ -868,11 +868,15 @@ private extension BridgeProvider {
 
 struct CodexAuxiliaryHookFilter {
     private static let titleGenerationPromptPrefix =
-        "You are a helpful assistant. You will be presented with a user prompt"
-    private static let titleGenerationPromptMarker =
-        "Generate a concise UI title (18-36 characters) for this task."
+        "you are a helpful assistant. you will be presented with a user prompt"
+    private static let titleGenerationPromptRoleMarker =
+        "your job is to provide a short title"
+    private static let titleGenerationPromptAlternateRoleMarker =
+        "generate a concise ui title"
+    private static let titleGenerationPromptDisplayMarker =
+        "title you generate will be shown in the ui"
     private static let titleGenerationPromptReturnMarker =
-        "Return only the title. No quotes or trailing punctuation."
+        "return only the title"
 
     private let sessionRetention: TimeInterval
     private var ignoredSessionIDs: [String: Date] = [:]
@@ -916,20 +920,38 @@ struct CodexAuxiliaryHookFilter {
     }
 
     static func isCodexTitleGenerationPrompt(_ prompt: String?) -> Bool {
-        guard let prompt = prompt?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !prompt.isEmpty else {
+        guard let prompt = normalizedPrompt(prompt), !prompt.isEmpty else {
             return false
         }
 
+        let hasTitleGenerationRole = prompt.contains(titleGenerationPromptRoleMarker)
+            || prompt.contains(titleGenerationPromptAlternateRoleMarker)
+        let hasDisplayOrReturnInstruction = prompt.contains(titleGenerationPromptDisplayMarker)
+            || prompt.contains(titleGenerationPromptReturnMarker)
+            || prompt.contains("represent the prompt")
+            || prompt.contains("no quotes or trailing punctuation")
+
         return prompt.contains(titleGenerationPromptPrefix)
-            && prompt.contains(titleGenerationPromptMarker)
-            && prompt.contains(titleGenerationPromptReturnMarker)
+            && hasTitleGenerationRole
+            && hasDisplayOrReturnInstruction
     }
 
     private mutating func pruneExpiredSessions(referenceDate: Date) {
         ignoredSessionIDs = ignoredSessionIDs.filter { _, seenAt in
             referenceDate.timeIntervalSince(seenAt) < sessionRetention
         }
+    }
+
+    private static func normalizedPrompt(_ prompt: String?) -> String? {
+        guard let prompt else { return nil }
+        let collapsed = prompt
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return collapsed.isEmpty ? nil : collapsed
     }
 
     private func firstNonEmpty(_ values: String?...) -> String? {
