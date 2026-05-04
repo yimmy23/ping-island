@@ -1422,8 +1422,7 @@ actor SessionStore {
     ) async {
         guard var session = sessions[sessionId] else { return }
         if let intervention = session.intervention,
-           intervention.kind == .question,
-           session.clientInfo.prefersAnsweredQuestionFollowupAction {
+           shouldAwaitExternalContinuationAfterResolving(intervention, in: session) {
             session.intervention = intervention.markingAwaitingExternalContinuation(
                 actorName: session.interactionDisplayName,
                 selectedAnswers: submittedAnswers
@@ -1438,6 +1437,20 @@ actor SessionStore {
         session.lastActivity = Date()
         sessions[sessionId] = session
         publishState()
+    }
+
+    private nonisolated func shouldAwaitExternalContinuationAfterResolving(
+        _ intervention: SessionIntervention,
+        in session: SessionState
+    ) -> Bool {
+        guard intervention.kind == .question else { return false }
+        if session.clientInfo.prefersAnsweredQuestionFollowupAction {
+            return true
+        }
+        if !intervention.supportsInlineResponse {
+            return true
+        }
+        return intervention.id.hasPrefix("qoder-question-")
     }
 
     // MARK: - File Update Processing

@@ -27,7 +27,7 @@ final class QoderWorkContinuationTests: XCTestCase {
         XCTAssertEqual(session?.phase, .waitingForInput)
         XCTAssertTrue(session?.needsQuestionResponse ?? false)
         XCTAssertTrue(session?.intervention?.awaitsExternalContinuation ?? false)
-        XCTAssertTrue(session?.intervention?.supportsInlineResponse ?? false)
+        XCTAssertFalse(session?.intervention?.supportsInlineResponse ?? true)
         XCTAssertEqual(session?.intervention?.submittedAnswers["topic"], ["A 方案"])
         XCTAssertEqual(session?.intervention?.externalContinuationStatusMessage, "Qoder 有问题需要介入处理，可通过上方按钮快速打开并继续操作")
 
