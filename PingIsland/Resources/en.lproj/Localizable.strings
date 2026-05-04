@@ -142,6 +142,8 @@
 "管理 ~/.qwen/settings.json，按 Qwen Code 官方 hooks 协议接入 Island" = "Manage ~/.qwen/settings.json using Qwen Code's official hooks protocol for Island";
 "管理 ~/.openclaw/hooks/ping-island-openclaw，并自动启用内部 hook" = "Manage ~/.openclaw/hooks/ping-island-openclaw and automatically enable the internal hook";
 "管理 ~/.codebuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island" = "Manage ~/.codebuddy/settings.json using the CodeBuddy Hooks protocol for Island";
+"管理 ~/.codebuddy/settings.json，支持 CodeBuddy IDE hooks" = "Manage ~/.codebuddy/settings.json for CodeBuddy IDE hooks";
+"管理 ~/.codebuddy/settings.json，按 CodeBuddy CLI Claude-compatible hooks 协议接入 Island" = "Manage ~/.codebuddy/settings.json using CodeBuddy CLI's Claude-compatible hooks protocol for Island";
 "管理 ~/.workbuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island" = "Manage ~/.workbuddy/settings.json using the CodeBuddy Hooks protocol for Island";
 "管理 ~/Library/Application Support/Cursor/User/settings.json，按 Claude Hooks 协议接入 Island" = "Manage ~/Library/Application Support/Cursor/User/settings.json using the Claude Hooks protocol for Island";
 "管理 ~/.qoder/settings.json，按 Claude Code hooks 协议支持 Qoder CLI / IDE 会话" = "Manage ~/.qoder/settings.json using the Claude Code hooks protocol for Qoder CLI / IDE sessions";

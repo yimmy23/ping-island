@@ -186,6 +186,71 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testCodeBuddyCLINotificationQuestionDoesNotCreateInlineAnswer() async throws {
+        let sessionId = "codebuddy-cli-notification-\(UUID().uuidString)"
+        let store = SessionStore.shared
+        let event = HookEvent(
+            sessionId: sessionId,
+            cwd: "/tmp/project",
+            event: "Notification",
+            status: "processing",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "codebuddy-cli",
+                name: "CodeBuddy CLI",
+                origin: "cli"
+            ),
+            pid: nil,
+            tty: nil,
+            tool: nil,
+            toolInput: nil,
+            toolUseId: "bridge-\(sessionId)",
+            notificationType: "permission_prompt",
+            message: "needs your permission to use AskUserQuestion"
+        )
+        XCTAssertFalse(event.expectsResponse)
+
+        await store.process(.hookReceived(event))
+
+        let session = await store.session(for: sessionId)
+        XCTAssertNil(session?.intervention)
+        XCTAssertFalse(session?.phase.needsAttention ?? true)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
+    func testCodeBuddyCLIPermissionRequestQuestionClearsAfterInlineAnswer() async throws {
+        let sessionId = "codebuddy-cli-permission-\(UUID().uuidString)"
+        let store = SessionStore.shared
+        let event = makeCodeBuddyCLIPermissionRequest(sessionId: sessionId)
+        XCTAssertTrue(event.expectsResponse)
+
+        await store.process(.hookReceived(event))
+
+        var session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertEqual(session?.intervention?.kind, .question)
+        XCTAssertNil(session?.intervention?.metadata["responseMode"])
+        XCTAssertTrue(session?.intervention?.supportsInlineResponse ?? false)
+        XCTAssertEqual(session?.intervention?.metadata["originalToolUseId"], "call_\(sessionId)")
+        XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["SessionStore", "UI 卡片"])
+
+        await store.process(
+            .interventionResolved(
+                sessionId: sessionId,
+                nextPhase: .processing,
+                submittedAnswers: ["scope": ["SessionStore"]]
+            )
+        )
+
+        session = await store.session(for: sessionId)
+        XCTAssertNil(session?.intervention)
+        XCTAssertEqual(session?.phase, .processing)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     func testHistoryLoadedQuestionToolSynthesizesClaudeIntervention() async {
         let sessionId = "claude-history-\(UUID().uuidString)"
         let store = SessionStore.shared
@@ -398,6 +463,41 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
             tool: tool,
             toolInput: [:],
             toolUseId: toolUseId,
+            notificationType: nil,
+            message: nil
+        )
+    }
+
+    private func makeCodeBuddyCLIPermissionRequest(sessionId: String) -> HookEvent {
+        HookEvent(
+            sessionId: sessionId,
+            cwd: "/tmp/project",
+            event: "PermissionRequest",
+            status: "waiting_for_approval",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "codebuddy-cli",
+                name: "CodeBuddy CLI",
+                origin: "cli"
+            ),
+            pid: nil,
+            tty: nil,
+            tool: "AskUserQuestion",
+            toolInput: [
+                "questions": AnyCodable([
+                    [
+                        "id": "scope",
+                        "header": "范围",
+                        "question": "这次要修哪里？",
+                        "options": [
+                            ["label": "SessionStore"],
+                            ["label": "UI 卡片"]
+                        ]
+                    ]
+                ])
+            ],
+            toolUseId: "call_\(sessionId)",
             notificationType: nil,
             message: nil
         )

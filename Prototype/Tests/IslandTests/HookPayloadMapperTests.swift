@@ -695,6 +695,145 @@ func qoderCLIClientMetadataCanBeInjectedFromBridgeArguments() throws {
 }
 
 @Test
+func codeBuddyCLIClientMetadataCanBeInjectedFromBridgeArguments() throws {
+    let payload = """
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "codebuddy-cli-123"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge", "--source", "claude",
+            "--client-kind", "codebuddy-cli",
+            "--client-name", "CodeBuddy CLI",
+            "--client-origin", "cli",
+            "--client-originator", "CodeBuddy"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.provider == .claude)
+    #expect(envelope.metadata["client_kind"] == "codebuddy-cli")
+    #expect(envelope.metadata["client_name"] == "CodeBuddy CLI")
+    #expect(envelope.metadata["client_origin"] == "cli")
+    #expect(envelope.metadata["client_originator"] == "CodeBuddy")
+    #expect(envelope.sessionKey == "claude:codebuddy-cli-123")
+}
+
+@Test
+func codeBuddyCLIPreToolUseBecomesBlockingApproval() throws {
+    let payload = """
+    {
+      "hook_event_name": "PreToolUse",
+      "session_id": "codebuddy-cli-tool",
+      "permission_mode": "default",
+      "tool_name": "Write",
+      "tool_input": {
+        "file_path": "/tmp/demo.txt",
+        "content": "hello"
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge", "--source", "claude",
+            "--client-kind", "codebuddy-cli",
+            "--client-name", "CodeBuddy CLI",
+            "--client-origin", "cli",
+            "--client-originator", "CodeBuddy"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "PreToolUse")
+    #expect(envelope.status?.kind == .waitingForApproval)
+    #expect(envelope.expectsResponse == true)
+    #expect(envelope.intervention?.kind == .approval)
+    #expect(envelope.intervention?.title == "CodeBuddy CLI needs approval")
+}
+
+@Test
+func codeBuddyCLIAskUserQuestionNotificationDoesNotClaimInlineAnswer() throws {
+    let payload = """
+    {
+      "hook_event_name": "Notification",
+      "session_id": "codebuddy-cli-question",
+      "notification_type": "permission_prompt",
+      "message": "needs your permission to use AskUserQuestion"
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge", "--source", "claude",
+            "--client-kind", "codebuddy-cli",
+            "--client-name", "CodeBuddy CLI",
+            "--client-origin", "cli",
+            "--client-originator", "CodeBuddy"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "Notification")
+    #expect(envelope.expectsResponse == false)
+    #expect(envelope.metadata["client_kind"] == "codebuddy-cli")
+}
+
+@Test
+func codeBuddyCLIPermissionRequestAskUserQuestionBecomesInlineQuestion() throws {
+    let payload = """
+    {
+      "hook_event_name": "PermissionRequest",
+      "session_id": "codebuddy-cli-question",
+      "tool_name": "AskUserQuestion",
+      "tool_use_id": "call_question",
+      "tool_input": {
+        "questions": [
+          {
+            "id": "scope",
+            "header": "Scope",
+            "question": "Where should we start?",
+            "options": [
+              {"label": "SessionStore"},
+              {"label": "UI"}
+            ]
+          }
+        ]
+      }
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge", "--source", "claude",
+            "--client-kind", "codebuddy-cli",
+            "--client-name", "CodeBuddy CLI",
+            "--client-origin", "cli",
+            "--client-originator", "CodeBuddy"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "PermissionRequest")
+    #expect(envelope.status?.kind == .waitingForInput)
+    #expect(envelope.expectsResponse == true)
+    #expect(envelope.intervention?.kind == .question)
+    #expect(envelope.intervention?.rawContext["tool_use_id"] == "call_question")
+    #expect(envelope.metadata["tool_input_json"]?.contains("Where should we start?") == true)
+}
+
+@Test
 func qoderCLIExitPlanModePreToolUseBecomesBlockingApproval() throws {
     let payload = """
     {
@@ -1262,6 +1401,75 @@ func qoderCLIExitPlanModeApprovalPayloadUsesPreToolUseEventName() throws {
     let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
     #expect(hookSpecificOutput["hookEventName"] as? String == "PreToolUse")
     #expect(hookSpecificOutput["permissionDecision"] as? String == "allow")
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
+}
+
+@Test
+func codeBuddyCLIApprovalPayloadUsesHookSpecificOutputShape() throws {
+    let response = BridgeResponse(
+        requestID: UUID(),
+        decision: .approve
+    )
+
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: response,
+        eventType: "PreToolUse",
+        metadata: [
+            "client_kind": "codebuddy-cli",
+            "client_name": "CodeBuddy CLI",
+            "tool_name": "Write"
+        ]
+    )
+
+    let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    #expect(hookSpecificOutput["hookEventName"] as? String == "PreToolUse")
+    #expect(hookSpecificOutput["permissionDecision"] as? String == "allow")
+}
+
+@Test
+func codeBuddyCLIPermissionRequestAnswerPayloadIncludesModifiedAndUpdatedInput() throws {
+    let response = BridgeResponse(
+        requestID: UUID(),
+        decision: .answer([:]),
+        updatedInput: [
+            "questions": .array([
+                .object([
+                    "id": .string("scope"),
+                    "question": .string("Where should we start?"),
+                    "options": .array([
+                        .object(["label": .string("SessionStore")])
+                    ])
+                ])
+            ]),
+            "answers": .object([
+                "scope": .string("SessionStore")
+            ])
+        ]
+    )
+
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: response,
+        eventType: "PermissionRequest",
+        metadata: [
+            "client_kind": "codebuddy-cli",
+            "client_name": "CodeBuddy CLI"
+        ]
+    )
+
+    let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    #expect(hookSpecificOutput["hookEventName"] as? String == "PermissionRequest")
+    #expect(hookSpecificOutput["permissionDecision"] as? String == "allow")
+    let modifiedInput = try #require(hookSpecificOutput["modifiedInput"] as? [String: Any])
+    let updatedInput = try #require(hookSpecificOutput["updatedInput"] as? [String: Any])
+    let modifiedAnswers = try #require(modifiedInput["answers"] as? [String: String])
+    let updatedAnswers = try #require(updatedInput["answers"] as? [String: String])
+    #expect(modifiedAnswers["scope"] == "SessionStore")
+    #expect(updatedAnswers["scope"] == "SessionStore")
     let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
     #expect(decision["behavior"] as? String == "allow")
 }

@@ -144,7 +144,7 @@ enum MascotClient: String, CaseIterable, Identifiable, Sendable {
                 .opencode
             case "qoder", "qoderwork", "qoder-cli", "jb-plugin":
                 .qoder
-            case "codebuddy":
+            case "codebuddy", "codebuddy-cli":
                 .codebuddy
             case "gemini":
                 .gemini

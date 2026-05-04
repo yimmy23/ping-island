@@ -248,7 +248,23 @@ struct HookInstaller {
         try installCodeBuddyCompatibleAssets(
             relativePath: ".codebuddy/settings.json",
             clientKind: "codebuddy",
-            clientName: "CodeBuddy"
+            clientName: "CodeBuddy",
+            clientOrigin: nil,
+            clientOriginator: "CodeBuddy",
+            preToolUseTimeout: nil,
+            preferredFirst: false
+        )
+    }
+
+    func installCodeBuddyCLIAssets() throws {
+        try installCodeBuddyCompatibleAssets(
+            relativePath: ".codebuddy/settings.json",
+            clientKind: "codebuddy-cli",
+            clientName: "CodeBuddy CLI",
+            clientOrigin: "cli",
+            clientOriginator: "CodeBuddy",
+            preToolUseTimeout: 86_400,
+            preferredFirst: true
         )
     }
 
@@ -256,7 +272,11 @@ struct HookInstaller {
         try installCodeBuddyCompatibleAssets(
             relativePath: ".workbuddy/settings.json",
             clientKind: "workbuddy",
-            clientName: "WorkBuddy"
+            clientName: "WorkBuddy",
+            clientOrigin: nil,
+            clientOriginator: "WorkBuddy",
+            preToolUseTimeout: nil,
+            preferredFirst: false
         )
     }
 
@@ -401,38 +421,68 @@ struct HookInstaller {
     private func installCodeBuddyCompatibleAssets(
         relativePath: String,
         clientKind: String,
-        clientName: String
+        clientName: String,
+        clientOrigin: String?,
+        clientOriginator: String,
+        preToolUseTimeout: Int?,
+        preferredFirst: Bool
     ) throws {
         try ensureSupportFiles()
         let fileURL = homeDirectory.appending(path: relativePath)
         let current = try readJSON(fileURL) ?? [:]
         var updated = current
-        var hooks = current["hooks"] as? [String: Any] ?? [:]
+        var hooks = removingIslandManagedHooks(from: current["hooks"] as? [String: Any] ?? [:], clientKind: clientKind)
 
+        let isCodeBuddyCLI = clientKind == "codebuddy-cli"
         let plainEvents = ["UserPromptSubmit", "Stop", "SubagentStop", "SessionStart", "SessionEnd"]
-        let wildcardEvents = ["PreToolUse", "PostToolUse", "Notification"]
+        let wildcardEvents = isCodeBuddyCLI
+            ? ["PreToolUse", "PostToolUse", "PermissionRequest", "Notification"]
+            : ["PreToolUse", "PostToolUse", "Notification"]
         let compactEvents = ["PreCompact": ["auto", "manual"]]
+        var extraArguments = [
+            "--client-kind", clientKind,
+            "--client-name", clientName
+        ]
+        if let clientOrigin {
+            extraArguments += ["--client-origin", clientOrigin]
+        }
+        extraArguments += ["--client-originator", clientOriginator]
         let command = bridgeCommand(
             source: "claude",
-            extraArguments: [
-                "--client-kind", clientKind,
-                "--client-name", clientName,
-                "--client-originator", clientName
-            ]
+            extraArguments: extraArguments
         )
 
         for event in plainEvents {
-            hooks[event] = installHookArray(existing: hooks[event], command: command, matcher: nil)
+            hooks[event] = installHookArray(
+                existing: hooks[event],
+                command: command,
+                matcher: nil,
+                preferredFirst: preferredFirst,
+                clientKind: clientKind
+            )
         }
 
         for event in wildcardEvents {
-            hooks[event] = installHookArray(existing: hooks[event], command: command, matcher: "*")
+            hooks[event] = installHookArray(
+                existing: hooks[event],
+                command: command,
+                timeout: event == "PermissionRequest" ? 86_400 : (event == "PreToolUse" ? preToolUseTimeout : nil),
+                matcher: "*",
+                preferredFirst: preferredFirst,
+                clientKind: clientKind
+            )
         }
 
         for (event, matchers) in compactEvents {
             var entries = hooks[event] as? [[String: Any]]
             for matcher in matchers {
-                entries = installHookArray(existing: entries, command: command, matcher: matcher)
+                entries = installHookArray(
+                    existing: entries,
+                    command: command,
+                    matcher: matcher,
+                    preferredFirst: preferredFirst,
+                    clientKind: clientKind
+                )
             }
             hooks[event] = entries
         }

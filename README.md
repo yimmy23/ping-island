@@ -105,6 +105,8 @@ Ping Island also ships VS Code-compatible focus extensions for VS Code, Cursor, 
 
 Qoder IDE and Qoder CLI both store hooks in `~/.qoder/settings.json`, but Ping Island treats them as separate managed integrations because their hook behavior is not identical. On launch, Ping Island checks `qodercli -v`; when the local CLI is newer than 0.2.5, it refreshes only the Qoder CLI managed entries while preserving Qoder IDE hooks and unrelated JSON settings. New Qoder CLI follows Claude Code-compatible blocking hooks and response payloads, while Qoder IDE and `QoderWork` stay notify-only so Ping Island does not submit answers or approvals back into those clients.
 
+CodeBuddy IDE and CodeBuddy CLI both use `~/.codebuddy/settings.json`, but Ping Island manages them as separate hook profiles. The CodeBuddy CLI profile writes its own `codebuddy-cli` hooks, uses the CLI's Claude-compatible hook response shape, and preserves CodeBuddy IDE hooks plus unrelated settings in the same file.
+
 Hermes Agent is integrated through a generated plugin directory at `~/.hermes/plugins/ping_island/`. Hermes' gateway hook directories under `~/.hermes/hooks/` do not run in the CLI, so Ping Island uses the official `ctx.register_hook()` plugin surface to observe prompt submission, tool activity, model replies, and session end events.
 
 Qwen Code is supported as a first-class hook client through `~/.qwen/settings.json`, and its built-in mascot is the mint-scarf capybara shown in the README GIF strip. The visual is meant to feel calm and dependable, while still carrying a small Qwen-tinted scarf and reply bubble instead of another generic bird or blob.

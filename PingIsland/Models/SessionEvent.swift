@@ -258,9 +258,36 @@ extension HookEvent {
                 && !(questionPayloads?.isEmpty ?? true)
         }
 
+        if isCodeBuddyCLIClient {
+            return (event == "PreToolUse" || event == "PermissionRequest")
+                && Self.questionToolNames.contains(normalizedToolNameForIntervention ?? "")
+                && !(questionPayloads?.isEmpty ?? true)
+        }
+
         return event == "PreToolUse"
             && Self.questionToolNames.contains(normalizedToolNameForIntervention ?? "")
             && !(questionPayloads?.isEmpty ?? true)
+    }
+
+    private nonisolated var isCodeBuddyCLIClient: Bool {
+        let normalized = clientInfo.normalizedForClaudeRouting()
+        let profileIDs = [clientInfo.profileID, normalized.profileID]
+            .compactMap { value -> String? in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return trimmed?.isEmpty == false ? trimmed : nil
+            }
+        if profileIDs.contains("codebuddy-cli") || profileIDs.contains("codebuddy-cli-hooks") {
+            return true
+        }
+
+        let origin = (clientInfo.origin ?? normalized.origin)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard origin == "cli" else { return false }
+
+        return [clientInfo.name, normalized.name]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .contains { $0.contains("codebuddy") }
     }
 
     nonisolated var questionPayloads: [[String: Any]]? {

@@ -96,6 +96,9 @@ public enum HookPayloadMapper {
                ) {
                 return qoderCLIPermissionPayload(response: response, decision: decision, eventType: eventType)
             }
+            if clientKind == "codebuddy-cli" {
+                return codeBuddyCLIStdoutPayload(response: response, decision: decision, eventType: eventType)
+            }
             if isCodeBuddyFamilyHookClient(clientKind) {
                 return codeBuddyStdoutPayload(response: response, decision: decision)
             }
@@ -729,7 +732,7 @@ public enum HookPayloadMapper {
             return InterventionRequest(
                 sessionID: sessionKey,
                 kind: .approval,
-                title: "CodeBuddy needs approval",
+                title: "\(codeBuddyDisplayName(for: clientKind)) needs approval",
                 message: message,
                 options: [
                     InterventionOption(id: "approve", title: "Allow Once"),
@@ -1050,6 +1053,12 @@ public enum HookPayloadMapper {
             if nameHint.contains("qoder") {
                 return "qoder"
             }
+            if nameHint.contains("codebuddy cli")
+                || nameHint.contains("codebuddy-cli")
+                || nameHint.contains("code buddy cli")
+                || nameHint.contains("code-buddy-cli") {
+                return "codebuddy-cli"
+            }
             if nameHint.contains("workbuddy") || nameHint.contains("work buddy") {
                 return "workbuddy"
             }
@@ -1185,10 +1194,21 @@ public enum HookPayloadMapper {
     private static func isCodeBuddyFamilyHookClient(_ clientKind: String?) -> Bool {
         guard let clientKind else { return false }
         switch clientKind {
-        case "codebuddy", "workbuddy":
+        case "codebuddy", "codebuddy-cli", "workbuddy":
             return true
         default:
             return false
+        }
+    }
+
+    private static func codeBuddyDisplayName(for clientKind: String?) -> String {
+        switch clientKind {
+        case "codebuddy-cli":
+            return "CodeBuddy CLI"
+        case "workbuddy":
+            return "WorkBuddy"
+        default:
+            return "CodeBuddy"
         }
     }
 
@@ -1338,6 +1358,11 @@ public enum HookPayloadMapper {
                 || isQoderWorkPermissionQuestionEvent(eventType: eventType, payload: payload)
         }
 
+        if clientKind == "codebuddy-cli" {
+            return isQoderWorkPreToolQuestionEvent(eventType: eventType, payload: payload)
+                || isQoderWorkPermissionQuestionEvent(eventType: eventType, payload: payload)
+        }
+
         return eventType == "PreToolUse" || eventType == "UserInputRequest"
     }
 
@@ -1458,6 +1483,44 @@ public enum HookPayloadMapper {
             }
         }
 
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+
+        return string
+    }
+
+    private static func codeBuddyCLIStdoutPayload(
+        response: BridgeResponse,
+        decision: InterventionDecision,
+        eventType: String
+    ) -> String {
+        var hookSpecificOutput: [String: Any] = [
+            "hookEventName": eventType
+        ]
+
+        switch decision {
+        case .approve, .approveForSession:
+            hookSpecificOutput["permissionDecision"] = "allow"
+        case .deny, .cancel:
+            hookSpecificOutput["permissionDecision"] = "deny"
+            hookSpecificOutput["permissionDecisionReason"] = response.reason ?? "Denied from Island"
+        case .answer:
+            hookSpecificOutput["permissionDecision"] = "allow"
+            if let updatedInput = response.updatedInput {
+                let input = updatedInput.mapValues(\.foundationObject)
+                hookSpecificOutput["modifiedInput"] = input
+                hookSpecificOutput["updatedInput"] = input
+                hookSpecificOutput["decision"] = [
+                    "behavior": "allow",
+                    "updatedInput": input
+                ]
+            }
+        }
+
+        let payload: [String: Any] = ["hookSpecificOutput": hookSpecificOutput]
         guard JSONSerialization.isValidJSONObject(payload),
               let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
               let string = String(data: data, encoding: .utf8) else {

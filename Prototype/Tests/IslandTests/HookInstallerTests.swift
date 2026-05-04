@@ -320,6 +320,7 @@ func installerAddsCodeBuddyWorkBuddyAndCursorHooks() throws {
 
     let installer = HookInstaller(homeDirectory: root)
     try installer.installCodeBuddyAssets()
+    try installer.installCodeBuddyCLIAssets()
     try installer.installWorkBuddyAssets()
     try installer.installCursorAssets()
 
@@ -334,9 +335,19 @@ func installerAddsCodeBuddyWorkBuddyAndCursorHooks() throws {
     #expect(codeBuddyCommands.contains {
         $0.contains("/.ping-island/bin/ping-island-bridge --source claude --client-kind codebuddy --client-name CodeBuddy --client-originator CodeBuddy")
     })
+    let codeBuddyCLICommand = "/.ping-island/bin/ping-island-bridge --source claude --client-kind codebuddy-cli --client-name 'CodeBuddy CLI' --client-origin cli --client-originator CodeBuddy"
+    #expect(codeBuddyCommands.first?.contains(codeBuddyCLICommand) == true)
+    #expect(codeBuddyCommands.filter { $0.contains(codeBuddyCLICommand) }.count == 1)
+    let codeBuddyCLIHook = try #require((codeBuddyPreToolUse.first?["hooks"] as? [[String: Any]])?.first)
+    #expect(codeBuddyCLIHook["timeout"] as? Int == 86_400)
     #expect(codeBuddyHooks["SessionEnd"] != nil)
     #expect(codeBuddyHooks["PreCompact"] != nil)
-    #expect(codeBuddyHooks["PermissionRequest"] == nil)
+    let codeBuddyPermissionRequest = try #require(codeBuddyHooks["PermissionRequest"] as? [[String: Any]])
+    let codeBuddyPermissionRequestCommand = try #require(
+        (codeBuddyPermissionRequest.first?["hooks"] as? [[String: Any]])?.first?["command"] as? String
+    )
+    #expect(codeBuddyPermissionRequestCommand.contains(codeBuddyCLICommand))
+    #expect(((codeBuddyPermissionRequest.first?["hooks"] as? [[String: Any]])?.first?["timeout"] as? Int) == 86_400)
     #expect(codeBuddyHooks["Notification"] != nil)
     #expect(codeBuddyHooks["SubagentStop"] != nil)
 

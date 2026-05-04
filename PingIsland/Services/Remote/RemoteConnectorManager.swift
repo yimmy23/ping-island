@@ -1300,6 +1300,7 @@ final class RemoteConnectorManager: ObservableObject {
             "hermes-hooks",
             "qwen-code-hooks",
             "openclaw-hooks",
+            "codebuddy-cli-hooks",
             "qoder-hooks",
             "qoder-cli-hooks",
             "qoderwork-hooks"

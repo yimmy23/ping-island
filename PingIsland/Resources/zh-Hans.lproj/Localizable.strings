@@ -139,6 +139,8 @@
 "管理 ~/.codex/hooks.json" = "管理 ~/.codex/hooks.json";
 "管理 ~/.gemini/settings.json，按 Gemini CLI 官方 hooks 协议接入 Island" = "管理 ~/.gemini/settings.json，按 Gemini CLI 官方 hooks 协议接入 Island";
 "管理 ~/.codebuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island" = "管理 ~/.codebuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island";
+"管理 ~/.codebuddy/settings.json，支持 CodeBuddy IDE hooks" = "管理 ~/.codebuddy/settings.json，支持 CodeBuddy IDE hooks";
+"管理 ~/.codebuddy/settings.json，按 CodeBuddy CLI Claude-compatible hooks 协议接入 Island" = "管理 ~/.codebuddy/settings.json，按 CodeBuddy CLI Claude-compatible hooks 协议接入 Island";
 "管理 ~/.workbuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island" = "管理 ~/.workbuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island";
 "管理 ~/Library/Application Support/Cursor/User/settings.json，按 Claude Hooks 协议接入 Island" = "管理 ~/Library/Application Support/Cursor/User/settings.json，按 Claude Hooks 协议接入 Island";
 "管理 ~/.qoder/settings.json，按 Claude Code hooks 协议支持 Qoder CLI / IDE 会话" = "管理 ~/.qoder/settings.json，按 Claude Code hooks 协议支持 Qoder CLI / IDE 会话";

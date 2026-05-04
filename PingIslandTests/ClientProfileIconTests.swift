@@ -9,6 +9,7 @@ final class ClientProfileIconTests: XCTestCase {
             "gemini-hooks": "GeminiLogo",
             "openclaw-hooks": "OpenClawLogo",
             "codebuddy-hooks": "CodeBuddyLogo",
+            "codebuddy-cli-hooks": "CodeBuddyLogo",
             "workbuddy-hooks": "WorkBuddyLogo",
             "cursor-hooks": "CursorLogo",
             "qoder-hooks": "QoderLogo",
@@ -81,6 +82,32 @@ final class ClientProfileIconTests: XCTestCase {
         XCTAssertFalse(qoderEvents.contains("SessionStart"))
         XCTAssertNil(qoderProfile.events.first { $0.name == "PermissionRequest" }?.timeout)
         XCTAssertEqual(qoderProfile.bridgeExtraArguments, ["--client-kind", "qoder"])
+    }
+
+    func testCodeBuddyCLIHookProfileUsesIndependentClaudeCompatibleHooks() throws {
+        let codeBuddyCLIProfile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "codebuddy-cli-hooks"))
+        let codeBuddyProfile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "codebuddy-hooks"))
+
+        XCTAssertEqual(codeBuddyCLIProfile.configurationRelativePaths, codeBuddyProfile.configurationRelativePaths)
+        XCTAssertEqual(
+            codeBuddyCLIProfile.bridgeExtraArguments,
+            [
+                "--client-kind", "codebuddy-cli",
+                "--client-name", "CodeBuddy CLI",
+                "--client-origin", "cli",
+                "--client-originator", "CodeBuddy"
+            ]
+        )
+        XCTAssertEqual(
+            codeBuddyCLIProfile.events.first { $0.name == "PreToolUse" }?.timeout,
+            86_400
+        )
+        XCTAssertEqual(
+            codeBuddyCLIProfile.events.first { $0.name == "PermissionRequest" }?.timeout,
+            86_400
+        )
+        XCTAssertTrue(codeBuddyCLIProfile.events.contains { $0.name == "SessionStart" })
+        XCTAssertTrue(codeBuddyCLIProfile.events.contains { $0.name == "SessionEnd" })
     }
 
     func testQoderWorkHookProfileKeepsNotifyOnlySemantics() throws {

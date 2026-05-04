@@ -96,4 +96,66 @@ final class QoderCLIVersionDetectionTests: XCTestCase {
         let managedPreToolUseHook = try XCTUnwrap((preToolUse.first?["hooks"] as? [[String: Any]])?.first)
         XCTAssertEqual(managedPreToolUseHook["timeout"] as? Int, 86_400)
     }
+
+    func testCodeBuddyCLIHookRefreshPreservesCodeBuddyIDEHooks() throws {
+        let codeBuddyProfile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "codebuddy-hooks"))
+        let codeBuddyCLIProfile = try XCTUnwrap(ClientProfileRegistry.managedHookProfile(id: "codebuddy-cli-hooks"))
+        let existing = """
+        {
+          "theme": "dark",
+          "hooks": {
+            "PreToolUse": [
+              {
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": "/usr/bin/printf keep"}]
+              },
+              {
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": "/Users/test/.ping-island/bin/ping-island-bridge --source claude --client-kind codebuddy --client-name CodeBuddy --client-originator CodeBuddy"}]
+              }
+            ]
+          }
+        }
+        """.data(using: .utf8)
+
+        let ideData = HookInstaller.updatedConfigurationData(
+            existingData: existing,
+            profile: codeBuddyProfile,
+            customCommand: "/Users/test/.ping-island/bin/ping-island-bridge --source claude --client-kind codebuddy --client-name CodeBuddy --client-originator CodeBuddy",
+            installing: true
+        )
+        let data = HookInstaller.updatedConfigurationData(
+            existingData: ideData,
+            profile: codeBuddyCLIProfile,
+            customCommand: "/Users/test/.ping-island/bin/ping-island-bridge --source claude --client-kind codebuddy-cli --client-name 'CodeBuddy CLI' --client-origin cli --client-originator CodeBuddy",
+            installing: true
+        )
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["theme"] as? String, "dark")
+
+        let hooks = try XCTUnwrap(json["hooks"] as? [String: Any])
+        XCTAssertNotNil(hooks["SessionStart"])
+        XCTAssertNotNil(hooks["SessionEnd"])
+        XCTAssertNotNil(hooks["PreCompact"])
+        XCTAssertNotNil(hooks["PermissionRequest"])
+
+        let preToolUse = try XCTUnwrap(hooks["PreToolUse"] as? [[String: Any]])
+        let commands = preToolUse.compactMap { entry in
+            ((entry["hooks"] as? [[String: Any]])?.first?["command"] as? String)
+        }
+        XCTAssertTrue(commands.first?.contains("--client-kind codebuddy-cli") == true)
+        XCTAssertTrue(commands.contains { $0.contains("--client-kind codebuddy") && !$0.contains("--client-kind codebuddy-cli") })
+        XCTAssertTrue(commands.contains("/usr/bin/printf keep"))
+        XCTAssertEqual(
+            commands.filter { $0.contains("/.ping-island/bin/ping-island-bridge") }.count,
+            2
+        )
+        let managedPreToolUseHook = try XCTUnwrap((preToolUse.first?["hooks"] as? [[String: Any]])?.first)
+        XCTAssertEqual(managedPreToolUseHook["timeout"] as? Int, 86_400)
+
+        let permissionRequest = try XCTUnwrap(hooks["PermissionRequest"] as? [[String: Any]])
+        let managedPermissionRequestHook = try XCTUnwrap((permissionRequest.first?["hooks"] as? [[String: Any]])?.first)
+        XCTAssertTrue((managedPermissionRequestHook["command"] as? String)?.contains("--client-kind codebuddy-cli") == true)
+        XCTAssertEqual(managedPermissionRequestHook["timeout"] as? Int, 86_400)
+    }
 }

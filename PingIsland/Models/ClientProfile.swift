@@ -578,7 +578,7 @@ enum ClientProfileRegistry {
         ManagedHookClientProfile(
             id: "codebuddy-hooks",
             title: "CodeBuddy",
-            subtitle: "管理 ~/.codebuddy/settings.json，按 CodeBuddy Hooks 协议接入 Island",
+            subtitle: "管理 ~/.codebuddy/settings.json，支持 CodeBuddy IDE hooks",
             logoAssetName: "CodeBuddyLogo",
             prefersBundledLogoOverAppIcon: true,
             localAppBundleIdentifiers: ["com.tencent.codebuddy", "com.codebuddy.app"],
@@ -601,6 +601,37 @@ enum ClientProfileRegistry {
                 HookInstallEventDescriptor(name: "SubagentStop", templates: [.plain]),
                 HookInstallEventDescriptor(name: "SessionStart", templates: [.plain]),
                 HookInstallEventDescriptor(name: "SessionEnd", templates: [.plain]),
+                HookInstallEventDescriptor(name: "PreCompact", templates: [.matcher("auto"), .matcher("manual")]),
+            ]
+        ),
+        ManagedHookClientProfile(
+            id: "codebuddy-cli-hooks",
+            title: "CodeBuddy CLI",
+            subtitle: "管理 ~/.codebuddy/settings.json，按 CodeBuddy CLI Claude-compatible hooks 协议接入 Island",
+            alwaysVisibleInSettings: true,
+            logoAssetName: "CodeBuddyLogo",
+            prefersBundledLogoOverAppIcon: true,
+            iconSymbolName: "apple.terminal.fill",
+            configurationRelativePath: ".codebuddy/settings.json",
+            bridgeSource: "claude",
+            bridgeExtraArguments: [
+                "--client-kind", "codebuddy-cli",
+                "--client-name", "CodeBuddy CLI",
+                "--client-origin", "cli",
+                "--client-originator", "CodeBuddy"
+            ],
+            defaultEnabled: false,
+            brand: .codebuddy,
+            events: [
+                HookInstallEventDescriptor(name: "UserPromptSubmit", templates: [.plain]),
+                HookInstallEventDescriptor(name: "PreToolUse", templates: [.matcher("*")], timeout: 86_400),
+                HookInstallEventDescriptor(name: "PostToolUse", templates: [.matcher("*")]),
+                HookInstallEventDescriptor(name: "PermissionRequest", templates: [.matcher("*")], timeout: 86_400),
+                HookInstallEventDescriptor(name: "Notification", templates: [.matcher("*")]),
+                HookInstallEventDescriptor(name: "Stop", templates: [.plain]),
+                HookInstallEventDescriptor(name: "SubagentStop", templates: [.plain]),
+                HookInstallEventDescriptor(name: "SessionStart", templates: [.matcher("startup"), .matcher("resume"), .matcher("clear"), .matcher("compact")]),
+                HookInstallEventDescriptor(name: "SessionEnd", templates: [.matcher("clear"), .matcher("logout"), .matcher("prompt_input_exit"), .matcher("other")]),
                 HookInstallEventDescriptor(name: "PreCompact", templates: [.matcher("auto"), .matcher("manual")]),
             ]
         ),
@@ -852,6 +883,21 @@ enum ClientProfileRegistry {
             recognizedKinds: ["qoder-cli", "qoder_cli", "qoder cli"],
             exactAliases: ["qoder-cli", "qoder cli"],
             keywordAliases: ["qoder cli"],
+            bundleIdentifiers: []
+        ),
+        SessionClientProfile(
+            id: "codebuddy-cli",
+            provider: .claude,
+            family: .claudeHooks,
+            kind: .claudeCode,
+            displayName: "CodeBuddy CLI",
+            assistantLabelMode: .badgeLabel,
+            brand: .codebuddy,
+            defaultBundleIdentifier: nil,
+            defaultOrigin: nil,
+            recognizedKinds: ["codebuddy-cli", "codebuddy_cli", "codebuddy cli", "code-buddy-cli", "code buddy cli"],
+            exactAliases: ["codebuddy-cli", "codebuddy cli", "code-buddy-cli", "code buddy cli"],
+            keywordAliases: ["codebuddy cli", "code buddy cli"],
             bundleIdentifiers: []
         ),
         SessionClientProfile(

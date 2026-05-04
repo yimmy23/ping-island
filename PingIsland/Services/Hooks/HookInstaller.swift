@@ -990,6 +990,7 @@ struct HookInstaller {
 
         let command = bridgeCommand(source: profile.bridgeSource, extraArguments: profile.bridgeExtraArguments)
         let preferredFirst = profile.id == "qoder-cli-hooks"
+            || profile.id == "codebuddy-cli-hooks"
 
         var hooks = removingIslandManagedHooks(from: json["hooks"] as? [String: Any] ?? [:], profile: profile)
         for event in profile.events {
@@ -1270,6 +1271,12 @@ struct HookInstaller {
         }
 
         switch profile.id {
+        case "codebuddy-hooks":
+            return hookCommand(command, hasClientKind: "codebuddy")
+        case "codebuddy-cli-hooks":
+            return hookCommand(command, hasClientKind: "codebuddy-cli")
+        case "workbuddy-hooks":
+            return hookCommand(command, hasClientKind: "workbuddy")
         case "qoder-hooks":
             return hookCommand(command, hasClientKind: "qoder")
         case "qoder-cli-hooks":
@@ -2740,6 +2747,7 @@ struct HookInstaller {
             if installing {
                 hooks = removingIslandManagedHooks(from: hooks, profile: profile)
                 let preferredFirst = profile.id == "qoder-cli-hooks"
+                    || profile.id == "codebuddy-cli-hooks"
                 for event in profile.events {
                     let existingEvent = sanitizedHookEntries(
                         hooks[event.name] as? [[String: Any]],

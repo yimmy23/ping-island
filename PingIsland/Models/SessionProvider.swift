@@ -314,7 +314,9 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
         let normalizedProfileID = profileID?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-        if normalizedProfileID == "codebuddy" || normalizedProfileID == "workbuddy" {
+        if normalizedProfileID == "codebuddy"
+            || normalizedProfileID == "codebuddy-cli"
+            || normalizedProfileID == "workbuddy" {
             return false
         }
 

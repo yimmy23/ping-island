@@ -894,7 +894,8 @@ struct SessionState: Equatable, Identifiable, Sendable {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .lowercased()
 
-            if normalizedProfileID == "qoder-cli" {
+            if normalizedProfileID == "qoder-cli"
+                || normalizedProfileID == "codebuddy-cli" {
                 return true
             }
 

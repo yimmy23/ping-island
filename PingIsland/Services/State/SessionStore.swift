@@ -3575,6 +3575,7 @@ actor SessionStore {
         let normalizedClientInfo = event.clientInfo.normalizedForClaudeRouting()
         let profileID = normalizedClientInfo.profileID?.lowercased()
         if profileID == "qoder-cli"
+            || profileID == "codebuddy-cli"
             || profileID == "qwen-code"
             || normalizedClientInfo.isQwenCodeClient {
             return false

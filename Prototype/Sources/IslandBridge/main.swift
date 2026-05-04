@@ -425,6 +425,8 @@ private enum BridgeDebugLogger {
             .lowercased()
 
         switch clientKind {
+        case "codebuddy-cli":
+            return "codebuddy-cli-hooks"
         case "codebuddy":
             return "codebuddy-hooks"
         case "hermes", "hermes-agent", "hermes_agent", "hermes agent":

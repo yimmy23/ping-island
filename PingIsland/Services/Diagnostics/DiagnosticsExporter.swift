@@ -506,6 +506,16 @@ actor DiagnosticsExporter {
 
         do {
             try copyRecentDirectoryContentsIfPresent(
+                from: preferredCodeBuddyCLIHookDebugDirectory(),
+                toRelativeDirectory: "debug/codebuddy-cli-hooks",
+                under: exportRoot
+            )
+        } catch {
+            warnings.append("Failed to copy CodeBuddy CLI hook debug logs: \(error.localizedDescription)")
+        }
+
+        do {
+            try copyRecentDirectoryContentsIfPresent(
                 from: preferredQoderHookDebugDirectory(),
                 toRelativeDirectory: "debug/qoder-hooks",
                 under: exportRoot
@@ -843,6 +853,10 @@ actor DiagnosticsExporter {
 
     private func preferredCodeBuddyHookDebugDirectory() -> URL {
         fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".ping-island-debug/codebuddy-hooks", isDirectory: true)
+    }
+
+    private func preferredCodeBuddyCLIHookDebugDirectory() -> URL {
+        fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".ping-island-debug/codebuddy-cli-hooks", isDirectory: true)
     }
 
     private func preferredQoderHookDebugDirectory() -> URL {
