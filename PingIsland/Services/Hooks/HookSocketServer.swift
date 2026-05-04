@@ -154,6 +154,12 @@ struct HookEvent: Sendable {
             || (event == "Notification" && status == "waiting_for_approval"
                 && clientInfo.isQwenCodeClient && notificationType == "permission_prompt")
             || (
+                event == "Notification"
+                    && clientInfo.isCodeBuddyCLIClient
+                    && notificationType == "permission_prompt"
+                    && isCodeBuddyCLIAskUserQuestionNotification
+            )
+            || (
                 event == "PreToolUse"
                     && normalizedTool == "askuserquestion"
                     && toolInput?["questions"] != nil
@@ -164,6 +170,19 @@ struct HookEvent: Sendable {
                     && normalizedTool == "exitplanmode"
                     && clientInfo.normalizedForClaudeRouting().profileID == "qoder-cli"
             )
+    }
+
+    private nonisolated var isCodeBuddyCLIAskUserQuestionNotification: Bool {
+        let normalizedMessage = message?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard let normalizedMessage else { return false }
+        return normalizedMessage.contains("askuserquestion")
+            || normalizedMessage.contains("ask user question")
+            || normalizedMessage.contains("ask_user_question")
+            || normalizedMessage.contains("askfollowupquestion")
+            || normalizedMessage.contains("ask followup question")
+            || normalizedMessage.contains("ask_followup_question")
     }
 
     private nonisolated var isQoderIDENotifyOnlyClient: Bool {

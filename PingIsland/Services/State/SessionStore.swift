@@ -57,6 +57,7 @@ actor SessionStore {
     private var pendingCodexPlaceholderPrunes: [String: Task<Void, Never>] = [:]
     private var pendingQoderConversationPolls: [String: (id: UUID, task: Task<Void, Never>)] = [:]
     private var pendingOpenClawConversationPolls: [String: (id: UUID, task: Task<Void, Never>)] = [:]
+    private var pendingCodeBuddyCLIQuestionPolls: [String: (id: UUID, task: Task<Void, Never>)] = [:]
     private var codexSessionAliases: [String: String] = [:]
     private var ignoredCodexAuxiliaryHookSessionIds: Set<String> = []
 
@@ -71,6 +72,8 @@ actor SessionStore {
     private let qoderSubagentAssociationWindow: TimeInterval = 2 * 60
     private let openClawConversationPollIntervalNs: UInt64 = 1_000_000_000
     private let openClawConversationPollTimeoutNs: UInt64 = 30_000_000_000
+    private let codeBuddyCLIQuestionPollIntervalNs: UInt64 = 150_000_000
+    private let codeBuddyCLIQuestionPollTimeoutNs: UInt64 = 5_000_000_000
 
     /// Persisted session associations used to restore client routing across relaunches.
     private var persistedAssociations: [String: PersistedSessionAssociation] = [:]
@@ -392,14 +395,19 @@ actor SessionStore {
             }
             cancelPendingCodexPlaceholderPrune(sessionId: sessionId)
             cancelPendingQoderConversationPoll(sessionId: sessionId)
+            cancelPendingCodeBuddyCLIQuestionPoll(sessionId: sessionId)
             scheduleFinalSessionSync(for: session)
             return
         }
 
-        let newPhase: SessionPhase = shouldPreserveEndedStopForAnsweredQuestion
+        let codeBuddyCLINotificationIntervention = await codeBuddyCLINotificationQuestionIntervention(
+            for: event,
+            session: session
+        )
+        let newPhase: SessionPhase = shouldPreserveEndedStopForAnsweredQuestion || codeBuddyCLINotificationIntervention != nil
             ? .waitingForInput
             : event.determinePhase()
-        let intervention = event.intervention
+        let intervention = codeBuddyCLINotificationIntervention ?? event.intervention
         let shouldPreserveQwenQuestionIntervention = shouldPreserveQwenQuestionIntervention(
             for: event,
             newPhase: newPhase,
@@ -475,6 +483,11 @@ actor SessionStore {
                 currentIntervention: session.intervention
             ) {
                 // Notification-derived approval should not override existing intervention
+            } else if shouldPreserveInlineIntervention(
+                current: session.intervention,
+                proposed: intervention
+            ) {
+                // A parsed inline question should win over a fallback notification reminder.
             } else {
                 session.intervention = intervention
             }
@@ -530,6 +543,7 @@ actor SessionStore {
         updateCodexPlaceholderPrune(for: session)
         updateQoderConversationPoll(for: session, event: event)
         updateOpenClawConversationPoll(for: session, event: event)
+        updateCodeBuddyCLIQuestionPoll(for: session, event: event)
 
         if event.shouldSyncFile {
             scheduleFileSync(
@@ -547,6 +561,94 @@ actor SessionStore {
                 cwd: session.cwd
             )
         }
+    }
+
+    private nonisolated func shouldPreserveInlineIntervention(
+        current: SessionIntervention?,
+        proposed: SessionIntervention
+    ) -> Bool {
+        guard let current,
+              current.supportsInlineResponse,
+              proposed.metadata["source"] == "codebuddy_cli_notification",
+              proposed.metadata["responseMode"] == "external_only" else {
+            return false
+        }
+
+        return true
+    }
+
+    private func codeBuddyCLINotificationQuestionIntervention(
+        for event: HookEvent,
+        session: SessionState
+    ) async -> SessionIntervention? {
+        guard isCodeBuddyCLIAskUserQuestionNotification(event, session: session) else {
+            return nil
+        }
+
+        return await parseCodeBuddyCLIQuestionIntervention(for: event, session: session)
+    }
+
+    private func parseCodeBuddyCLIQuestionIntervention(
+        for event: HookEvent,
+        session: SessionState
+    ) async -> SessionIntervention? {
+        let cwd = session.cwd.isEmpty ? event.cwd : session.cwd
+        let explicitFilePath = event.clientInfo.sessionFilePath
+            ?? session.clientInfo.sessionFilePath
+
+        return await parseCodeBuddyCLIQuestionIntervention(
+            sessionId: event.sessionId,
+            cwd: cwd,
+            explicitFilePath: explicitFilePath,
+            actorClientInfo: event.clientInfo.isCodeBuddyCLIClient ? event.clientInfo : session.clientInfo,
+            provider: event.provider,
+            responseToolUseId: event.toolUseId
+        )
+    }
+
+    private func parseCodeBuddyCLIQuestionIntervention(
+        sessionId: String,
+        cwd: String,
+        explicitFilePath: String?,
+        actorClientInfo: SessionClientInfo,
+        provider: SessionProvider,
+        responseToolUseId: String?
+    ) async -> SessionIntervention? {
+        let actorName = actorClientInfo.interactionLabel(for: provider)
+
+        return await ConversationParser.shared.pendingCodeBuddyCLIQuestionIntervention(
+            sessionId: sessionId,
+            cwd: cwd,
+            explicitFilePath: explicitFilePath,
+            actorName: actorName,
+            responseToolUseId: responseToolUseId
+        )
+    }
+
+    private nonisolated func isCodeBuddyCLIAskUserQuestionNotification(
+        _ event: HookEvent,
+        session: SessionState
+    ) -> Bool {
+        event.provider == .claude
+            && event.event == "Notification"
+            && event.notificationType == "permission_prompt"
+            && (event.clientInfo.isCodeBuddyCLIClient || session.clientInfo.isCodeBuddyCLIClient)
+            && Self.isAskUserQuestionNotificationMessage(event.message)
+    }
+
+    private nonisolated static func isAskUserQuestionNotificationMessage(_ message: String?) -> Bool {
+        guard let normalizedMessage = message?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() else {
+            return false
+        }
+
+        return normalizedMessage.contains("askuserquestion")
+            || normalizedMessage.contains("ask user question")
+            || normalizedMessage.contains("ask_user_question")
+            || normalizedMessage.contains("askfollowupquestion")
+            || normalizedMessage.contains("ask followup question")
+            || normalizedMessage.contains("ask_followup_question")
     }
 
     private func createSession(from event: HookEvent) -> SessionState {
@@ -2281,6 +2383,93 @@ actor SessionStore {
     private func finishOpenClawConversationPoll(sessionId: String, pollID: UUID) {
         guard pendingOpenClawConversationPolls[sessionId]?.id == pollID else { return }
         pendingOpenClawConversationPolls.removeValue(forKey: sessionId)
+    }
+
+    private func updateCodeBuddyCLIQuestionPoll(for session: SessionState, event: HookEvent) {
+        guard isCodeBuddyCLIAskUserQuestionNotification(event, session: session) else {
+            if session.clientInfo.isCodeBuddyCLIClient, session.phase == .ended {
+                cancelPendingCodeBuddyCLIQuestionPoll(sessionId: session.sessionId)
+            }
+            return
+        }
+
+        if session.intervention?.metadata["source"] == "codebuddy_cli_transcript" {
+            cancelPendingCodeBuddyCLIQuestionPoll(sessionId: session.sessionId)
+            return
+        }
+
+        guard session.intervention?.metadata["source"] == "codebuddy_cli_notification" else {
+            return
+        }
+
+        scheduleCodeBuddyCLIQuestionPoll(sessionId: session.sessionId)
+    }
+
+    private func scheduleCodeBuddyCLIQuestionPoll(sessionId: String) {
+        cancelPendingCodeBuddyCLIQuestionPoll(sessionId: sessionId)
+
+        let pollID = UUID()
+        let task = Task { [weak self] in
+            guard let self else { return }
+
+            let startedAt = Date()
+            while !Task.isCancelled {
+                guard let session = await self.session(for: sessionId),
+                      session.clientInfo.isCodeBuddyCLIClient,
+                      session.phase != .ended else {
+                    break
+                }
+
+                if await self.refreshCodeBuddyCLIQuestionIntervention(sessionId: sessionId) {
+                    break
+                }
+
+                if Date().timeIntervalSince(startedAt) * 1_000_000_000 >= Double(self.codeBuddyCLIQuestionPollTimeoutNs) {
+                    break
+                }
+
+                try? await Task.sleep(nanoseconds: self.codeBuddyCLIQuestionPollIntervalNs)
+            }
+
+            await self.finishCodeBuddyCLIQuestionPoll(sessionId: sessionId, pollID: pollID)
+        }
+
+        pendingCodeBuddyCLIQuestionPolls[sessionId] = (id: pollID, task: task)
+    }
+
+    private func refreshCodeBuddyCLIQuestionIntervention(sessionId: String) async -> Bool {
+        guard var session = sessions[sessionId],
+              session.intervention?.metadata["source"] == "codebuddy_cli_notification" else {
+            return true
+        }
+
+        guard let intervention = await parseCodeBuddyCLIQuestionIntervention(
+            sessionId: session.sessionId,
+            cwd: session.cwd,
+            explicitFilePath: session.clientInfo.sessionFilePath,
+            actorClientInfo: session.clientInfo,
+            provider: session.provider,
+            responseToolUseId: session.intervention?.id
+        ) else {
+            return false
+        }
+
+        session.intervention = intervention
+        session.phase = .waitingForInput
+        session.lastActivity = Date()
+        sessions[sessionId] = session
+        publishState()
+        return true
+    }
+
+    private func cancelPendingCodeBuddyCLIQuestionPoll(sessionId: String) {
+        pendingCodeBuddyCLIQuestionPolls[sessionId]?.task.cancel()
+        pendingCodeBuddyCLIQuestionPolls.removeValue(forKey: sessionId)
+    }
+
+    private func finishCodeBuddyCLIQuestionPoll(sessionId: String, pollID: UUID) {
+        guard pendingCodeBuddyCLIQuestionPolls[sessionId]?.id == pollID else { return }
+        pendingCodeBuddyCLIQuestionPolls.removeValue(forKey: sessionId)
     }
 
     private func scheduleCodexRolloutSync(

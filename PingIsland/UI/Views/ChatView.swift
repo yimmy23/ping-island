@@ -586,8 +586,7 @@ struct ChatView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-            } else if intervention.metadata["responseMode"] == "external_only",
-                      session.clientInfo.kind == .codexCLI {
+            } else if intervention.metadata["responseMode"] == "external_only" {
                 HStack(spacing: 8) {
                     Button {
                         Task {

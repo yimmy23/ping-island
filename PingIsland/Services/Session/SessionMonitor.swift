@@ -742,6 +742,7 @@ class SessionMonitor: ObservableObject {
 
     private enum HookAnswerEncodingStrategy {
         case lookupAliases
+        case codeBuddyCLI
         case questionText
         case questionIndex
     }
@@ -755,10 +756,13 @@ class SessionMonitor: ObservableObject {
             return .questionText
         }
 
+        if profileID == "codebuddy-cli" {
+            return .codeBuddyCLI
+        }
+
         if profileID == "qoder"
             || profileID == "qoderwork"
             || profileID == "codebuddy"
-            || profileID == "codebuddy-cli"
             || profileID == "workbuddy"
             || bundleIdentifier == "com.qoder.ide"
             || bundleIdentifier == "com.qoder.work"
@@ -808,6 +812,10 @@ class SessionMonitor: ObservableObject {
                 for key in lookupKeys {
                     encodedAnswers[key] = encodedValue
                 }
+            case .codeBuddyCLI:
+                for key in lookupKeys + ["q_\(index)"] {
+                    encodedAnswers[key] = encodedValue
+                }
             case .questionIndex:
                 encodedAnswers["\(index)"] = encodedValue
             case .questionText:
@@ -833,7 +841,12 @@ class SessionMonitor: ObservableObject {
             return nil
         }
 
-        return Self.updatedHookToolInput(rawJSON: rawJSON, answers: answers, clientInfo: clientInfo)
+        var updatedInput = Self.updatedHookToolInput(rawJSON: rawJSON, answers: answers, clientInfo: clientInfo)
+        if let transcriptCallId = intervention.metadata["transcriptCallId"], !transcriptCallId.isEmpty {
+            updatedInput?["tool_call_id"] = transcriptCallId
+            updatedInput?["call_id"] = transcriptCallId
+        }
+        return updatedInput
     }
 
     nonisolated static func defaultAnswers(for intervention: SessionIntervention) -> [String: [String]] {

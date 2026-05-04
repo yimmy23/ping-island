@@ -34,7 +34,7 @@ struct RecentInterventionResponseStore {
         }
 
         prune(now: now)
-        guard let key = Self.cacheKey(for: event) else { return }
+        guard let key = Self.cacheKey(for: event, updatedInput: updatedInput) else { return }
         responses[key] = RecentInterventionResponse(
             decision: decision,
             reason: reason,
@@ -57,6 +57,10 @@ struct RecentInterventionResponseStore {
     }
 
     static func cacheKey(for event: HookEvent) -> String? {
+        cacheKey(for: event, updatedInput: nil)
+    }
+
+    private static func cacheKey(for event: HookEvent, updatedInput: [String: AnyCodable]?) -> String? {
         guard shouldStoreAnswerReplay(for: event) else {
             return nil
         }
@@ -65,13 +69,20 @@ struct RecentInterventionResponseStore {
             .lowercased()
             .replacingOccurrences(of: "_", with: "")
             .replacingOccurrences(of: "-", with: "")
-        guard normalizedTool == "askuserquestion" else { return nil }
-        guard let signature = questionSignature(from: event.toolInput), !signature.isEmpty else { return nil }
+        let effectiveTool = normalizedTool ?? (isCodeBuddyCLIQuestionNotification(event) ? "askuserquestion" : nil)
+        guard effectiveTool == "askuserquestion" else { return nil }
+        guard let signature = questionSignature(from: event.toolInput)
+            ?? questionSignature(from: updatedInput),
+              !signature.isEmpty else { return nil }
 
-        return ([event.sessionId, normalizedTool ?? "askuserquestion"] + signature).joined(separator: "||")
+        return ([event.sessionId, effectiveTool ?? "askuserquestion"] + signature).joined(separator: "||")
     }
 
     private static func shouldStoreAnswerReplay(for event: HookEvent) -> Bool {
+        if isCodeBuddyCLIQuestionNotification(event) {
+            return true
+        }
+
         if event.clientInfo.profileID == "qoderwork" || event.clientInfo.bundleIdentifier == "com.qoder.work" {
             return true
         }
@@ -108,6 +119,23 @@ struct RecentInterventionResponseStore {
             && event.event == "PermissionRequest"
             && normalizedTool == "askuserquestion"
             && isPlainClaudeCode
+    }
+
+    private static func isCodeBuddyCLIQuestionNotification(_ event: HookEvent) -> Bool {
+        guard event.provider == .claude,
+              event.event == "Notification",
+              event.notificationType == "permission_prompt",
+              event.clientInfo.profileID?.lowercased() == "codebuddy-cli" else {
+            return false
+        }
+
+        let normalizedMessage = event.message?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            ?? ""
+        return normalizedMessage.contains("askuserquestion")
+            || normalizedMessage.contains("ask user question")
+            || normalizedMessage.contains("ask_user_question")
     }
 
     static func questionSignature(from toolInput: [String: AnyCodable]?) -> [String]? {

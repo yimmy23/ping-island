@@ -760,7 +760,7 @@ func codeBuddyCLIPreToolUseBecomesBlockingApproval() throws {
 }
 
 @Test
-func codeBuddyCLIAskUserQuestionNotificationDoesNotClaimInlineAnswer() throws {
+func codeBuddyCLIAskUserQuestionNotificationKeepsBridgeResponseOpen() throws {
     let payload = """
     {
       "hook_event_name": "Notification",
@@ -784,7 +784,8 @@ func codeBuddyCLIAskUserQuestionNotificationDoesNotClaimInlineAnswer() throws {
     )
 
     #expect(envelope.eventType == "Notification")
-    #expect(envelope.expectsResponse == false)
+    #expect(envelope.status?.kind == .waitingForInput)
+    #expect(envelope.expectsResponse == true)
     #expect(envelope.metadata["client_kind"] == "codebuddy-cli")
 }
 
@@ -1406,7 +1407,7 @@ func qoderCLIExitPlanModeApprovalPayloadUsesPreToolUseEventName() throws {
 }
 
 @Test
-func codeBuddyCLIApprovalPayloadUsesHookSpecificOutputShape() throws {
+func codeBuddyCLIApprovalPayloadUsesClaudeCodeOutputShape() throws {
     let response = BridgeResponse(
         requestID: UUID(),
         decision: .approve
@@ -1425,12 +1426,14 @@ func codeBuddyCLIApprovalPayloadUsesHookSpecificOutputShape() throws {
 
     let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
     let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
-    #expect(hookSpecificOutput["hookEventName"] as? String == "PreToolUse")
-    #expect(hookSpecificOutput["permissionDecision"] as? String == "allow")
+    #expect(hookSpecificOutput["hookEventName"] as? String == "PermissionRequest")
+    #expect(hookSpecificOutput["permissionDecision"] == nil)
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
 }
 
 @Test
-func codeBuddyCLIPermissionRequestAnswerPayloadIncludesModifiedAndUpdatedInput() throws {
+func codeBuddyCLIPermissionRequestAnswerPayloadUsesClaudeCodeOutputShape() throws {
     let response = BridgeResponse(
         requestID: UUID(),
         decision: .answer([:]),
@@ -1463,15 +1466,63 @@ func codeBuddyCLIPermissionRequestAnswerPayloadIncludesModifiedAndUpdatedInput()
     let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
     let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
     #expect(hookSpecificOutput["hookEventName"] as? String == "PermissionRequest")
-    #expect(hookSpecificOutput["permissionDecision"] as? String == "allow")
-    let modifiedInput = try #require(hookSpecificOutput["modifiedInput"] as? [String: Any])
-    let updatedInput = try #require(hookSpecificOutput["updatedInput"] as? [String: Any])
-    let modifiedAnswers = try #require(modifiedInput["answers"] as? [String: String])
-    let updatedAnswers = try #require(updatedInput["answers"] as? [String: String])
-    #expect(modifiedAnswers["scope"] == "SessionStore")
-    #expect(updatedAnswers["scope"] == "SessionStore")
+    #expect(hookSpecificOutput["permissionDecision"] == nil)
+    #expect(hookSpecificOutput["modifiedInput"] == nil)
+    #expect(hookSpecificOutput["updatedInput"] == nil)
+    #expect(json["decision"] == nil)
+    #expect(json["modifiedInput"] == nil)
+    #expect(json["updatedInput"] == nil)
     let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
     #expect(decision["behavior"] as? String == "allow")
+    let updatedInput = try #require(decision["updatedInput"] as? [String: Any])
+    let answers = try #require(updatedInput["answers"] as? [String: String])
+    #expect(answers["scope"] == "SessionStore")
+}
+
+@Test
+func codeBuddyCLINotificationAnswerPayloadUsesClaudeCodeOutputShape() throws {
+    let response = BridgeResponse(
+        requestID: UUID(),
+        decision: .answer([:]),
+        updatedInput: [
+            "questions": .array([
+                .object([
+                    "id": .string("scope"),
+                    "question": .string("Where should we start?"),
+                    "options": .array([
+                        .object(["label": .string("SessionStore")])
+                    ])
+                ])
+            ]),
+            "answers": .object([
+                "scope": .string("SessionStore")
+            ])
+        ]
+    )
+
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: response,
+        eventType: "Notification",
+        metadata: [
+            "client_kind": "codebuddy-cli",
+            "client_name": "CodeBuddy CLI"
+        ]
+    )
+
+    let json = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    #expect(hookSpecificOutput["hookEventName"] as? String == "Notification")
+    #expect(hookSpecificOutput["permissionDecision"] == nil)
+    #expect(hookSpecificOutput["updatedInput"] == nil)
+    #expect(json["decision"] == nil)
+    #expect(json["modifiedInput"] == nil)
+    #expect(json["updatedInput"] == nil)
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
+    let updatedInput = try #require(decision["updatedInput"] as? [String: Any])
+    let answers = try #require(updatedInput["answers"] as? [String: String])
+    #expect(answers["scope"] == "SessionStore")
 }
 
 @Test

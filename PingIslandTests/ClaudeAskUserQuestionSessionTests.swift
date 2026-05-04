@@ -186,36 +186,77 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
-    func testCodeBuddyCLINotificationQuestionDoesNotCreateInlineAnswer() async throws {
+    func testCodeBuddyCLINotificationQuestionCreatesInlineQuestionFromTranscript() async throws {
         let sessionId = "codebuddy-cli-notification-\(UUID().uuidString)"
         let store = SessionStore.shared
-        let event = HookEvent(
+        let transcriptURL = try makeCodeBuddyCLITranscript(sessionId: sessionId)
+        defer { try? FileManager.default.removeItem(at: transcriptURL.deletingLastPathComponent()) }
+
+        let event = makeCodeBuddyCLINotification(
             sessionId: sessionId,
-            cwd: "/tmp/project",
-            event: "Notification",
-            status: "processing",
-            provider: .claude,
-            clientInfo: SessionClientInfo(
-                kind: .qoder,
-                profileID: "codebuddy-cli",
-                name: "CodeBuddy CLI",
-                origin: "cli"
-            ),
-            pid: nil,
-            tty: nil,
-            tool: nil,
-            toolInput: nil,
-            toolUseId: "bridge-\(sessionId)",
-            notificationType: "permission_prompt",
-            message: "needs your permission to use AskUserQuestion"
+            sessionFilePath: transcriptURL.path
         )
-        XCTAssertFalse(event.expectsResponse)
+        XCTAssertTrue(event.expectsResponse)
 
         await store.process(.hookReceived(event))
 
         let session = await store.session(for: sessionId)
-        XCTAssertNil(session?.intervention)
-        XCTAssertFalse(session?.phase.needsAttention ?? true)
+        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertEqual(session?.intervention?.kind, .question)
+        XCTAssertNil(session?.intervention?.metadata["responseMode"])
+        XCTAssertEqual(session?.intervention?.metadata["source"], "codebuddy_cli_transcript")
+        XCTAssertEqual(session?.intervention?.metadata["originalToolUseId"], "bridge-\(sessionId)")
+        XCTAssertTrue(session?.intervention?.supportsInlineResponse ?? false)
+        XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.prompt, "这次要修哪里？")
+        XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["SessionStore", "UI 卡片"])
+
+        await store.process(
+            .interventionResolved(
+                sessionId: sessionId,
+                nextPhase: .processing,
+                submittedAnswers: ["scope": ["SessionStore"]]
+            )
+        )
+        let resolvedSession = await store.session(for: sessionId)
+        XCTAssertNil(resolvedSession?.intervention)
+        XCTAssertEqual(resolvedSession?.phase, .processing)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
+    func testCodeBuddyCLINotificationFallbackUpgradesWhenTranscriptArrives() async throws {
+        let sessionId = "codebuddy-cli-delayed-\(UUID().uuidString)"
+        let store = SessionStore.shared
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PingIslandTests-CodeBuddyCLI-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let transcriptURL = directoryURL.appendingPathComponent("\(sessionId).jsonl")
+
+        await store.process(.hookReceived(makeCodeBuddyCLINotification(
+            sessionId: sessionId,
+            sessionFilePath: transcriptURL.path
+        )))
+
+        var session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.intervention?.metadata["source"], "codebuddy_cli_notification")
+        XCTAssertEqual(session?.intervention?.metadata["responseMode"], "external_only")
+
+        try writeCodeBuddyCLITranscript(sessionId: sessionId, to: transcriptURL)
+
+        for _ in 0..<30 {
+            try await Task.sleep(nanoseconds: 150_000_000)
+            session = await store.session(for: sessionId)
+            if session?.intervention?.metadata["source"] == "codebuddy_cli_transcript" {
+                break
+            }
+        }
+
+        XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertEqual(session?.intervention?.kind, .question)
+        XCTAssertEqual(session?.intervention?.metadata["source"], "codebuddy_cli_transcript")
+        XCTAssertNil(session?.intervention?.metadata["responseMode"])
+        XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["SessionStore", "UI 卡片"])
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }
@@ -223,6 +264,8 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
     func testCodeBuddyCLIPermissionRequestQuestionClearsAfterInlineAnswer() async throws {
         let sessionId = "codebuddy-cli-permission-\(UUID().uuidString)"
         let store = SessionStore.shared
+        await store.process(.hookReceived(makeCodeBuddyCLINotification(sessionId: sessionId)))
+
         let event = makeCodeBuddyCLIPermissionRequest(sessionId: sessionId)
         XCTAssertTrue(event.expectsResponse)
 
@@ -466,6 +509,58 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
             notificationType: nil,
             message: nil
         )
+    }
+
+    private func makeCodeBuddyCLINotification(
+        sessionId: String,
+        sessionFilePath: String? = nil
+    ) -> HookEvent {
+        HookEvent(
+            sessionId: sessionId,
+            cwd: "/tmp/project",
+            event: "Notification",
+            status: "processing",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "codebuddy-cli",
+                name: "CodeBuddy CLI",
+                origin: "cli",
+                sessionFilePath: sessionFilePath
+            ),
+            pid: nil,
+            tty: nil,
+            tool: nil,
+            toolInput: nil,
+            toolUseId: "bridge-\(sessionId)",
+            notificationType: "permission_prompt",
+            message: "needs your permission to use AskUserQuestion"
+        )
+    }
+
+    private func makeCodeBuddyCLITranscript(sessionId: String) throws -> URL {
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PingIslandTests-CodeBuddyCLI-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let transcriptURL = directoryURL.appendingPathComponent("\(sessionId).jsonl")
+        try writeCodeBuddyCLITranscript(sessionId: sessionId, to: transcriptURL)
+        return transcriptURL
+    }
+
+    private func writeCodeBuddyCLITranscript(sessionId: String, to transcriptURL: URL) throws {
+        let arguments = """
+        {"questions":[{"id":"scope","header":"范围","question":"这次要修哪里？","options":[{"label":"SessionStore"},{"label":"UI 卡片"}]}]}
+        """
+        let escapedArguments = try XCTUnwrap(String(data: JSONEncoder().encode(arguments), encoding: .utf8))
+        let lines = [
+            """
+            {"id":"user-\(sessionId)","timestamp":1777857886681,"type":"message","role":"user","content":[{"type":"input_text","text":"ask"}],"sessionId":"\(sessionId)","cwd":"/tmp/project"}
+            """,
+            """
+            {"id":"message-\(sessionId)","timestamp":1777857902423,"type":"function_call","callId":"call-\(sessionId)","name":"AskUserQuestion","arguments":\(escapedArguments),"sessionId":"\(sessionId)","cwd":"/tmp/project"}
+            """
+        ]
+        try lines.joined(separator: "\n").write(to: transcriptURL, atomically: true, encoding: .utf8)
     }
 
     private func makeCodeBuddyCLIPermissionRequest(sessionId: String) -> HookEvent {

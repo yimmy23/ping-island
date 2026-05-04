@@ -57,6 +57,11 @@ actor ConversationParser {
         case codeBuddyHistory
     }
 
+    private nonisolated static let codeBuddyQuestionToolNames: Set<String> = [
+        "askuserquestion",
+        "askfollowupquestion"
+    ]
+
     /// Parsed tool result data
     struct ToolResult {
         let content: String?
@@ -1141,6 +1146,242 @@ actor ConversationParser {
         }
 
         return Self.parseQoderSubagentPresentation(content)
+    }
+
+    func pendingCodeBuddyCLIQuestionIntervention(
+        sessionId: String,
+        cwd: String,
+        explicitFilePath: String? = nil,
+        actorName: String,
+        responseToolUseId: String?
+    ) -> SessionIntervention? {
+        let sessionFile = Self.sessionFilePath(sessionId: sessionId, cwd: cwd, explicitFilePath: explicitFilePath)
+        guard Self.transcriptFormat(for: sessionFile) == .claudeLike,
+              let content = try? String(contentsOfFile: sessionFile, encoding: .utf8) else {
+            return nil
+        }
+
+        return Self.parsePendingCodeBuddyCLIQuestionIntervention(
+            content,
+            sessionId: sessionId,
+            actorName: actorName,
+            responseToolUseId: responseToolUseId
+        )
+    }
+
+    private struct PendingCodeBuddyCLIQuestion {
+        let callId: String
+        let toolName: String
+        let arguments: [String: Any]
+        let argumentsJSON: String
+    }
+
+    private static func parsePendingCodeBuddyCLIQuestionIntervention(
+        _ content: String,
+        sessionId: String,
+        actorName: String,
+        responseToolUseId: String?
+    ) -> SessionIntervention? {
+        var pending: PendingCodeBuddyCLIQuestion?
+        var completedCallIds: Set<String> = []
+
+        for line in content.components(separatedBy: .newlines) {
+            guard !line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  let data = line.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let type = json["type"] as? String else {
+                continue
+            }
+
+            let normalizedType = type
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+
+            if normalizedType == "function_call",
+               let toolName = json["name"] as? String,
+               codeBuddyQuestionToolNames.contains(normalizedToolName(toolName)),
+               let callId = nonEmpty(json["callId"] as? String)
+                    ?? nonEmpty(json["call_id"] as? String)
+                    ?? nonEmpty(json["id"] as? String),
+               let arguments = decodedJSONObject(from: json["arguments"]),
+               let questions = decodedQuestions(from: arguments["questions"]),
+               !questions.isEmpty,
+               let argumentsJSON = serializedJSONString(from: arguments) {
+                pending = PendingCodeBuddyCLIQuestion(
+                    callId: callId,
+                    toolName: toolName,
+                    arguments: arguments,
+                    argumentsJSON: argumentsJSON
+                )
+                continue
+            }
+
+            if isCodeBuddyCLIResultType(normalizedType),
+               let callId = resultCallId(from: json) {
+                completedCallIds.insert(callId)
+                if pending?.callId == callId {
+                    pending = nil
+                }
+            }
+        }
+
+        guard let pending,
+              !completedCallIds.contains(pending.callId),
+              let questions = decodedQuestions(from: pending.arguments["questions"]) else {
+            return nil
+        }
+
+        let parsedQuestions = questions.enumerated().compactMap { index, question -> SessionInterventionQuestion? in
+            codeBuddyCLIInterventionQuestion(from: question, index: index)
+        }
+        guard !parsedQuestions.isEmpty else { return nil }
+
+        let title = parsedQuestions.count == 1
+            ? "\(actorName) 的提问"
+            : "\(actorName) 的提问（\(parsedQuestions.count) 个问题）"
+        var metadata: [String: String] = [
+            "source": "codebuddy_cli_transcript",
+            "toolName": pending.toolName,
+            "toolInputJSON": pending.argumentsJSON,
+            "transcriptCallId": pending.callId
+        ]
+        if let responseToolUseId, !responseToolUseId.isEmpty {
+            metadata["originalToolUseId"] = responseToolUseId
+        } else {
+            metadata["originalToolUseId"] = pending.callId
+        }
+
+        return SessionIntervention(
+            id: responseToolUseId ?? pending.callId,
+            kind: .question,
+            title: title,
+            message: "\(actorName) 需要你补充回答，提交后会继续执行当前会话。",
+            options: [],
+            questions: parsedQuestions,
+            supportsSessionScope: false,
+            metadata: metadata
+        )
+    }
+
+    private static func codeBuddyCLIInterventionQuestion(
+        from question: [String: Any],
+        index: Int
+    ) -> SessionInterventionQuestion? {
+        let prompt = (question["question"] as? String)
+            ?? (question["prompt"] as? String)
+            ?? (question["label"] as? String)
+        guard let prompt, !prompt.isEmpty else { return nil }
+
+        let objectOptions = (question["options"] as? [[String: Any]] ?? []).enumerated().compactMap { entry -> SessionInterventionOption? in
+            let (optionIndex, option) = entry
+            guard let label = option["label"] as? String, !label.isEmpty else { return nil }
+            return SessionInterventionOption(
+                id: option["id"] as? String ?? "\(index)-option-\(optionIndex)",
+                title: label,
+                detail: option["description"] as? String
+            )
+        }
+
+        let options: [SessionInterventionOption]
+        if !objectOptions.isEmpty {
+            options = objectOptions
+        } else if let stringOptions = question["options"] as? [String], !stringOptions.isEmpty {
+            options = stringOptions.enumerated().map { optionIndex, label in
+                SessionInterventionOption(
+                    id: "\(index)-option-\(optionIndex)",
+                    title: label,
+                    detail: nil
+                )
+            }
+        } else {
+            options = []
+        }
+
+        return SessionInterventionQuestion(
+            id: question["id"] as? String ?? prompt,
+            header: question["header"] as? String ?? "\(index + 1).",
+            prompt: prompt,
+            detail: question["description"] as? String,
+            options: options,
+            allowsMultiple: question["isMultiple"] as? Bool
+                ?? question["allowsMultiple"] as? Bool
+                ?? question["multiSelect"] as? Bool
+                ?? question["multiple"] as? Bool
+                ?? false,
+            allowsOther: question["isOther"] as? Bool
+                ?? question["allowsOther"] as? Bool
+                ?? false,
+            isSecret: question["isSecret"] as? Bool
+                ?? question["secret"] as? Bool
+                ?? false
+        )
+    }
+
+    private static func decodedJSONObject(from rawValue: Any?) -> [String: Any]? {
+        if let dictionary = rawValue as? [String: Any] {
+            return dictionary
+        }
+
+        guard let string = rawValue as? String,
+              let data = string.data(using: .utf8),
+              let dictionary = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        return dictionary
+    }
+
+    private static func decodedQuestions(from rawValue: Any?) -> [[String: Any]]? {
+        if let questions = rawValue as? [[String: Any]], !questions.isEmpty {
+            return questions
+        }
+        if let question = rawValue as? [String: Any] {
+            return [question]
+        }
+        guard let string = rawValue as? String,
+              let data = string.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) else {
+            return nil
+        }
+        if let questions = json as? [[String: Any]], !questions.isEmpty {
+            return questions
+        }
+        if let question = json as? [String: Any] {
+            return [question]
+        }
+        return nil
+    }
+
+    private static func isCodeBuddyCLIResultType(_ normalizedType: String) -> Bool {
+        normalizedType == "function_call_output"
+            || normalizedType == "function_result"
+            || normalizedType == "tool_result"
+            || normalizedType == "tool-result"
+            || (normalizedType.contains("function") && (normalizedType.contains("output") || normalizedType.contains("result")))
+            || (normalizedType.contains("tool") && normalizedType.contains("result"))
+    }
+
+    private static func resultCallId(from json: [String: Any]) -> String? {
+        nonEmpty(json["callId"] as? String)
+            ?? nonEmpty(json["call_id"] as? String)
+            ?? nonEmpty(json["toolCallId"] as? String)
+            ?? nonEmpty(json["tool_call_id"] as? String)
+            ?? nonEmpty(json["toolUseId"] as? String)
+            ?? nonEmpty(json["tool_use_id"] as? String)
+            ?? nonEmpty(json["id"] as? String)
+    }
+
+    private static func normalizedToolName(_ toolName: String) -> String {
+        toolName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .lowercased()
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed?.isEmpty == false ? trimmed : nil
     }
 
     private static func qoderConversationHistoryPath(sessionId: String) -> String? {

@@ -66,6 +66,41 @@ final class SessionMonitorAskUserQuestionTests: XCTestCase {
         XCTAssertEqual(answers?["先选一个主题"] as? String, "A 方案")
     }
 
+    func testUpdatedHookToolInputAddsCodeBuddyCLIQuestionIndexAlias() {
+        let rawJSON = """
+        {
+          "questions": [
+            {
+              "id": "scope",
+              "header": "范围",
+              "question": "这次要修哪里？",
+              "options": [
+                { "label": "SessionStore" },
+                { "label": "UI 卡片" }
+              ]
+            }
+          ]
+        }
+        """
+
+        let updated = SessionMonitor.updatedHookToolInput(
+            rawJSON: rawJSON,
+            answers: ["scope": ["SessionStore"]],
+            clientInfo: SessionClientInfo(
+                kind: .qoder,
+                profileID: "codebuddy-cli",
+                name: "CodeBuddy CLI",
+                origin: "cli"
+            )
+        )
+
+        let answers = updated?["answers"] as? [String: Any]
+        XCTAssertEqual(answers?["scope"] as? String, "SessionStore")
+        XCTAssertEqual(answers?["这次要修哪里？"] as? String, "SessionStore")
+        XCTAssertEqual(answers?["0"] as? String, "SessionStore")
+        XCTAssertEqual(answers?["q_0"] as? String, "SessionStore")
+    }
+
     func testUpdatedHookToolInputUsesClaudeAnswerShapeForQoderCLI() {
         let rawJSON = """
         {

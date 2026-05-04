@@ -222,4 +222,92 @@ final class RecentInterventionResponseStoreTests: XCTestCase {
         XCTAssertEqual(replay?.decision, "answer")
         XCTAssertEqual(replay?.updatedInput?["answers"]?.value as? [String: String], ["project": "会话层"])
     }
+
+    func testCodeBuddyCLINotificationAnswerCanReplayToPermissionRequest() {
+        var store = RecentInterventionResponseStore(ttl: 30)
+
+        let clientInfo = SessionClientInfo(
+            kind: .qoder,
+            profileID: "codebuddy-cli",
+            name: "CodeBuddy CLI",
+            origin: "cli"
+        )
+        let notificationEvent = HookEvent(
+            sessionId: "codebuddy-cli-session",
+            cwd: "/tmp/project",
+            event: "Notification",
+            status: "waiting_for_input",
+            provider: .claude,
+            clientInfo: clientInfo,
+            pid: nil,
+            tty: nil,
+            tool: nil,
+            toolInput: nil,
+            toolUseId: "bridge-123",
+            notificationType: "permission_prompt",
+            message: "needs your permission to use AskUserQuestion"
+        )
+        let permissionEvent = HookEvent(
+            sessionId: "codebuddy-cli-session",
+            cwd: "/tmp/project",
+            event: "PermissionRequest",
+            status: "waiting_for_approval",
+            provider: .claude,
+            clientInfo: clientInfo,
+            pid: nil,
+            tty: nil,
+            tool: "AskUserQuestion",
+            toolInput: [
+                "questions": AnyCodable([
+                    [
+                        "id": "scope",
+                        "header": "范围",
+                        "question": "这次要修哪里？",
+                        "options": [
+                            ["label": "SessionStore"],
+                            ["label": "UI 卡片"]
+                        ]
+                    ]
+                ])
+            ],
+            toolUseId: "call-123",
+            notificationType: nil,
+            message: nil
+        )
+
+        store.record(
+            event: notificationEvent,
+            decision: "answer",
+            reason: nil,
+            updatedInput: [
+                "questions": AnyCodable([
+                    [
+                        "id": "scope",
+                        "header": "范围",
+                        "question": "这次要修哪里？",
+                        "options": [
+                            ["label": "SessionStore"],
+                            ["label": "UI 卡片"]
+                        ]
+                    ]
+                ]),
+                "answers": AnyCodable([
+                    "scope": "SessionStore",
+                    "q_0": "SessionStore"
+                ])
+            ],
+            now: Date(timeIntervalSince1970: 100)
+        )
+
+        let replay = store.response(
+            for: permissionEvent,
+            now: Date(timeIntervalSince1970: 101)
+        )
+
+        XCTAssertEqual(replay?.decision, "answer")
+        XCTAssertEqual(replay?.updatedInput?["answers"]?.value as? [String: String], [
+            "scope": "SessionStore",
+            "q_0": "SessionStore"
+        ])
+    }
 }

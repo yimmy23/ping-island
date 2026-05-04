@@ -432,6 +432,8 @@ struct HookInstaller {
 
         if profile.id == "qwen-code-hooks" {
             applyQwenAskUserQuestionCompatibilityPatchIfNeeded()
+        } else if profile.id == "codebuddy-cli-hooks" {
+            applyCodeBuddyCLIAskUserQuestionCompatibilityPatchIfNeeded()
         }
     }
 
@@ -867,27 +869,7 @@ struct HookInstaller {
     }
 
     private static func qwenCLIEntryPointURL() -> URL? {
-        let process = Process()
-        let stdout = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["which", "qwen"]
-        process.standardOutput = stdout
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-            let data = stdout.fileHandleForReading.readDataToEndOfFile()
-            guard let path = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-                !path.isEmpty else {
-                return nil
-            }
-            return URL(fileURLWithPath: path).resolvingSymlinksInPath()
-        } catch {
-            return nil
-        }
+        commandEntryPointURL(named: "qwen")
     }
 
     static func patchedQwenCLISourceIfNeeded(_ source: String) -> String? {
@@ -931,6 +913,118 @@ struct HookInstaller {
         }
 
         return didChange ? patched : nil
+    }
+
+    private static func applyCodeBuddyCLIAskUserQuestionCompatibilityPatchIfNeeded() {
+        for cliURL in codeBuddyCLIBundleURLs() {
+            guard let source = try? String(contentsOf: cliURL, encoding: .utf8),
+                  let patched = patchedCodeBuddyCLISourceIfNeeded(source),
+                  patched != source else {
+                continue
+            }
+
+            try? patched.write(to: cliURL, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private static func codeBuddyCLIBundleURLs() -> [URL] {
+        guard let entryPointURL = commandEntryPointURL(named: "codebuddy") else {
+            return []
+        }
+
+        let packageURL = entryPointURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let distURL = packageURL.appendingPathComponent("dist", isDirectory: true)
+        return [
+            distURL.appendingPathComponent("codebuddy.js"),
+            distURL.appendingPathComponent("codebuddy-headless.js")
+        ].filter { FileManager.default.isWritableFile(atPath: $0.path) }
+    }
+
+    private static func commandEntryPointURL(named command: String) -> URL? {
+        let process = Process()
+        let stdout = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["which", command]
+        process.standardOutput = stdout
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            let data = stdout.fileHandleForReading.readDataToEndOfFile()
+            guard let path = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                !path.isEmpty else {
+                return nil
+            }
+            return URL(fileURLWithPath: path).resolvingSymlinksInPath()
+        } catch {
+            return nil
+        }
+    }
+
+    static func patchedCodeBuddyCLISourceIfNeeded(_ source: String) -> String? {
+        let marker = "[PingIsland CodeBuddy CLI AskUserQuestion compatibility]"
+        if source.contains(marker) {
+            return source
+        }
+
+        guard let containerAlias = codeBuddyContainerUtilAlias(in: source) else {
+            return nil
+        }
+
+        var patched = source
+        var didChange = false
+
+        let notificationNeedle = #"try{await this.hookManager.executeHooks(tV.HookEvent.NOTIFICATION,ec)}catch(ei){this.logger.error("Notification hook execution failed:",ei)}"#
+        if patched.contains(notificationNeedle) {
+            patched = patched.replacingOccurrences(
+                of: notificationNeedle,
+                with: #"try{return await this.hookManager.executeHooks(tV.HookEvent.NOTIFICATION,ec)}catch(ei){this.logger.error("Notification hook execution failed:",ei)}"#
+            )
+            didChange = true
+        }
+
+        let permissionNeedle = #"let eu=`needs your permission to use ${ea}`;try{await this.sessionHookManager.executeNotificationHooks(ei,eu,tV.NotificationType.PERMISSION_PROMPT)}catch(ei){this.consoleManager.error("Notification hook failed:",ei)}}"#
+        if patched.contains(permissionNeedle) {
+            let replacement = """
+            let eu=`needs your permission to use ${ea}`;try{
+            let eI=await this.sessionHookManager.executeNotificationHooks(ei,eu,tV.NotificationType.PERMISSION_PROMPT);
+            if("AskUserQuestion"===ea){
+            let eR=eI?.hookSpecificOutput?.updatedInput||eI?.hookSpecificOutput?.modifiedInput||eI?.updatedInput||eI?.modifiedInput||eI?.decision?.updatedInput||eI?.hookSpecificOutput?.decision?.updatedInput,eO=eR?.answers;
+            if(eO&&"object"==typeof eO){
+            let eP=new Map,eD="arguments"in em.rawItem?em.rawItem.arguments:void 0;
+            try{let ei="string"==typeof eD?JSON.parse(eD):eD;(Array.isArray(ei?.questions)?ei.questions:[]).forEach((ei,ea)=>{let el="string"==typeof ei?.question?ei.question:"";el&&(eP.set(el,el),"string"==typeof ei?.id&&ei.id&&eP.set(ei.id,el),eP.set(`q_${ea}`,el),eP.set(String(ea),el))})}catch(ei){this.logger.warn?.(`[HandleInterruptions] Failed to parse AskUserQuestion arguments from hook answer: ${ei instanceof Error?ei.message:String(ei)}`)}
+            let eN=Object.fromEntries(Object.entries(eO).map(([ei,ea])=>[eP.get(ei)||ei,Array.isArray(ea)?ea.join(", "):ea])),eM=em.rawItem.callId||em.rawItem.id;
+            try{\(containerAlias).ContainerUtil.get(el(88056).AskService).doneAsk(eN,eM),this.approve(em),this.logger.info?.(`[PingIsland CodeBuddy CLI AskUserQuestion compatibility] answered id=${eM||"none"}`)}catch(ei){this.logger.warn?.(`[HandleInterruptions] Failed to apply AskUserQuestion hook answer: ${ei instanceof Error?ei.message:String(ei)}`)}
+            }}
+            }catch(ei){this.consoleManager.error("Notification hook failed:",ei)}}
+            """
+            patched = patched.replacingOccurrences(of: permissionNeedle, with: replacement)
+            didChange = true
+        }
+
+        return didChange ? patched : nil
+    }
+
+    private static func codeBuddyContainerUtilAlias(in source: String) -> String? {
+        guard let permissionRange = source.range(of: #"needs your permission to use"#) else {
+            return nil
+        }
+        let prefix = String(source[..<permissionRange.lowerBound].suffix(200_000))
+        guard let regex = try? NSRegularExpression(pattern: #"(?:^|[,\s])([A-Za-z_$][A-Za-z0-9_$]*)=el\(80699\),"#) else {
+            return nil
+        }
+        let range = NSRange(prefix.startIndex..., in: prefix)
+        guard let match = regex.matches(in: prefix, range: range).last,
+              match.numberOfRanges > 1,
+              let aliasRange = Range(match.range(at: 1), in: prefix) else {
+            return nil
+        }
+        return String(prefix[aliasRange])
     }
 
     private static func normalizedHookEntries(

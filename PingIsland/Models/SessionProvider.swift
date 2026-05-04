@@ -178,6 +178,27 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
             || originator?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "qwen-code"
     }
 
+    nonisolated var isCodeBuddyCLIClient: Bool {
+        let normalized = normalizedForClaudeRouting()
+        let profileIDs = [profileID, normalized.profileID]
+            .compactMap { value -> String? in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return trimmed?.isEmpty == false ? trimmed : nil
+            }
+        if profileIDs.contains("codebuddy-cli") || profileIDs.contains("codebuddy-cli-hooks") {
+            return true
+        }
+
+        let normalizedOrigin = (origin ?? normalized.origin)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard normalizedOrigin == "cli" else { return false }
+
+        return [name, normalized.name]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .contains { $0.contains("codebuddy") }
+    }
+
     nonisolated var isHermesClient: Bool {
         profileID == "hermes"
             || threadSource?.lowercased() == "hermes-plugin"
@@ -493,15 +514,39 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
             normalized.terminalBundleIdentifier
                 ?? normalized.bundleIdentifier
         )?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedProfileID = normalized.profileID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedName = normalized.name?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedOrigin = normalized.origin?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let isCodeBuddyCLI =
+            normalizedProfileID == "codebuddy-cli"
+            || normalizedProfileID == "codebuddy-cli-hooks"
+            || normalizedName == "codebuddy cli"
+            || normalizedName == "codebuddy-cli"
+            || (
+                normalizedOrigin == "cli"
+                    && (
+                        normalizedName?.contains("codebuddy") == true
+                            || normalized.originator?
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                .lowercased()
+                                .contains("codebuddy") == true
+                    )
+            )
         let isQoderWorkHosted =
             hostBundleIdentifier == "com.qoder.work"
-            || normalized.profileID == "qoderwork"
-            || normalized.name?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "qoderwork"
-            || normalized.name?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "qoder work"
+            || normalizedProfileID == "qoderwork"
+            || normalizedName == "qoderwork"
+            || normalizedName == "qoder work"
         let isExplicitQoderCLI =
-            normalized.profileID == "qoder-cli"
-            || normalized.name?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "qoder cli"
-            || normalized.origin?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "cli"
+            normalizedProfileID == "qoder-cli"
+            || normalizedName == "qoder cli"
+            || normalizedOrigin == "cli"
         let isIDEBundle = hostBundleIdentifier.map { TerminalAppRegistry.isIDEBundle($0) } ?? false
         let isTerminalHosted =
             (hostBundleIdentifier.map { TerminalAppRegistry.isTerminalBundle($0) } ?? false)
@@ -525,7 +570,11 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
                         || normalized.bundleIdentifier?.lowercased() == "com.qoder.ide"
                 )
 
-        if isQoderWorkHosted {
+        if isCodeBuddyCLI {
+            normalized.profileID = "codebuddy-cli"
+            normalized.name = "CodeBuddy CLI"
+            normalized.origin = "cli"
+        } else if isQoderWorkHosted {
             normalized.profileID = "qoderwork"
             normalized.name = "QoderWork"
         } else if isQoderIDEHosted {

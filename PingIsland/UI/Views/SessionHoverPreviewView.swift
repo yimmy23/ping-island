@@ -549,8 +549,7 @@ private struct HoverQuestionInterventionCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-            } else if intervention.metadata["responseMode"] == "external_only",
-                      session.clientInfo.kind == .codexCLI {
+            } else if intervention.metadata["responseMode"] == "external_only" {
                 Button {
                     Task {
                         _ = await SessionLauncher.shared.activate(session)
