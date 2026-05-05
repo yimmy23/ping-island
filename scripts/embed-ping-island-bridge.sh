@@ -70,6 +70,17 @@ if [[ "${CODE_SIGNING_ALLOWED:-NO}" == "YES" && -n "${EXPANDED_CODE_SIGN_IDENTIT
     --timestamp
   )
 
+  if [[ -n "${CODE_SIGN_ENTITLEMENTS:-}" ]]; then
+    entitlements_path="$CODE_SIGN_ENTITLEMENTS"
+    if [[ "$entitlements_path" != /* ]]; then
+      entitlements_path="${SRCROOT:?SRCROOT is required}/$entitlements_path"
+    fi
+
+    if [[ -f "$entitlements_path" ]]; then
+      codesign_args+=(--entitlements "$entitlements_path")
+    fi
+  fi
+
   if [[ "${ENABLE_HARDENED_RUNTIME:-NO}" == "YES" ]]; then
     codesign_args+=(--options runtime)
   fi

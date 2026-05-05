@@ -1,7 +1,9 @@
 import AppKit
 import Combine
 import Foundation
+#if !APP_STORE
 import Sparkle
+#endif
 
 enum UpdateState: Equatable {
     case idle
@@ -27,6 +29,7 @@ enum UpdateState: Equatable {
 enum UpdateConfigurationStatus: Equatable {
     case configured
     case unconfigured
+    case appStoreManaged
 
     var message: String {
         switch self {
@@ -34,10 +37,81 @@ enum UpdateConfigurationStatus: Equatable {
             "更新源已准备就绪"
         case .unconfigured:
             "缺少 Sparkle 更新源或公钥配置"
+        case .appStoreManaged:
+            "更新由 Mac App Store 管理"
         }
     }
 }
 
+#if APP_STORE
+@MainActor
+final class UpdateManager: ObservableObject {
+    static let shared = UpdateManager()
+    nonisolated static let silentCheckInterval: TimeInterval = 10 * 60
+
+    @Published var state: UpdateState = .idle
+    @Published var hasUnseenUpdate = false
+    @Published private(set) var latestReleaseNotes: UpdateReleaseNotes?
+    @Published private(set) var configurationStatus = UpdateConfigurationStatus.appStoreManaged
+    @Published private(set) var availableVersion: String?
+
+    private init() {}
+
+    var isConfigured: Bool {
+        false
+    }
+
+    var canShowReleaseNotes: Bool {
+        false
+    }
+
+    var releaseNotesActionTitle: String {
+        "版本历史由 App Store 管理"
+    }
+
+    var releaseNotesActionSubtitle: String {
+        "Mac App Store 版本不包含独立更新器"
+    }
+
+    func start() {}
+
+    func checkForUpdates() {
+        state = .upToDate
+    }
+
+    func checkForUpdatesInBackground() {}
+
+    func downloadAndInstall() {}
+
+    func installAndRelaunch() {}
+
+    func skipUpdate() {
+        state = .idle
+    }
+
+    func dismissUpdate() {
+        state = .idle
+    }
+
+    func cancelDownload() {
+        state = .idle
+    }
+
+    func markUpdateSeen() {
+        hasUnseenUpdate = false
+    }
+
+    func showReleaseNotes() {}
+
+    nonisolated static func hasActiveSessions(in sessions: [SessionState]) -> Bool {
+        sessions.contains(where: { $0.phase.isActive })
+    }
+
+    nonisolated static func isValidFeedURL(_ value: String) -> Bool {
+        false
+    }
+}
+#else
 @MainActor
 final class UpdateManager: NSObject, ObservableObject {
     static let shared = UpdateManager()
@@ -684,3 +758,4 @@ private struct UpdateConfiguration {
         return .configured
     }
 }
+#endif

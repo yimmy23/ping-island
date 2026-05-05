@@ -46,6 +46,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - Client mascot system: `PingIsland/UI/Components/MascotView.swift`, `PingIsland/UI/Views/MascotSettingsView.swift`
 - App updates and release notes: `PingIsland/Services/Update/`, `PingIsland/UI/Views/ReleaseNotesWindowView.swift`, `PingIsland/UI/Window/ReleaseNotesWindowController.swift`
 - Sparkle build configuration: `Config/App.xcconfig`, `Config/LocalSecrets.xcconfig`, `docs/sparkle-release.md`
+- Mac App Store distribution lane: `PingIslandAppStore` target / scheme, `PingIsland/Info-AppStore.plist`, `PingIsland/Resources/PingIsland-AppStore.entitlements`, `Config/AppStore.xcconfig`, `scripts/build-app-store.sh`, and `docs/mac-app-store-submission.md`
 
 ## Repo Map
 
@@ -102,6 +103,7 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
 - If you change Codex behavior, verify both the monitor layer under `PingIsland/Services/Codex/` and the UI under `PingIsland/UI/Views/CodexSessionView.swift`.
 - If you change app updates or release notes, trace through `PingIsland/Services/Update/`, `PingIsland/Info.plist`, the settings UI, and `scripts/create-release.sh` so appcast assets, runtime config, and update messaging stay aligned.
 - If you change Sparkle configuration keys or hosting assumptions, update `Config/App.xcconfig`, `Config/LocalSecrets.example.xcconfig`, `scripts/generate-keys.sh`, and `docs/sparkle-release.md` together.
+- If you change App Store distribution behavior, keep the `PingIslandAppStore` target isolated from the regular `PingIsland` Developer ID/Sparkle lane, and update `docs/mac-app-store-submission.md` plus `scripts/build-app-store.sh` together.
 - If you only need logic-level confidence, prefer adding or updating tests under `Prototype/Tests`.
 
 ## Build And Test
@@ -112,6 +114,8 @@ This file is a routing layer for coding agents working in this repo. Keep it sho
   - `xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Debug build`
 - App release build:
   - `xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Release build`
+- Mac App Store unsigned archive validation:
+  - `PING_ISLAND_SKIP_APP_STORE_SIGNING=1 ./scripts/build-app-store.sh`
 - Root Xcode unit tests:
   - `xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Debug CODE_SIGNING_ALLOWED=NO test -only-testing:PingIslandTests`
 - Root Xcode UI tests:
