@@ -9,7 +9,8 @@
   <a href="#features">Features</a> •
   <a href="#buddy-detach">Buddy Detach</a> •
   <a href="#supported-tools">Supported Tools</a> •
-  <a href="#build-from-source">Build</a><br>
+  <a href="#build-from-source">Build</a> •
+  <a href="docs/privacy-policy.md">Privacy</a><br>
   English | <a href="README.zh-CN.md">简体中文</a>
 </p>
 

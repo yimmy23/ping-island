@@ -9,7 +9,8 @@
   <a href="#features">功能</a> •
   <a href="#buddy-detach">Buddy 离岛</a> •
   <a href="#supported-tools">支持的工具</a> •
-  <a href="#build-from-source">构建</a><br>
+  <a href="#build-from-source">构建</a> •
+  <a href="docs/privacy-policy.md">隐私政策</a><br>
   <a href="README.md">English</a> | 简体中文
 </p>
 

@@ -75,9 +75,9 @@ Result: build succeeded.
 
 2. Complete App Store Connect review metadata.
 
-   The App Store Connect app record must include a privacy policy URL,
-   screenshots, age rating, review contact info, and privacy nutrition label
-   answers before the build can be submitted for review.
+   The App Store Connect app record must include screenshots, age rating,
+   review contact info, and privacy nutrition label answers before the build can
+   be submitted for review.
 
 ## Upload Command Shape
 
@@ -120,5 +120,5 @@ and `-authenticationKeyIssuerID`.
 - Promotional text: Monitor Claude Code, Codex, Gemini CLI, Qwen Code, Hermes, and compatible hook-driven agent sessions from a native macOS menu bar island.
 - Description: Ping Island brings AI coding session status, approval prompts, follow-up questions, remote SSH activity, and completion notifications into a compact macOS menu bar surface. It supports Claude Code, Codex, Gemini CLI, Qwen Code, Hermes Agent, and compatible hook-driven clients, with mascot-rich status views, terminal jump-back, and docked or detached island modes.
 - Keywords: Claude Code, Codex, Gemini CLI, AI coding, menu bar, Dynamic Island, developer tools
-- Support URL: project website or GitHub repository support page
-- Privacy policy URL: required before submission
+- Support URL: https://github.com/erha19/ping-island/issues
+- Privacy policy URL: https://github.com/erha19/ping-island/blob/main/docs/privacy-policy.md
