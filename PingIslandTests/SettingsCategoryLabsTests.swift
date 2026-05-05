@@ -2,13 +2,17 @@ import XCTest
 @testable import Ping_Island
 
 final class SettingsCategoryLabsTests: XCTestCase {
-    func testLabsCategoryIsVisibleBeforeAbout() {
-        let categories = SettingsCategory.allCases
+    func testLabsCategoryIsHiddenUntilUnlocked() {
+        let hiddenCategories = SettingsCategory.visibleCategories(labsUnlocked: false)
 
-        XCTAssertTrue(categories.contains(.labs))
+        XCTAssertFalse(hiddenCategories.contains(.labs))
+
+        let unlockedCategories = SettingsCategory.visibleCategories(labsUnlocked: true)
+
+        XCTAssertTrue(unlockedCategories.contains(.labs))
         XCTAssertLessThan(
-            categories.firstIndex(of: .labs)!,
-            categories.firstIndex(of: .about)!
+            unlockedCategories.firstIndex(of: .labs)!,
+            unlockedCategories.firstIndex(of: .about)!
         )
     }
 

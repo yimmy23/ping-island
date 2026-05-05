@@ -73,6 +73,12 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .about: return Color(red: 0.17, green: 0.60, blue: 0.96)
         }
     }
+
+    static func visibleCategories(labsUnlocked: Bool) -> [SettingsCategory] {
+        allCases.filter { category in
+            category != .labs || labsUnlocked
+        }
+    }
 }
 
 struct QoderCLIHookRefreshNoticeGate {
@@ -476,6 +482,7 @@ private struct SettingsPanelContentView: View {
     @State private var showingCustomHookInstallSheet = false
     @State private var showingRemoteHostSheet = false
     @State private var remotePasswordPromptRequest: RemotePasswordPromptRequest?
+    @State private var consecutiveGeneralTapCount = 0
 
     var body: some View {
         ZStack {
@@ -655,7 +662,7 @@ private struct SettingsPanelContentView: View {
         [
             SettingsSidebarSection(
                 title: nil,
-                categories: [.general, .shortcuts, .display, .mascot, .sound, .integration, .remote, .labs, .about]
+                categories: SettingsCategory.visibleCategories(labsUnlocked: settings.labsSettingsUnlocked)
             )
         ]
     }
@@ -679,7 +686,7 @@ private struct SettingsPanelContentView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(section.categories) { category in
                                 Button {
-                                    selectedCategory = category
+                                    selectSidebarCategory(category)
                                 } label: {
                                     SidebarItemView(
                                         category: category,
@@ -875,11 +882,34 @@ private struct SettingsPanelContentView: View {
     }
 
     private var currentCategory: SettingsCategory {
-        selectedCategory ?? .general
+        let category = selectedCategory ?? .general
+        guard category != .labs || settings.labsSettingsUnlocked else {
+            return .general
+        }
+        return category
     }
 
     private var currentWindow: NSWindow? {
         NSApp.keyWindow ?? NSApp.mainWindow
+    }
+
+    private func selectSidebarCategory(_ category: SettingsCategory) {
+        selectedCategory = category
+
+        guard !settings.labsSettingsUnlocked else {
+            return
+        }
+
+        guard category == .general else {
+            consecutiveGeneralTapCount = 0
+            return
+        }
+
+        consecutiveGeneralTapCount += 1
+        if consecutiveGeneralTapCount >= 6 {
+            settings.labsSettingsUnlocked = true
+            selectedCategory = .labs
+        }
     }
 
     private var generalContent: some View {

@@ -243,4 +243,17 @@ final class AppSettingsPersistenceTests: XCTestCase {
         XCTAssertFalse(reloadedStore.floatingPetSettingsHintPending)
         XCTAssertEqual(defaults.object(forKey: AppSettingsDefaultKeys.floatingPetSettingsHintPending) as? Bool, false)
     }
+
+    func testLabsSettingsUnlockedDefaultsHiddenAndPersists() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+
+        XCTAssertFalse(store.labsSettingsUnlocked)
+
+        store.labsSettingsUnlocked = true
+
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertTrue(reloadedStore.labsSettingsUnlocked)
+        XCTAssertEqual(defaults.object(forKey: "labsSettingsUnlocked") as? Bool, true)
+    }
 }

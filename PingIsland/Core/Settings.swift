@@ -301,6 +301,7 @@ final class AppSettingsStore: ObservableObject {
         static let presentationModeOnboardingPending = AppSettingsDefaultKeys.presentationModeOnboardingPending
         static let notchDetachmentHintPending = AppSettingsDefaultKeys.notchDetachmentHintPending
         static let floatingPetSettingsHintPending = AppSettingsDefaultKeys.floatingPetSettingsHintPending
+        static let labsSettingsUnlocked = "labsSettingsUnlocked"
         static let automaticUpdateChecksEnabled = "automaticUpdateChecksEnabled"
         static let mascotOverrides = "mascotOverrides"
         static let openActiveSessionShortcut = "openActiveSessionShortcut"
@@ -609,6 +610,13 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(floatingPetSettingsHintPending, forKey: Keys.floatingPetSettingsHintPending)
+        }
+    }
+
+    @Published var labsSettingsUnlocked: Bool {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(labsSettingsUnlocked, forKey: Keys.labsSettingsUnlocked)
         }
     }
 
@@ -1058,6 +1066,12 @@ final class AppSettingsStore: ObservableObject {
             from: defaults,
             key: Keys.floatingPetSettingsHintPending,
             exists: persistedKeys.contains(Keys.floatingPetSettingsHintPending),
+            default: false
+        ))
+        _labsSettingsUnlocked = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.labsSettingsUnlocked,
+            exists: persistedKeys.contains(Keys.labsSettingsUnlocked),
             default: false
         ))
         _automaticUpdateChecksEnabled = Published(initialValue: Self.boolValue(
