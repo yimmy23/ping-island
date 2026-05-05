@@ -11,8 +11,8 @@ current direct-download lane.
 - App Store name: ping-island
 - Bundle display name: Ping Island
 - Bundle ID: `com.wudanwu.PingIsland`
-- Version: `0.9.3`
-- Build: `33`
+- Version: `0.10.0`
+- Build: `34`
 - Xcode: 26.4
 - Primary category: Developer Tools
 - Suggested App Store Connect SKU: `ping-island-macos`
