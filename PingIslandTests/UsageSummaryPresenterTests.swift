@@ -72,6 +72,53 @@ final class UsageSummaryPresenterTests: XCTestCase {
         XCTAssertEqual(UsageSummaryPresenter.preferredBatteryWindow(for: provider)?.id, "codex-secondary")
     }
 
+    func testSevenDayWindowSelectsOnlyRequestedProvider() {
+        let providers = [
+            UsageSummaryProvider(
+                id: "claude",
+                title: "Claude",
+                windows: [
+                    UsageSummaryWindow(
+                        id: "claude-7d",
+                        label: "7d",
+                        valueText: "64% left",
+                        resetText: nil,
+                        severity: .healthy,
+                        remainingPercentage: 64
+                    )
+                ]
+            ),
+            UsageSummaryProvider(
+                id: "codex",
+                title: "Codex",
+                windows: [
+                    UsageSummaryWindow(
+                        id: "codex-5h",
+                        label: "5h",
+                        valueText: "22% left",
+                        resetText: nil,
+                        severity: .warning,
+                        remainingPercentage: 22
+                    ),
+                    UsageSummaryWindow(
+                        id: "codex-7d",
+                        label: "7d",
+                        valueText: "91% left",
+                        resetText: nil,
+                        severity: .healthy,
+                        remainingPercentage: 91
+                    )
+                ]
+            )
+        ]
+
+        XCTAssertEqual(
+            UsageSummaryPresenter.sevenDayWindow(forProviderID: "codex", in: providers)?.id,
+            "codex-7d"
+        )
+        XCTAssertNil(UsageSummaryPresenter.sevenDayWindow(forProviderID: "gemini", in: providers))
+    }
+
     func testRemainingHelpTextIncludesAllWindows() {
         let provider = UsageSummaryProvider(
             id: "claude",

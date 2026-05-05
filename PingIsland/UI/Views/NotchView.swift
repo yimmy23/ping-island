@@ -111,6 +111,25 @@ struct NotchView: View {
         )
     }
 
+    private var closedTrailingUsageWindow: UsageSummaryWindow? {
+        guard let providerID = settings.closedNotchTrailingContentMode.usageProviderID else {
+            return nil
+        }
+
+        return UsageSummaryPresenter.sevenDayWindow(
+            forProviderID: providerID,
+            in: usageSummaryProviders
+        )
+    }
+
+    private var closedTrailingUsageProviderTitle: String? {
+        guard let providerID = settings.closedNotchTrailingContentMode.usageProviderID else {
+            return nil
+        }
+
+        return usageSummaryProviders.first { $0.id == providerID }?.title
+    }
+
     private var openedHeaderUsageValueMode: UsageValueMode {
         isOnBuiltinDisplay ? .remaining : settings.usageValueMode
     }
@@ -628,16 +647,21 @@ struct NotchView: View {
                     }
 
                     // Right side - in the closed state show session count by default,
-                    // or a bell when manual attention is needed. Hide it when settings are visible.
+                    // or the selected 7d usage remainder when available. Attention still wins.
                     if viewModel.status != .opened {
                         ZStack {
                             if hasManualAttentionIndicator {
                                 BellIndicatorIcon(size: 12, color: closedIndicatorTone.emphasisColor)
+                            } else if let usageWindow = closedTrailingUsageWindow {
+                                ClosedNotchUsageRemainingIndicator(
+                                    providerTitle: closedTrailingUsageProviderTitle,
+                                    window: usageWindow
+                                )
                             } else if activeSessionCount > 0 {
                                 SessionCountIndicator(count: activeSessionCount)
                             }
                         }
-                        .frame(width: sideWidth, alignment: .trailing)
+                        .frame(width: closedTrailingWidth, alignment: .trailing)
                     }
                 }
             }
@@ -654,7 +678,10 @@ struct NotchView: View {
     }
 
     private var closedTrailingWidth: CGFloat {
-        sideWidth
+        if closedTrailingUsageWindow != nil {
+            return max(sideWidth, 34)
+        }
+        return sideWidth
     }
 
     private var closedCenterWidth: CGFloat {
@@ -1527,5 +1554,48 @@ private struct SessionCountIndicator: View {
         )
         .frame(minWidth: 18)
         .offset(x: closedNotchRightShift)
+    }
+}
+
+private struct ClosedNotchUsageRemainingIndicator: View {
+    let providerTitle: String?
+    let window: UsageSummaryWindow
+    private let closedNotchRightShift: CGFloat = 4
+
+    var body: some View {
+        Text(remainingText)
+            .font(.system(size: remainingPercentage >= 100 ? 8.0 : 8.8, weight: .semibold, design: .rounded))
+            .foregroundStyle(color(for: window.severity))
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
+            .frame(minWidth: 28, alignment: .trailing)
+            .offset(x: closedNotchRightShift)
+            .help(helpText)
+            .accessibilityLabel(Text(helpText))
+    }
+
+    private var remainingPercentage: Int {
+        Int(max(0, window.remainingPercentage).rounded())
+    }
+
+    private var remainingText: String {
+        "\(remainingPercentage)%"
+    }
+
+    private var helpText: String {
+        let title = providerTitle ?? ""
+        let prefix = title.isEmpty ? window.label : "\(title) \(window.label)"
+        return "\(prefix) \(remainingText) \(AppLocalization.string("剩余"))"
+    }
+
+    private func color(for severity: UsageSummarySeverity) -> Color {
+        switch severity {
+        case .healthy:
+            return Color(red: 0.42, green: 0.92, blue: 0.60)
+        case .warning:
+            return Color(red: 0.98, green: 0.82, blue: 0.32)
+        case .critical:
+            return Color(red: 0.98, green: 0.44, blue: 0.38)
+        }
     }
 }

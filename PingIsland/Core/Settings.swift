@@ -120,6 +120,36 @@ enum NotchDisplayMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum ClosedNotchTrailingContentMode: String, CaseIterable, Identifiable {
+    case sessionCount
+    case claudeSevenDayRemaining
+    case codexSevenDayRemaining
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .sessionCount:
+            return "会话数量"
+        case .claudeSevenDayRemaining:
+            return "Claude Code 7d 余量"
+        case .codexSevenDayRemaining:
+            return "Codex 7d 余量"
+        }
+    }
+
+    var usageProviderID: String? {
+        switch self {
+        case .sessionCount:
+            return nil
+        case .claudeSevenDayRemaining:
+            return "claude"
+        case .codexSevenDayRemaining:
+            return "codex"
+        }
+    }
+}
+
 enum IslandSurfaceMode: String, CaseIterable, Identifiable {
     case notch
     case floatingPet
@@ -295,6 +325,7 @@ final class AppSettingsStore: ObservableObject {
         static let maxPanelHeight = "maxPanelHeight"
         static let notchPetStyle = "notchPetStyle"
         static let notchDisplayMode = "notchDisplayMode"
+        static let closedNotchTrailingContentMode = "closedNotchTrailingContentMode"
         static let previewMascotKind = "previewMascotKind"
         static let surfaceMode = AppSettingsDefaultKeys.surfaceMode
         static let floatingPetAnchor = AppSettingsDefaultKeys.floatingPetAnchor
@@ -568,6 +599,13 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(notchDisplayMode.rawValue, forKey: Keys.notchDisplayMode)
+        }
+    }
+
+    @Published var closedNotchTrailingContentMode: ClosedNotchTrailingContentMode {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(closedNotchTrailingContentMode.rawValue, forKey: Keys.closedNotchTrailingContentMode)
         }
     }
 
@@ -894,6 +932,7 @@ final class AppSettingsStore: ObservableObject {
             : nil
         let notchPetStyleRaw = defaults.string(forKey: Keys.notchPetStyle)
         let notchDisplayModeRaw = defaults.string(forKey: Keys.notchDisplayMode)
+        let closedNotchTrailingContentModeRaw = defaults.string(forKey: Keys.closedNotchTrailingContentMode)
         let previewMascotKindRaw = defaults.string(forKey: Keys.previewMascotKind)
         let surfaceModeRaw = defaults.string(forKey: Keys.surfaceMode)
         let floatingPetAnchor = Self.decodeValue(FloatingPetAnchor.self, from: defaults, key: Keys.floatingPetAnchor)
@@ -1047,6 +1086,9 @@ final class AppSettingsStore: ObservableObject {
         ))
         _notchPetStyle = Published(initialValue: NotchPetStyle(rawValue: notchPetStyleRaw ?? "") ?? .cat)
         _notchDisplayMode = Published(initialValue: NotchDisplayMode(rawValue: notchDisplayModeRaw ?? "") ?? .compact)
+        _closedNotchTrailingContentMode = Published(initialValue: ClosedNotchTrailingContentMode(
+            rawValue: closedNotchTrailingContentModeRaw ?? ""
+        ) ?? .sessionCount)
         _previewMascotKind = Published(initialValue: MascotKind(rawValue: previewMascotKindRaw ?? "") ?? .claude)
         _surfaceMode = Published(initialValue: IslandSurfaceMode(rawValue: surfaceModeRaw ?? "") ?? .notch)
         _floatingPetAnchor = Published(initialValue: floatingPetAnchor)
@@ -1221,6 +1263,11 @@ enum AppSettings {
     static var notchDisplayMode: NotchDisplayMode {
         get { shared.notchDisplayMode }
         set { shared.notchDisplayMode = newValue }
+    }
+
+    static var closedNotchTrailingContentMode: ClosedNotchTrailingContentMode {
+        get { shared.closedNotchTrailingContentMode }
+        set { shared.closedNotchTrailingContentMode = newValue }
     }
 
     static var previewMascotKind: MascotKind {

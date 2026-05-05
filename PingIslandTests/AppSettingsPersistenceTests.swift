@@ -158,6 +158,21 @@ final class AppSettingsPersistenceTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "usageValueMode"), UsageValueMode.remaining.rawValue)
     }
 
+    func testClosedNotchTrailingContentModePersists() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+
+        XCTAssertEqual(store.closedNotchTrailingContentMode, .sessionCount)
+
+        store.closedNotchTrailingContentMode = .codexSevenDayRemaining
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertEqual(reloadedStore.closedNotchTrailingContentMode, .codexSevenDayRemaining)
+        XCTAssertEqual(
+            defaults.string(forKey: "closedNotchTrailingContentMode"),
+            ClosedNotchTrailingContentMode.codexSevenDayRemaining.rawValue
+        )
+    }
+
     func testSurfaceModePersists() {
         let defaults = makeDefaults()
         let store = makeStore(defaults: defaults)

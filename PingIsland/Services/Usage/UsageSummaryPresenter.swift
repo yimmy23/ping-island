@@ -41,13 +41,27 @@ struct UsageSummaryProvider: Equatable, Identifiable {
 }
 
 enum UsageSummaryPresenter {
+    nonisolated static func isSevenDayWindowLabel(_ label: String) -> Bool {
+        let normalizedLabel = label
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return normalizedLabel == "7d" || normalizedLabel.hasPrefix("7d ")
+    }
+
     nonisolated static func preferredBatteryWindow(for provider: UsageSummaryProvider) -> UsageSummaryWindow? {
         provider.windows.first { window in
-            let normalizedLabel = window.label
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .lowercased()
-            return normalizedLabel == "7d" || normalizedLabel.hasPrefix("7d ")
+            isSevenDayWindowLabel(window.label)
         } ?? provider.windows.last
+    }
+
+    nonisolated static func sevenDayWindow(
+        forProviderID providerID: String,
+        in providers: [UsageSummaryProvider]
+    ) -> UsageSummaryWindow? {
+        providers
+            .first { $0.id == providerID }?
+            .windows
+            .first { isSevenDayWindowLabel($0.label) }
     }
 
     nonisolated static func remainingHelpText(
