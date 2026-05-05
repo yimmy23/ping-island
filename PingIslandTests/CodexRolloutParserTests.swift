@@ -143,6 +143,7 @@ final class CodexRolloutParserTests: XCTestCase {
         XCTAssertEqual(snapshot?.intervention?.metadata["responseMode"], "external_only")
         XCTAssertEqual(snapshot?.intervention?.resolvedQuestions.first?.prompt, "TodoList 示例的数据要怎么处理？")
         XCTAssertEqual(snapshot?.intervention?.resolvedQuestions.first?.options.map(\.title), ["内存状态（推荐）", "UserDefaults 持久化"])
+        XCTAssertTrue(snapshot?.intervention?.resolvedQuestions.first?.allowsOther ?? false)
     }
 
     func testRolloutParserClearsRequestUserInputAfterOutput() async throws {

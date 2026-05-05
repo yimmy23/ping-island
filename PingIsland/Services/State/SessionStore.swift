@@ -3176,6 +3176,9 @@ actor SessionStore {
             } else {
                 normalizedOptions = []
             }
+            let allowsOther = (question["isOther"] as? Bool)
+                ?? (question["allowsOther"] as? Bool)
+                ?? false
 
             return SessionInterventionQuestion(
                 id: question["id"] as? String ?? prompt,
@@ -3188,9 +3191,7 @@ actor SessionStore {
                     ?? question["multiSelect"] as? Bool
                     ?? question["multiple"] as? Bool
                     ?? false,
-                allowsOther: question["isOther"] as? Bool
-                    ?? question["allowsOther"] as? Bool
-                    ?? false,
+                allowsOther: allowsOther || session.clientInfo.supportsCustomAskUserQuestionInput,
                 isSecret: question["isSecret"] as? Bool
                     ?? question["secret"] as? Bool
                     ?? false

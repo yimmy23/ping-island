@@ -393,6 +393,9 @@ extension HookEvent {
             } else {
                 normalizedOptions = []
             }
+            let allowsOther = (question["isOther"] as? Bool)
+                ?? (question["allowsOther"] as? Bool)
+                ?? false
 
             return SessionInterventionQuestion(
                 id: question["id"] as? String ?? prompt,
@@ -405,9 +408,7 @@ extension HookEvent {
                     ?? question["multiSelect"] as? Bool
                     ?? question["multiple"] as? Bool
                     ?? false,
-                allowsOther: question["isOther"] as? Bool
-                    ?? question["allowsOther"] as? Bool
-                    ?? false,
+                allowsOther: allowsOther || clientInfo.supportsCustomAskUserQuestionInput,
                 isSecret: question["isSecret"] as? Bool
                     ?? question["secret"] as? Bool
                     ?? false

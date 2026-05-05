@@ -34,6 +34,22 @@ final class SessionQuestionFormTests: XCTestCase {
         )
     }
 
+    func testQuestionBottomShadowShowsOnlyForScrollableContent() {
+        XCTAssertTrue(
+            SessionQuestionForm.shouldShowQuestionBottomShadow(
+                contentHeight: 360,
+                visibleHeight: 320
+            )
+        )
+
+        XCTAssertFalse(
+            SessionQuestionForm.shouldShowQuestionBottomShadow(
+                contentHeight: 320,
+                visibleHeight: 320
+            )
+        )
+    }
+
     func testOptionSequenceLabelsUseLetters() {
         XCTAssertEqual(SessionQuestionForm.optionSequenceLabel(for: 0), "A")
         XCTAssertEqual(SessionQuestionForm.optionSequenceLabel(for: 1), "B")
@@ -79,6 +95,26 @@ final class SessionQuestionFormTests: XCTestCase {
         )
 
         XCTAssertFalse(SessionQuestionForm.shouldUseSingleColumnOptions(for: question))
+    }
+
+    func testFourOptionsUseTwoColumns() {
+        let question = SessionInterventionQuestion(
+            id: "task_type",
+            header: "Task Type",
+            prompt: "What type of task would you like help with?",
+            detail: nil,
+            options: [
+                .init(id: "bug", title: "Bug fix", detail: nil),
+                .init(id: "feature", title: "New feature", detail: nil),
+                .init(id: "refactor", title: "Refactoring", detail: nil),
+                .init(id: "explore", title: "Exploration", detail: nil),
+            ],
+            allowsMultiple: false,
+            allowsOther: false,
+            isSecret: false
+        )
+
+        XCTAssertEqual(SessionQuestionForm.optionColumns(for: question).count, 2)
     }
 
     func testNextQuestionRevealPrefersNextUnansweredQuestion() {

@@ -1308,9 +1308,7 @@ actor ConversationParser {
                 ?? question["multiSelect"] as? Bool
                 ?? question["multiple"] as? Bool
                 ?? false,
-            allowsOther: question["isOther"] as? Bool
-                ?? question["allowsOther"] as? Bool
-                ?? false,
+            allowsOther: true,
             isSecret: question["isSecret"] as? Bool
                 ?? question["secret"] as? Bool
                 ?? false

@@ -12,6 +12,7 @@ struct SessionQuestionForm: View {
     @State private var answers: [String: [String]] = [:]
     @State private var otherAnswers: [String: String] = [:]
     @State private var measuredQuestionContentHeight: CGFloat = 0
+    @FocusState private var focusedCustomQuestionID: String?
 
     private var displayQuestions: [SessionInterventionQuestion] {
         intervention.resolvedQuestions
@@ -20,6 +21,13 @@ struct SessionQuestionForm: View {
     nonisolated static func optionColumns(
         for question: SessionInterventionQuestion
     ) -> [GridItem] {
+        if question.options.count == 4 {
+            return [
+                GridItem(.flexible(minimum: 0), spacing: 8),
+                GridItem(.flexible(minimum: 0), spacing: 8),
+            ]
+        }
+
         if shouldUseSingleColumnOptions(for: question) {
             return [GridItem(.flexible(minimum: 0), spacing: 8)]
         }
@@ -56,6 +64,13 @@ struct SessionQuestionForm: View {
         }
 
         return min(contentHeight, maximumHeight)
+    }
+
+    nonisolated static func shouldShowQuestionBottomShadow(
+        contentHeight: CGFloat,
+        visibleHeight: CGFloat
+    ) -> Bool {
+        contentHeight > visibleHeight + 1
     }
 
     nonisolated static func optionSequenceLabel(for index: Int) -> String {
@@ -105,6 +120,17 @@ struct SessionQuestionForm: View {
         )
     }
 
+    private var showsQuestionBottomShadow: Bool {
+        Self.shouldShowQuestionBottomShadow(
+            contentHeight: measuredQuestionContentHeight,
+            visibleHeight: questionListHeight
+        )
+    }
+
+    private var questionContainerShadowColor: Color {
+        Color.black.opacity(0.2)
+    }
+
     init(
         intervention: SessionIntervention,
         submitLabel: String? = nil,
@@ -132,6 +158,9 @@ struct SessionQuestionForm: View {
                         .readHeight { measuredQuestionContentHeight = $0 }
                 }
                 .scrollBounceBehavior(.basedOnSize)
+                .overlay(alignment: .bottom) {
+                    questionContentBottomShadow
+                }
             }
             .frame(height: questionListHeight)
             .clipped()
@@ -160,6 +189,24 @@ struct SessionQuestionForm: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var questionContentBottomShadow: some View {
+        if showsQuestionBottomShadow {
+            LinearGradient(
+                colors: [
+                    questionContainerShadowColor.opacity(0),
+                    questionContainerShadowColor.opacity(0.74),
+                    questionContainerShadowColor,
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 36)
+            .allowsHitTesting(false)
+            .transition(.opacity)
+        }
     }
 
     private func questionsContent(scrollProxy: ScrollViewProxy) -> some View {
@@ -283,17 +330,7 @@ struct SessionQuestionForm: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if question.allowsOther {
-                TextField("其他答案", text: Binding(
-                    get: { otherAnswers[question.id] ?? "" },
-                    set: { otherAnswers[question.id] = $0 }
-                ))
-                .textFieldStyle(.plain)
-                .padding(10)
-                .disabled(!isEditable)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-                )
+                customAnswerField(for: question)
             }
         } else if question.isSecret {
             SecureField("Answer", text: Binding(
@@ -320,6 +357,43 @@ struct SessionQuestionForm: View {
                     .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
             )
         }
+    }
+
+    private func customAnswerField(for question: SessionInterventionQuestion) -> some View {
+        let isFocused = focusedCustomQuestionID == question.id
+
+        return HStack(spacing: 8) {
+            Image(systemName: "text.cursor")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+                .frame(width: 18)
+
+            TextField("", text: Binding(
+                get: { otherAnswers[question.id] ?? "" },
+                set: { setCustomAnswer($0, for: question) }
+            ), prompt: Text(appLocalized: "Type Something ..."))
+            .textFieldStyle(.plain)
+            .focused($focusedCustomQuestionID, equals: question.id)
+        }
+        .padding(10)
+        .disabled(!isEditable)
+        .overlay(
+            customAnswerFocusOutline(isFocused: isFocused)
+        )
+    }
+
+    private func customAnswerFocusOutline(isFocused: Bool) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                .blur(radius: 1.2)
+                .opacity(isFocused ? 1 : 0)
+
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                .opacity(isFocused ? 0.72 : 0)
+        }
+        .animation(.easeOut(duration: 0.16), value: isFocused)
     }
 
     private var canSubmit: Bool {
@@ -349,6 +423,15 @@ struct SessionQuestionForm: View {
         }
 
         answers[question.id] = [title]
+        otherAnswers[question.id] = nil
+    }
+
+    private func setCustomAnswer(_ value: String, for question: SessionInterventionQuestion) {
+        otherAnswers[question.id] = value
+        if !question.allowsMultiple,
+           !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            answers[question.id] = []
+        }
     }
 
     private func revealNextQuestion(
@@ -376,7 +459,11 @@ struct SessionQuestionForm: View {
         var current = answers[question.id, default: []]
         let other = otherAnswers[question.id]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !other.isEmpty {
-            current.append(other)
+            if question.allowsMultiple {
+                current.append(other)
+            } else {
+                current = [other]
+            }
         }
         return current.filter { !$0.isEmpty }
     }

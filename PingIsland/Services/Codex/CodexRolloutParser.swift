@@ -577,9 +577,7 @@ actor CodexRolloutParser {
                     ?? boolValue(question["multiSelect"])
                     ?? boolValue(question["multiple"])
                     ?? false,
-                allowsOther: boolValue(question["isOther"])
-                    ?? boolValue(question["allowsOther"])
-                    ?? false,
+                allowsOther: true,
                 isSecret: boolValue(question["isSecret"])
                     ?? boolValue(question["secret"])
                     ?? false

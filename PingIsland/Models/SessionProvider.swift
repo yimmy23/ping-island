@@ -199,6 +199,39 @@ struct SessionClientInfo: Codable, Equatable, Sendable {
             .contains { $0.contains("codebuddy") }
     }
 
+    nonisolated var supportsCustomAskUserQuestionInput: Bool {
+        let normalized = normalizedForClaudeRouting()
+        let profileIDs = [profileID, normalized.profileID]
+            .compactMap { value -> String? in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return trimmed?.isEmpty == false ? trimmed : nil
+            }
+
+        if kind == .codexCLI
+            || kind == .codexApp
+            || normalized.kind == .codexCLI
+            || normalized.kind == .codexApp {
+            return true
+        }
+
+        if profileIDs.contains("qoder-cli")
+            || profileIDs.contains("codebuddy-cli")
+            || profileIDs.contains("codebuddy-cli-hooks") {
+            return true
+        }
+
+        if profileIDs.contains("qoder")
+            || profileIDs.contains("qoderwork")
+            || profileIDs.contains("codebuddy")
+            || profileIDs.contains("workbuddy")
+            || profileIDs.contains("qwen-code") {
+            return false
+        }
+
+        return kind == .claudeCode
+            || normalized.kind == .claudeCode
+    }
+
     nonisolated var isHermesClient: Bool {
         profileID == "hermes"
             || threadSource?.lowercased() == "hermes-plugin"

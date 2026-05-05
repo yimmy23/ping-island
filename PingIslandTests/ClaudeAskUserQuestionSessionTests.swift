@@ -12,6 +12,7 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         XCTAssertEqual(session?.phase, .waitingForInput)
         XCTAssertEqual(session?.intervention?.kind, .question)
         XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["会话层", "UI 层"])
+        XCTAssertTrue(session?.intervention?.resolvedQuestions.first?.allowsOther ?? false)
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }
@@ -116,6 +117,7 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         XCTAssertFalse(session?.needsApprovalResponse ?? true)
         XCTAssertTrue(session?.needsQuestionResponse ?? false)
         XCTAssertEqual(session?.phase, .waitingForInput)
+        XCTAssertFalse(session?.intervention?.resolvedQuestions.first?.allowsOther ?? true)
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }
@@ -182,6 +184,7 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         XCTAssertEqual(session?.phase, .waitingForInput)
         XCTAssertEqual(session?.intervention?.kind, .question)
         XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["Strict", "Balanced"])
+        XCTAssertTrue(session?.intervention?.resolvedQuestions.first?.allowsOther ?? false)
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }
@@ -209,6 +212,7 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         XCTAssertTrue(session?.intervention?.supportsInlineResponse ?? false)
         XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.prompt, "这次要修哪里？")
         XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["SessionStore", "UI 卡片"])
+        XCTAssertTrue(session?.intervention?.resolvedQuestions.first?.allowsOther ?? false)
 
         await store.process(
             .interventionResolved(
@@ -257,6 +261,7 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         XCTAssertEqual(session?.intervention?.metadata["source"], "codebuddy_cli_transcript")
         XCTAssertNil(session?.intervention?.metadata["responseMode"])
         XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["SessionStore", "UI 卡片"])
+        XCTAssertTrue(session?.intervention?.resolvedQuestions.first?.allowsOther ?? false)
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }
@@ -278,6 +283,7 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         XCTAssertTrue(session?.intervention?.supportsInlineResponse ?? false)
         XCTAssertEqual(session?.intervention?.metadata["originalToolUseId"], "call_\(sessionId)")
         XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["SessionStore", "UI 卡片"])
+        XCTAssertTrue(session?.intervention?.resolvedQuestions.first?.allowsOther ?? false)
 
         await store.process(
             .interventionResolved(
@@ -351,6 +357,7 @@ final class ClaudeAskUserQuestionSessionTests: XCTestCase {
         XCTAssertEqual(session?.intervention?.kind, .question)
         XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.prompt, "你想先处理哪个模块？")
         XCTAssertEqual(session?.intervention?.resolvedQuestions.first?.options.map(\.title), ["会话层", "UI 层"])
+        XCTAssertTrue(session?.intervention?.resolvedQuestions.first?.allowsOther ?? false)
 
         await store.process(.sessionArchived(sessionId: sessionId))
     }
