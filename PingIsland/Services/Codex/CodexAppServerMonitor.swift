@@ -163,19 +163,57 @@ actor CodexAppServerMonitor {
         await SessionStore.shared.resolveCodexIntervention(sessionId: threadId, nextPhase: .processing)
     }
 
-    func answer(threadId: String, answers: [String: [String]]) async {
-        guard let pending = pendingRequestsByThread[threadId], pending.kind == .userInput else { return }
-
-        let formattedAnswers = answers.reduce(into: [String: Any]()) { partial, entry in
-            partial[entry.key] = ["answers": entry.value]
-        }
+    func answer(threadId: String, answers: [String: [String]]) async -> Bool {
+        guard let pending = pendingRequestsByThread[threadId], pending.kind == .userInput else { return false }
 
         await sendResponse(
             id: pending.requestId,
-            result: ["answers": formattedAnswers]
+            result: Self.requestUserInputResponsePayload(answers: answers)
         )
         pendingRequestsByThread.removeValue(forKey: threadId)
         await SessionStore.shared.resolveCodexIntervention(sessionId: threadId, nextPhase: .processing)
+        return true
+    }
+
+    func submitRequestUserInputOutput(
+        threadId: String,
+        callId: String,
+        answers: [String: [String]]
+    ) async throws {
+        if websocket == nil {
+            await start()
+        }
+
+        let outputPayload = Self.requestUserInputResponsePayload(answers: answers)
+        let outputData = try JSONSerialization.data(withJSONObject: outputPayload, options: [.sortedKeys])
+        guard let output = String(data: outputData, encoding: .utf8) else {
+            throw NSError(domain: "CodexAppServer", code: 6, userInfo: [
+                NSLocalizedDescriptionKey: "Unable to encode Codex request_user_input answers."
+            ])
+        }
+
+        _ = try await sendRequest(
+            method: "thread/inject_items",
+            params: [
+                "threadId": threadId,
+                "items": [
+                    [
+                        "type": "function_call_output",
+                        "call_id": callId,
+                        "output": output
+                    ]
+                ]
+            ]
+        )
+
+        await SessionStore.shared.resolveCodexIntervention(sessionId: threadId, nextPhase: .processing)
+    }
+
+    nonisolated static func requestUserInputResponsePayload(answers: [String: [String]]) -> [String: Any] {
+        let formattedAnswers = answers.reduce(into: [String: Any]()) { partial, entry in
+            partial[entry.key] = ["answers": entry.value]
+        }
+        return ["answers": formattedAnswers]
     }
 
     func readThread(threadId: String, includeTurns: Bool = true) async throws -> CodexThreadSnapshot {

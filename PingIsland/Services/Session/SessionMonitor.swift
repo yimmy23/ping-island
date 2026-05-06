@@ -411,7 +411,30 @@ class SessionMonitor: ObservableObject {
 
             if session.ingress == .codexAppServer {
                 let resolvedSessionId = await SessionStore.shared.resolvedCodexSessionId(for: sessionId)
-                await CodexAppServerMonitor.shared.answer(threadId: resolvedSessionId, answers: answers)
+                if await CodexAppServerMonitor.shared.answer(threadId: resolvedSessionId, answers: answers) {
+                    return
+                }
+                guard let intervention = session.intervention,
+                      Self.shouldSubmitCodexRolloutUserInput(intervention),
+                      let callId = Self.codexRolloutUserInputCallId(for: intervention) else {
+                    return
+                }
+                do {
+                    try await CodexAppServerMonitor.shared.submitRequestUserInputOutput(
+                        threadId: resolvedSessionId,
+                        callId: callId,
+                        answers: answers
+                    )
+                    await SessionStore.shared.process(
+                        .interventionResolved(
+                            sessionId: sessionId,
+                            nextPhase: .processing,
+                            submittedAnswers: answers
+                        )
+                    )
+                } catch {
+                    NSLog("Failed to submit Codex request_user_input answer: \(error.localizedDescription)")
+                }
                 return
             }
 
@@ -854,6 +877,26 @@ class SessionMonitor: ObservableObject {
             guard let firstOption = question.options.first?.title, !firstOption.isEmpty else { return }
             partial[question.id] = [firstOption]
         }
+    }
+
+    nonisolated static func shouldSubmitCodexRolloutUserInput(_ intervention: SessionIntervention) -> Bool {
+        intervention.kind == .question
+            && intervention.metadata["source"] == "codex_rollout_request_user_input"
+            && intervention.metadata["responseMode"] == "external_only"
+    }
+
+    nonisolated static func codexRolloutUserInputCallId(for intervention: SessionIntervention) -> String? {
+        [
+            intervention.metadata["toolUseId"],
+            intervention.metadata["callId"],
+            intervention.metadata["call_id"],
+            intervention.id
+        ]
+        .compactMap { value -> String? in
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }
+        .first
     }
 
     nonisolated static func defaultQoderAutoAnswer(

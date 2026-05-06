@@ -49,6 +49,104 @@ final class SessionStoreCodexInterventionTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testCodexRolloutRequestUserInputIdleRefreshKeepsQuestionVisible() async {
+        let sessionId = "codex-rollout-question-\(UUID().uuidString)"
+        let store = SessionStore.shared
+
+        let intervention = SessionIntervention(
+            id: "call_question_1",
+            kind: .question,
+            title: "Codex Needs Input",
+            message: "What kind of question do you want me to ask?",
+            options: [],
+            questions: [
+                SessionInterventionQuestion(
+                    id: "focus",
+                    header: "Focus",
+                    prompt: "What kind of question do you want me to ask?",
+                    detail: nil,
+                    options: [
+                        SessionInterventionOption(
+                            id: "Planning",
+                            title: "Planning",
+                            detail: "Ask about implementation planning."
+                        )
+                    ],
+                    allowsMultiple: false,
+                    allowsOther: true,
+                    isSecret: false
+                )
+            ],
+            supportsSessionScope: false,
+            metadata: [
+                "source": "codex_rollout_request_user_input",
+                "responseMode": "external_only",
+                "toolUseId": "call_question_1"
+            ]
+        )
+
+        await store.upsertCodexSession(
+            sessionId: sessionId,
+            name: nil,
+            preview: intervention.message,
+            cwd: "/tmp/project",
+            phase: .waitingForInput,
+            intervention: intervention,
+            clientInfo: SessionClientInfo(kind: .codexCLI, profileID: "codex-cli", name: "Codex")
+        )
+
+        await store.upsertCodexSession(
+            sessionId: sessionId,
+            name: nil,
+            preview: "ask me a question with tool",
+            cwd: "/tmp/project",
+            phase: .idle,
+            intervention: nil,
+            clientInfo: SessionClientInfo(kind: .codexCLI, profileID: "codex-cli", name: "Codex"),
+            activityAt: Date().addingTimeInterval(10)
+        )
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.intervention?.id, "call_question_1")
+        XCTAssertEqual(session?.intervention?.metadata["source"], "codex_rollout_request_user_input")
+        XCTAssertEqual(session?.phase, .waitingForInput)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
+    func testCodexRequestUserInputResponsePayloadMatchesAppServerShape() throws {
+        let payload = CodexAppServerMonitor.requestUserInputResponsePayload(answers: [
+            "focus": ["Planning"],
+            "details": ["A", "B"]
+        ])
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        let json = String(data: data, encoding: .utf8)
+
+        XCTAssertEqual(
+            json,
+            #"{"answers":{"details":{"answers":["A","B"]},"focus":{"answers":["Planning"]}}}"#
+        )
+    }
+
+    func testCodexRolloutQuestionCallIdFallsBackToInterventionId() {
+        let intervention = SessionIntervention(
+            id: "call_from_id",
+            kind: .question,
+            title: "Codex Needs Input",
+            message: "Need input",
+            options: [],
+            questions: [],
+            supportsSessionScope: false,
+            metadata: [
+                "source": "codex_rollout_request_user_input",
+                "responseMode": "external_only"
+            ]
+        )
+
+        XCTAssertTrue(SessionMonitor.shouldSubmitCodexRolloutUserInput(intervention))
+        XCTAssertEqual(SessionMonitor.codexRolloutUserInputCallId(for: intervention), "call_from_id")
+    }
+
     func testCodexAppServerQuestionSurvivesRolloutQuestionRefresh() async {
         let sessionId = "codex-app-question-\(UUID().uuidString)"
         let store = SessionStore.shared

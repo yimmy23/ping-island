@@ -2975,6 +2975,7 @@ actor SessionStore {
               source.hasPrefix("rollout_pending_mcp")
                 || source.hasPrefix("app_server_pending_mcp")
                 || source.hasPrefix("guardian_review")
+                || source == "codex_rollout_request_user_input"
         else {
             return false
         }
