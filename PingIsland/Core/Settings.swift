@@ -1069,7 +1069,7 @@ final class AppSettingsStore: ObservableObject {
             from: defaults,
             key: Keys.showUsage,
             exists: persistedKeys.contains(Keys.showUsage),
-            default: false
+            default: true
         ))
         _usageValueMode = Published(initialValue: UsageValueMode(rawValue: usageValueModeRaw ?? "") ?? .remaining)
         _contentFontSize = Published(initialValue: Self.doubleValue(

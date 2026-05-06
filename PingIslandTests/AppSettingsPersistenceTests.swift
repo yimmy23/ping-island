@@ -138,12 +138,12 @@ final class AppSettingsPersistenceTests: XCTestCase {
         let defaults = makeDefaults()
         let store = makeStore(defaults: defaults)
 
-        XCTAssertFalse(store.showUsage)
+        XCTAssertTrue(store.showUsage)
 
-        store.showUsage = true
+        store.showUsage = false
         let reloadedStore = makeStore(defaults: defaults)
-        XCTAssertTrue(reloadedStore.showUsage)
-        XCTAssertEqual(defaults.object(forKey: "showUsage") as? Bool, true)
+        XCTAssertFalse(reloadedStore.showUsage)
+        XCTAssertEqual(defaults.object(forKey: "showUsage") as? Bool, false)
     }
 
     func testUsageValueModePersists() {
