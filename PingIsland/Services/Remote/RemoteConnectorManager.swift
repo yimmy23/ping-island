@@ -1046,6 +1046,14 @@ final class RemoteConnectorManager: ObservableObject {
         remoteLinuxBridgeBinaryAssetName(normalizedArchitecture: normalizedArchitecture) + ".zip"
     }
 
+    nonisolated static func remoteLinuxBridgeLegacyBinaryAssetName(normalizedArchitecture: String) -> String {
+        "PingIslandBridge-linux-\(normalizedArchitecture)"
+    }
+
+    nonisolated static func remoteLinuxBridgeLegacyArchiveAssetName(normalizedArchitecture: String) -> String {
+        remoteLinuxBridgeLegacyBinaryAssetName(normalizedArchitecture: normalizedArchitecture) + ".zip"
+    }
+
     func hasReusablePassword(for endpointID: UUID) -> Bool {
         if let password = ephemeralPasswords[endpointID], !password.isEmpty {
             return true
@@ -1275,10 +1283,20 @@ final class RemoteConnectorManager: ObservableObject {
         if [ -S \(shellQuote(controlSocketPath)) ] && pgrep -f \(shellQuote(servicePattern)) >/dev/null 2>&1; then
           exit 0
         fi
+        if [ ! -x \(shellQuote("\(installRoot)/bin/ping-island-bridge")) ] || [ ! -x \(shellQuote("\(installRoot)/bin/PingIslandBridge")) ]; then
+          echo "Ping Island remote bridge is not installed at \(installRoot)/bin" >&2
+          exit 127
+        fi
         pkill -f \(shellQuote(servicePattern)) >/dev/null 2>&1 || true
         rm -f \(shellQuote(controlSocketPath)) \(shellQuote(hookSocketPath))
         nohup \(shellQuote("\(installRoot)/bin/ping-island-bridge")) --mode remote-agent-service --hook-socket \(shellQuote(hookSocketPath)) --control-socket \(shellQuote(controlSocketPath)) > \(shellQuote("\(installRoot)/logs/remote-agent.log")) 2>&1 &
         sleep 1
+        if [ -S \(shellQuote(controlSocketPath)) ] && pgrep -f \(shellQuote(servicePattern)) >/dev/null 2>&1; then
+          exit 0
+        fi
+        echo "Ping Island remote bridge failed to start" >&2
+        tail -n 40 \(shellQuote("\(installRoot)/logs/remote-agent.log")) >&2 2>/dev/null || true
+        exit 1
         """
     }
 
@@ -2079,13 +2097,21 @@ private final class RemoteBridgeAssetResolver {
 
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
         let binaryAssetName = RemoteConnectorManager.remoteLinuxBridgeBinaryAssetName(normalizedArchitecture: normalizedArch)
-        let archiveAssetName = RemoteConnectorManager.remoteLinuxBridgeArchiveAssetName(normalizedArchitecture: normalizedArch)
+        let assetCandidates = [
+            (
+                archive: RemoteConnectorManager.remoteLinuxBridgeArchiveAssetName(normalizedArchitecture: normalizedArch),
+                binary: binaryAssetName
+            ),
+            (
+                archive: RemoteConnectorManager.remoteLinuxBridgeLegacyArchiveAssetName(normalizedArchitecture: normalizedArch),
+                binary: RemoteConnectorManager.remoteLinuxBridgeLegacyBinaryAssetName(normalizedArchitecture: normalizedArch)
+            )
+        ]
         let cacheDirectory = fileManager.homeDirectoryForCurrentUser
             .appendingPathComponent(".ping-island", isDirectory: true)
             .appendingPathComponent("remote-cache", isDirectory: true)
             .appendingPathComponent(version, isDirectory: true)
         let cachedBinaryURL = cacheDirectory.appendingPathComponent(binaryAssetName)
-        let cachedArchiveURL = cacheDirectory.appendingPathComponent(archiveAssetName)
 
         if fileManager.isReadableFile(atPath: cachedBinaryURL.path) {
             return cachedBinaryURL
@@ -2093,39 +2119,58 @@ private final class RemoteBridgeAssetResolver {
 
         try fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
 
-        if fileManager.isReadableFile(atPath: cachedArchiveURL.path) {
+        for candidate in assetCandidates {
+            let cachedArchiveURL = cacheDirectory.appendingPathComponent(candidate.archive)
+            if fileManager.isReadableFile(atPath: cachedArchiveURL.path) {
+                try await extractLinuxBridgeArchive(
+                    archiveURL: cachedArchiveURL,
+                    expectedBinaryName: candidate.binary,
+                    destinationURL: cachedBinaryURL
+                )
+                return cachedBinaryURL
+            }
+        }
+
+        var downloadFailures: [String] = []
+        for candidate in assetCandidates {
+            let cachedArchiveURL = cacheDirectory.appendingPathComponent(candidate.archive)
+            let releaseURLString = "https://github.com/erha19/ping-island/releases/download/v\(version)/\(candidate.archive)"
+            guard let releaseURL = URL(string: releaseURLString) else {
+                downloadFailures.append(AppLocalization.format("下载地址无效：%@", releaseURLString))
+                continue
+            }
+
+            let (downloadedURL, response) = try await URLSession.shared.download(from: releaseURL)
+            guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
+                downloadFailures.append(
+                    AppLocalization.format(
+                        "%@（HTTP %lld）",
+                        candidate.archive,
+                        (response as? HTTPURLResponse)?.statusCode ?? -1
+                    )
+                )
+                try? fileManager.removeItem(at: downloadedURL)
+                continue
+            }
+
+            if fileManager.fileExists(atPath: cachedArchiveURL.path) {
+                try fileManager.removeItem(at: cachedArchiveURL)
+            }
+            try fileManager.moveItem(at: downloadedURL, to: cachedArchiveURL)
             try await extractLinuxBridgeArchive(
                 archiveURL: cachedArchiveURL,
-                expectedBinaryName: binaryAssetName,
+                expectedBinaryName: candidate.binary,
                 destinationURL: cachedBinaryURL
             )
             return cachedBinaryURL
         }
 
-        let releaseURLString = "https://github.com/erha19/ping-island/releases/download/v\(version)/\(archiveAssetName)"
-        guard let releaseURL = URL(string: releaseURLString) else {
-            throw RemoteConnectorError.remoteBridgeDownloadFailed(
-                AppLocalization.format("Linux 远程 bridge 下载地址无效：%@", releaseURLString)
+        throw RemoteConnectorError.remoteBridgeDownloadFailed(
+            AppLocalization.format(
+                "无法从 GitHub Release 下载 Linux 远程 bridge：%@",
+                downloadFailures.joined(separator: "；")
             )
-        }
-
-        let (downloadedURL, response) = try await URLSession.shared.download(from: releaseURL)
-        guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
-            throw RemoteConnectorError.remoteBridgeDownloadFailed(
-                AppLocalization.format("无法从 GitHub Release 下载 Linux 远程 bridge（HTTP %lld）", (response as? HTTPURLResponse)?.statusCode ?? -1)
-            )
-        }
-
-        if fileManager.fileExists(atPath: cachedArchiveURL.path) {
-            try fileManager.removeItem(at: cachedArchiveURL)
-        }
-        try fileManager.moveItem(at: downloadedURL, to: cachedArchiveURL)
-        try await extractLinuxBridgeArchive(
-            archiveURL: cachedArchiveURL,
-            expectedBinaryName: binaryAssetName,
-            destinationURL: cachedBinaryURL
         )
-        return cachedBinaryURL
     }
 
     private func extractLinuxBridgeArchive(
