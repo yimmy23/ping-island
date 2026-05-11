@@ -13,9 +13,11 @@ final class GlobalShortcutManager {
     static let shared = GlobalShortcutManager()
 
     private var hotKeyRefs: [GlobalShortcutAction: EventHotKeyRef] = [:]
+    private var registeredActionsByHotKeyID: [UInt32: GlobalShortcutAction] = [:]
     private var eventHandlerRef: EventHandlerRef?
     private var cancellables = Set<AnyCancellable>()
     private let signature = GlobalShortcutManager.fourCharCode(from: "PISL")
+    private var nextHotKeyID: UInt32 = 100
 
     private init() {
         installEventHandlerIfNeeded()
@@ -51,7 +53,8 @@ final class GlobalShortcutManager {
 
     private func register(_ shortcut: GlobalShortcut, for action: GlobalShortcutAction) {
         var hotKeyRef: EventHotKeyRef?
-        let hotKeyID = EventHotKeyID(signature: signature, id: action.carbonID)
+        let carbonID = nextRegistrationID()
+        let hotKeyID = EventHotKeyID(signature: signature, id: carbonID)
         let status = RegisterEventHotKey(
             UInt32(shortcut.keyCode),
             shortcut.carbonModifierFlags,
@@ -63,6 +66,7 @@ final class GlobalShortcutManager {
 
         guard status == noErr, let hotKeyRef else { return }
         hotKeyRefs[action] = hotKeyRef
+        registeredActionsByHotKeyID[carbonID] = action
     }
 
     private func unregisterAllHotKeys() {
@@ -70,6 +74,7 @@ final class GlobalShortcutManager {
             UnregisterEventHotKey(hotKeyRef)
         }
         hotKeyRefs.removeAll()
+        registeredActionsByHotKeyID.removeAll()
     }
 
     private func installEventHandlerIfNeeded() {
@@ -113,7 +118,7 @@ final class GlobalShortcutManager {
             return status
         }
 
-        guard let action = GlobalShortcutAction.allCases.first(where: { $0.carbonID == hotKeyID.id }) else {
+        guard let action = registeredActionsByHotKeyID[hotKeyID.id] else {
             return OSStatus(eventNotHandledErr)
         }
 
@@ -125,6 +130,13 @@ final class GlobalShortcutManager {
         }
 
         return noErr
+    }
+
+    private func nextRegistrationID() -> UInt32 {
+        defer {
+            nextHotKeyID = nextHotKeyID == UInt32.max ? 100 : nextHotKeyID + 1
+        }
+        return nextHotKeyID
     }
 
     private static func fourCharCode(from string: String) -> OSType {

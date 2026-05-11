@@ -338,7 +338,9 @@ final class AppSettingsStore: ObservableObject {
         static let automaticUpdateChecksEnabled = "automaticUpdateChecksEnabled"
         static let mascotOverrides = "mascotOverrides"
         static let openActiveSessionShortcut = "openActiveSessionShortcut"
+        static let openActiveSessionShortcutDisabled = "openActiveSessionShortcutDisabled"
         static let openSessionListShortcut = "openSessionListShortcut"
+        static let openSessionListShortcutDisabled = "openSessionListShortcutDisabled"
         static let routePromptsToTerminal = "routePromptsToTerminal"
     }
 
@@ -690,14 +692,24 @@ final class AppSettingsStore: ObservableObject {
     @Published var openActiveSessionShortcut: GlobalShortcut? {
         didSet {
             guard !isBootstrapping else { return }
-            Self.persistShortcut(openActiveSessionShortcut, defaults: defaults, key: Keys.openActiveSessionShortcut)
+            Self.persistShortcut(
+                openActiveSessionShortcut,
+                defaults: defaults,
+                key: Keys.openActiveSessionShortcut,
+                disabledKey: Keys.openActiveSessionShortcutDisabled
+            )
         }
     }
 
     @Published var openSessionListShortcut: GlobalShortcut? {
         didSet {
             guard !isBootstrapping else { return }
-            Self.persistShortcut(openSessionListShortcut, defaults: defaults, key: Keys.openSessionListShortcut)
+            Self.persistShortcut(
+                openSessionListShortcut,
+                defaults: defaults,
+                key: Keys.openSessionListShortcut,
+                disabledKey: Keys.openSessionListShortcutDisabled
+            )
         }
     }
 
@@ -882,15 +894,20 @@ final class AppSettingsStore: ObservableObject {
             modifierFlags: NSEvent.ModifierFlags(rawValue: UInt(modifiers))
         )
 
-        persistShortcut(shortcut, defaults: defaults, key: key)
+        persistValue(shortcut, defaults: defaults, key: key)
         return shortcut
     }
 
     private static func resolvedShortcut(
         from defaults: UserDefaults,
         key: String,
+        disabledKey: String,
         action: GlobalShortcutAction
     ) -> GlobalShortcut? {
+        if defaults.bool(forKey: disabledKey) {
+            return nil
+        }
+
         let persistedShortcut = shortcut(from: defaults, key: key)
 
         if let persistedShortcut,
@@ -901,7 +918,13 @@ final class AppSettingsStore: ObservableObject {
         return persistedShortcut ?? action.defaultShortcut
     }
 
-    private static func persistShortcut(_ shortcut: GlobalShortcut?, defaults: UserDefaults, key: String) {
+    private static func persistShortcut(
+        _ shortcut: GlobalShortcut?,
+        defaults: UserDefaults,
+        key: String,
+        disabledKey: String
+    ) {
+        defaults.set(shortcut == nil, forKey: disabledKey)
         persistValue(shortcut, defaults: defaults, key: key)
     }
 
@@ -958,11 +981,13 @@ final class AppSettingsStore: ObservableObject {
         let openActiveSessionShortcut = Self.resolvedShortcut(
             from: defaults,
             key: Keys.openActiveSessionShortcut,
+            disabledKey: Keys.openActiveSessionShortcutDisabled,
             action: .openActiveSession
         )
         let openSessionListShortcut = Self.resolvedShortcut(
             from: defaults,
             key: Keys.openSessionListShortcut,
+            disabledKey: Keys.openSessionListShortcutDisabled,
             action: .openSessionList
         )
         let temporarilyMuteNotificationsUntil = temporarilyMuteNotificationsUntilTimestamp.map {

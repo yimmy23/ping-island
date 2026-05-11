@@ -19,6 +19,45 @@ final class AppSettingsPersistenceTests: XCTestCase {
         return store
     }
 
+    func testShortcutsUseDefaultsWhenNoPreferenceExists() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+
+        XCTAssertEqual(store.shortcut(for: .openActiveSession), GlobalShortcutAction.openActiveSession.defaultShortcut)
+        XCTAssertEqual(store.shortcut(for: .openSessionList), GlobalShortcutAction.openSessionList.defaultShortcut)
+    }
+
+    func testClearedShortcutPersistsAsDisabledInsteadOfRestoringDefault() {
+        let defaults = makeDefaults()
+        let key = "openActiveSessionShortcut"
+        let disabledKey = "openActiveSessionShortcutDisabled"
+        let store = makeStore(defaults: defaults)
+
+        store.setShortcut(nil, for: .openActiveSession)
+
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertNil(reloadedStore.shortcut(for: .openActiveSession))
+        XCTAssertEqual(defaults.object(forKey: disabledKey) as? Bool, true)
+        XCTAssertNil(defaults.data(forKey: key))
+    }
+
+    func testSettingShortcutAfterClearReEnablesAndPersistsCustomValue() {
+        let defaults = makeDefaults()
+        let disabledKey = "openSessionListShortcutDisabled"
+        let store = makeStore(defaults: defaults)
+        let shortcut = GlobalShortcut(
+            keyCode: 45,
+            modifierFlags: [.control, .option]
+        )
+
+        store.setShortcut(nil, for: .openSessionList)
+        store.setShortcut(shortcut, for: .openSessionList)
+
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertEqual(reloadedStore.shortcut(for: .openSessionList), shortcut)
+        XCTAssertEqual(defaults.object(forKey: disabledKey) as? Bool, false)
+    }
+
     func testShortcutLegacyDictionaryMigratesToDataStorage() {
         let defaults = makeDefaults()
         let key = "openActiveSessionShortcut"

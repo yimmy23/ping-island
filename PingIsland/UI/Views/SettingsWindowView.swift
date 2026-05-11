@@ -1319,7 +1319,7 @@ private struct SettingsPanelContentView: View {
 
                 SettingsInfoLine(
                     title: "录制规则",
-                    subtitle: "在录制状态下直接按新组合键即可。建议优先使用包含 Option 的组合，尽量避开常见系统快捷键。"
+                    subtitle: "录制状态下直接按新组合键即可；清空会关闭对应全局快捷键，重置按钮才会恢复默认。"
                 ) {
                     EmptyView()
                 }
