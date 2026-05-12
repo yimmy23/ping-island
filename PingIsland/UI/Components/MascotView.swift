@@ -1,6 +1,17 @@
 import SwiftUI
 import Foundation
 
+private struct MascotAnimationsEnabledKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var mascotAnimationsEnabled: Bool {
+        get { self[MascotAnimationsEnabledKey.self] }
+        set { self[MascotAnimationsEnabledKey.self] = newValue }
+    }
+}
+
 enum MascotClient: String, CaseIterable, Identifiable, Sendable {
     case claude
     case codex
@@ -370,6 +381,8 @@ extension MascotStatus {
 }
 
 struct MascotView: View {
+    @Environment(\.mascotAnimationsEnabled) private var mascotAnimationsEnabled
+
     let kind: MascotKind
     let status: MascotStatus
     var size: CGFloat = 40
@@ -407,25 +420,34 @@ struct MascotView: View {
     }
 
     var body: some View {
+        let renderTime = effectiveAnimationTime
+
         ZStack {
             if isDragging || status == .dragging {
-                draggingScene(time: animationTime)
+                draggingScene(time: renderTime)
             } else {
                 switch status {
                 case .idle:
-                    idleScene(time: animationTime)
+                    idleScene(time: renderTime)
                 case .working:
-                    workingScene(time: animationTime)
+                    workingScene(time: renderTime)
                 case .warning:
-                    warningScene(time: animationTime)
+                    warningScene(time: renderTime)
                 case .dragging:
-                    draggingScene(time: animationTime)
+                    draggingScene(time: renderTime)
                 }
             }
         }
         .frame(width: size, height: size)
         .clipped()
         .accessibilityLabel(AppLocalization.format("%@ %@", kind.title, status.displayName))
+    }
+
+    private var effectiveAnimationTime: TimeInterval? {
+        if let animationTime {
+            return animationTime
+        }
+        return mascotAnimationsEnabled ? nil : 0
     }
 
     private func idleScene(time: TimeInterval?) -> some View {

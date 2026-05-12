@@ -603,6 +603,7 @@ private struct SettingsPanelContentView: View {
     @State private var remotePasswordPromptRequest: RemotePasswordPromptRequest?
     @State private var consecutiveGeneralTapCount = 0
     @State private var isAccessibilityPollingActive = false
+    @State private var arePreviewAnimationsActive = false
 
     var body: some View {
         ZStack {
@@ -632,13 +633,17 @@ private struct SettingsPanelContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: Color.black.opacity(0.22), radius: 30, y: 18)
         .preferredColorScheme(.dark)
+        .environment(\.mascotAnimationsEnabled, arePreviewAnimationsActive)
         .onAppear {
             viewModel.refresh()
             ensureValidSelectedSoundPack()
-            isAccessibilityPollingActive = true
+            let isVisible = presentation == .popover || currentWindow?.isVisible == true
+            isAccessibilityPollingActive = isVisible
+            arePreviewAnimationsActive = isVisible
         }
         .onDisappear {
             isAccessibilityPollingActive = false
+            arePreviewAnimationsActive = false
         }
         .task(id: isAccessibilityPollingActive) {
             guard isAccessibilityPollingActive else { return }
@@ -655,6 +660,7 @@ private struct SettingsPanelContentView: View {
             }
 
             isAccessibilityPollingActive = isVisible
+            arePreviewAnimationsActive = isVisible
             if isVisible {
                 viewModel.refreshAccessibilityStatus()
             }
