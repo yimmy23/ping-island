@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import Ping_Island
 
@@ -453,23 +454,25 @@ final class DetachedIslandWindowControllerTests: XCTestCase {
         )
     }
 
-    func testBubblePlacementMapsTrimmedCornerToPetFacingEdge() {
-        XCTAssertEqual(
-            DetachedIslandBubblePlacement.topLeft.trimmedCorner,
-            .bottomTrailing
-        )
-        XCTAssertEqual(
-            DetachedIslandBubblePlacement.topRight.trimmedCorner,
-            .bottomLeading
-        )
-        XCTAssertEqual(
-            DetachedIslandBubblePlacement.bottomLeft.trimmedCorner,
-            .topTrailing
-        )
-        XCTAssertEqual(
-            DetachedIslandBubblePlacement.bottomRight.trimmedCorner,
-            .topLeading
-        )
+    func testBubbleShapeKeepsAllCornersRoundedForEveryPlacement() {
+        let rect = CGRect(x: 0, y: 0, width: 280, height: 180)
+        let cornerSamples = [
+            CGPoint(x: rect.minX + 1, y: rect.minY + 1),
+            CGPoint(x: rect.maxX - 1, y: rect.minY + 1),
+            CGPoint(x: rect.maxX - 1, y: rect.maxY - 1),
+            CGPoint(x: rect.minX + 1, y: rect.maxY - 1)
+        ]
+
+        for placement in DetachedIslandBubblePlacement.allCases {
+            let path = DetachedIslandBubbleShape(placement: placement).path(in: rect)
+
+            for sample in cornerSamples {
+                XCTAssertFalse(
+                    path.contains(sample),
+                    "Expected \(placement) bubble to keep corner sample \(sample) transparent"
+                )
+            }
+        }
     }
 
     func testBubbleLayoutLeavesWindowGutterAroundRenderedBubble() throws {

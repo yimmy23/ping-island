@@ -80,13 +80,6 @@ enum DetachedIslandPanelMetrics {
     }
 }
 
-enum DetachedIslandBubbleCorner: Equatable {
-    case topLeading
-    case topTrailing
-    case bottomLeading
-    case bottomTrailing
-}
-
 enum DetachedIslandBubblePlacement: CaseIterable, Equatable {
     case topLeft
     case topRight
@@ -118,18 +111,6 @@ enum DetachedIslandBubblePlacement: CaseIterable, Equatable {
         }
     }
 
-    var trimmedCorner: DetachedIslandBubbleCorner {
-        switch self {
-        case .topLeft:
-            return .bottomTrailing
-        case .topRight:
-            return .bottomLeading
-        case .bottomLeft:
-            return .topTrailing
-        case .bottomRight:
-            return .topLeading
-        }
-    }
 }
 
 enum DetachedIslandBubbleContentMode: Equatable {
@@ -1179,77 +1160,27 @@ private struct DetachedIslandBubbleChrome<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
+        let shape = DetachedIslandBubbleShape(placement: placement)
+
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, DetachedIslandPanelMetrics.bubbleHorizontalPadding)
             .padding(.vertical, DetachedIslandPanelMetrics.bubbleVerticalPadding)
             .background(
-                DetachedIslandBubbleShape(placement: placement)
-                    .fill(Color.black)
+                shape.fill(Color.black)
             )
+            .clipShape(shape)
     }
 }
 
-private struct DetachedIslandBubbleShape: Shape {
+struct DetachedIslandBubbleShape: Shape {
     let placement: DetachedIslandBubblePlacement
 
     func path(in rect: CGRect) -> Path {
-        var path = Path()
         let radius = min(
             DetachedIslandPanelMetrics.bubbleCornerRadius,
             min(rect.width, rect.height) / 2
         )
-        let topLeadingRadius = placement.trimmedCorner == .topLeading ? 0 : radius
-        let topTrailingRadius = placement.trimmedCorner == .topTrailing ? 0 : radius
-        let bottomTrailingRadius = placement.trimmedCorner == .bottomTrailing ? 0 : radius
-        let bottomLeadingRadius = placement.trimmedCorner == .bottomLeading ? 0 : radius
-
-        path.move(to: CGPoint(x: rect.minX + topLeadingRadius, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX - topTrailingRadius, y: rect.minY))
-        addCorner(
-            on: &path,
-            to: CGPoint(x: rect.maxX, y: rect.minY + topTrailingRadius),
-            control: CGPoint(x: rect.maxX, y: rect.minY),
-            radius: topTrailingRadius
-        )
-
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomTrailingRadius))
-        addCorner(
-            on: &path,
-            to: CGPoint(x: rect.maxX - bottomTrailingRadius, y: rect.maxY),
-            control: CGPoint(x: rect.maxX, y: rect.maxY),
-            radius: bottomTrailingRadius
-        )
-
-        path.addLine(to: CGPoint(x: rect.minX + bottomLeadingRadius, y: rect.maxY))
-        addCorner(
-            on: &path,
-            to: CGPoint(x: rect.minX, y: rect.maxY - bottomLeadingRadius),
-            control: CGPoint(x: rect.minX, y: rect.maxY),
-            radius: bottomLeadingRadius
-        )
-
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + topLeadingRadius))
-        addCorner(
-            on: &path,
-            to: CGPoint(x: rect.minX + topLeadingRadius, y: rect.minY),
-            control: CGPoint(x: rect.minX, y: rect.minY),
-            radius: topLeadingRadius
-        )
-        path.closeSubpath()
-        return path
-    }
-
-    private func addCorner(
-        on path: inout Path,
-        to: CGPoint,
-        control: CGPoint,
-        radius: CGFloat
-    ) {
-        if radius > 0 {
-            path.addQuadCurve(to: to, control: control)
-        } else {
-            path.addLine(to: to)
-        }
+        return Path(roundedRect: rect, cornerRadius: radius)
     }
 }
