@@ -97,6 +97,32 @@ enum UsageValueMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum AutoRoutePromptsIdleDelay: Int, CaseIterable, Identifiable {
+    case tenMinutes = 600
+    case twentyMinutes = 1200
+    case thirtyMinutes = 1800
+    case sixtyMinutes = 3600
+
+    nonisolated var id: Int { rawValue }
+
+    nonisolated var duration: TimeInterval {
+        TimeInterval(rawValue)
+    }
+
+    nonisolated var title: String {
+        switch self {
+        case .tenMinutes:
+            return "10 分钟"
+        case .twentyMinutes:
+            return "20 分钟"
+        case .thirtyMinutes:
+            return "30 分钟"
+        case .sixtyMinutes:
+            return "1 小时"
+        }
+    }
+}
+
 enum NotchDisplayMode: String, CaseIterable, Identifiable {
     case compact
     case detailed
@@ -318,6 +344,7 @@ final class AppSettingsStore: ObservableObject {
     static let shared = AppSettingsStore()
 
     private let defaults: UserDefaults
+    private let bridgeRuntimeConfigWriter: (Bool) -> Void
     private var isBootstrapping = true
     private var subagentVisibilityModeStorage: SubagentVisibilityMode
 
@@ -379,6 +406,8 @@ final class AppSettingsStore: ObservableObject {
         static let openSessionListShortcut = "openSessionListShortcut"
         static let openSessionListShortcutDisabled = "openSessionListShortcutDisabled"
         static let routePromptsToTerminal = "routePromptsToTerminal"
+        static let autoRoutePromptsToTerminalWhenIdleEnabled = "autoRoutePromptsToTerminalWhenIdleEnabled"
+        static let autoRoutePromptsIdleDelay = "autoRoutePromptsIdleDelay"
     }
 
     // MARK: - Published Settings
@@ -796,8 +825,49 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(routePromptsToTerminal, forKey: Keys.routePromptsToTerminal)
-            BridgeRuntimeConfigWriter.write(routePromptsToTerminal: routePromptsToTerminal)
+            writeEffectiveBridgeRuntimeConfig()
         }
+    }
+
+    @Published var autoRoutePromptsToTerminalWhenIdleEnabled: Bool {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(
+                autoRoutePromptsToTerminalWhenIdleEnabled,
+                forKey: Keys.autoRoutePromptsToTerminalWhenIdleEnabled
+            )
+            if !autoRoutePromptsToTerminalWhenIdleEnabled {
+                setIdleAutoRoutePromptsToTerminalActive(false)
+                return
+            }
+            writeEffectiveBridgeRuntimeConfig()
+        }
+    }
+
+    @Published var autoRoutePromptsIdleDelay: AutoRoutePromptsIdleDelay {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(autoRoutePromptsIdleDelay.rawValue, forKey: Keys.autoRoutePromptsIdleDelay)
+            writeEffectiveBridgeRuntimeConfig()
+        }
+    }
+
+    @Published private(set) var idleAutoRoutePromptsToTerminalActive: Bool = false {
+        didSet {
+            guard !isBootstrapping else { return }
+            writeEffectiveBridgeRuntimeConfig()
+        }
+    }
+
+    var effectiveRoutePromptsToTerminal: Bool {
+        routePromptsToTerminal
+            || (autoRoutePromptsToTerminalWhenIdleEnabled && idleAutoRoutePromptsToTerminalActive)
+    }
+
+    func setIdleAutoRoutePromptsToTerminalActive(_ active: Bool) {
+        let next = autoRoutePromptsToTerminalWhenIdleEnabled && active
+        guard idleAutoRoutePromptsToTerminalActive != next else { return }
+        idleAutoRoutePromptsToTerminalActive = next
     }
 
     func mascotOverride(for client: MascotClient) -> MascotKind? {
@@ -1032,8 +1102,14 @@ final class AppSettingsStore: ObservableObject {
         defaults.set(true, forKey: Keys.island8BitStartSoundMigrated)
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        bridgeRuntimeConfigWriter: @escaping (Bool) -> Void = {
+            BridgeRuntimeConfigWriter.write(routePromptsToTerminal: $0)
+        }
+    ) {
         self.defaults = defaults
+        self.bridgeRuntimeConfigWriter = bridgeRuntimeConfigWriter
         self.subagentVisibilityModeStorage = .visible
         let persistedKeys = Set(defaults.dictionaryRepresentation().keys)
         let appLanguageRaw = defaults.string(forKey: Keys.appLanguage)
@@ -1279,6 +1355,15 @@ final class AppSettingsStore: ObservableObject {
             default: false
         )
         _routePromptsToTerminal = Published(initialValue: routePromptsToTerminal)
+        _autoRoutePromptsToTerminalWhenIdleEnabled = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.autoRoutePromptsToTerminalWhenIdleEnabled,
+            exists: persistedKeys.contains(Keys.autoRoutePromptsToTerminalWhenIdleEnabled),
+            default: true
+        ))
+        _autoRoutePromptsIdleDelay = Published(initialValue: AutoRoutePromptsIdleDelay(
+            rawValue: defaults.integer(forKey: Keys.autoRoutePromptsIdleDelay)
+        ) ?? .thirtyMinutes)
 
         if defaults.string(forKey: Keys.soundThemeMode) == nil {
             defaults.set(resolvedSoundThemeMode.rawValue, forKey: Keys.soundThemeMode)
@@ -1293,7 +1378,17 @@ final class AppSettingsStore: ObservableObject {
 
         isBootstrapping = false
 
-        BridgeRuntimeConfigWriter.write(routePromptsToTerminal: routePromptsToTerminal)
+        writeEffectiveBridgeRuntimeConfig()
+    }
+
+    private func writeEffectiveBridgeRuntimeConfig() {
+        let effective = effectiveRoutePromptsToTerminal
+        bridgeRuntimeConfigWriter(effective)
+        NotificationCenter.default.post(
+            name: .bridgeRuntimeConfigDidChange,
+            object: self,
+            userInfo: ["routePromptsToTerminal": effective]
+        )
     }
 }
 

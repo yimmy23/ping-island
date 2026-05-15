@@ -26,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if !launchConfiguration.isRunningTests {
             UpdateManager.shared.start()
+            UserIdleAutoProtection.shared.start()
         }
 
         if launchConfiguration.shouldInstallIntegrations {
@@ -184,6 +185,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         screenObserver = nil
+        UserIdleAutoProtection.shared.stop()
         startupSessionMonitor.stopMonitoring()
     }
     private func ensureSingleInstance() -> Bool {

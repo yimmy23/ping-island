@@ -1906,28 +1906,22 @@ private struct SettingsPanelContentView: View {
                 )
                 SettingsLineDivider()
 
-                SettingsActionLine(
-                    title: "重新体验首次引导",
-                    subtitle: "手动打开形态选择引导；选择刘海屏或独立悬浮宠物后，会继续进入 Hooks 演示。"
-                ) {
-                    replayFirstRunOnboardingDemo()
-                } accessory: {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(SettingsCategory.integration.tint.opacity(0.95))
-                }
+                SettingsToggleLine(
+                    title: "空闲时自动保留到终端",
+                    subtitle: "键盘和鼠标静默达到设定时长后临时开启上方策略；恢复活跃后回到手动设置。",
+                    isOn: $settings.autoRoutePromptsToTerminalWhenIdleEnabled
+                )
                 SettingsLineDivider()
 
-                SettingsActionLine(
-                    title: "体验 Hooks 演示",
-                    subtitle: "启动一轮可交互案例：干净桌面背景、审批提交、处理完成、完成提醒。顶部 Island 与独立悬浮宠物都支持。"
+                SettingsInfoLine(
+                    title: "静默时长",
+                    subtitle: settings.idleAutoRoutePromptsToTerminalActive
+                        ? "当前已进入空闲保护，后续新审批和提问会保留在终端。"
+                        : "达到该时长后自动进入空闲保护。"
                 ) {
-                    SettingsWindowController.shared.dismiss()
-                    HookWalkthroughDemoRunner.shared.start()
-                } accessory: {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(TerminalColors.blue.opacity(0.95))
+                    AutoRoutePromptsIdleDelayPicker(delay: $settings.autoRoutePromptsIdleDelay)
+                        .disabled(!settings.autoRoutePromptsToTerminalWhenIdleEnabled)
+                        .opacity(settings.autoRoutePromptsToTerminalWhenIdleEnabled ? 1 : 0.45)
                 }
             }
 
@@ -4500,6 +4494,21 @@ private struct UsageValueModePicker: View {
         .labelsHidden()
         .accessibilityLabel(Text(appLocalized: "用量显示方式"))
         .settingsMenuPicker(width: 168)
+    }
+}
+
+private struct AutoRoutePromptsIdleDelayPicker: View {
+    @Binding var delay: AutoRoutePromptsIdleDelay
+
+    var body: some View {
+        Picker("", selection: $delay) {
+            ForEach(AutoRoutePromptsIdleDelay.allCases) { candidate in
+                Text(appLocalized: candidate.title).tag(candidate)
+            }
+        }
+        .labelsHidden()
+        .accessibilityLabel(Text(appLocalized: "静默时长"))
+        .settingsMenuPicker(width: 132)
     }
 }
 

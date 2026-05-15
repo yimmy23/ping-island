@@ -20,11 +20,13 @@ final class RemoteConnectorManager: ObservableObject {
     private var pendingRequests = RemotePendingRequestStore()
     private var ephemeralPasswords: [UUID: String] = [:]
     private var hasStarted = false
+    private var cancellables = Set<AnyCancellable>()
     private let assetResolver = RemoteBridgeAssetResolver()
     private let credentialStore = RemoteEndpointCredentialStore()
 
     private init() {
         loadPersistedEndpoints()
+        observeBridgeRuntimeConfigChanges()
     }
 
     func start(
@@ -49,6 +51,37 @@ final class RemoteConnectorManager: ObservableObject {
         }
         connectors.removeAll()
         pendingRequests.removeAll()
+    }
+
+    private func observeBridgeRuntimeConfigChanges() {
+        NotificationCenter.default.publisher(for: .bridgeRuntimeConfigDidChange)
+            .compactMap { $0.userInfo?["routePromptsToTerminal"] as? Bool }
+            .removeDuplicates()
+            .sink { [weak self] routePromptsToTerminal in
+                self?.syncRuntimeConfigToConnectedEndpoints(routePromptsToTerminal: routePromptsToTerminal)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func syncRuntimeConfigToConnectedEndpoints(routePromptsToTerminal: Bool) {
+        for endpointID in connectors.keys {
+            let password = resolvedCredential(for: endpointID, requestedPassword: nil).password
+            Task { [weak self] in
+                do {
+                    try await self?.writeRemoteRuntimeConfig(
+                        endpointID: endpointID,
+                        password: password,
+                        routePromptsToTerminal: routePromptsToTerminal
+                    )
+                } catch {
+                    await MainActor.run {
+                        self?.logger.error(
+                            "Remote runtime config sync failed endpoint=\(endpointID.uuidString, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                        )
+                    }
+                }
+            }
+        }
     }
 
     @discardableResult
@@ -136,6 +169,13 @@ final class RemoteConnectorManager: ObservableObject {
                     )
                 }
 
+                stage = "runtime-config"
+                try await writeRemoteRuntimeConfig(
+                    endpointID: endpointID,
+                    password: effectivePassword,
+                    routePromptsToTerminal: AppSettings.shared.effectiveRoutePromptsToTerminal
+                )
+
                 do {
                 stage = "ensure-remote-agent"
                 try await ensureRemoteAgentRunning(endpointID: endpointID, password: effectivePassword)
@@ -170,6 +210,13 @@ final class RemoteConnectorManager: ObservableObject {
 
                     stage = "bootstrap-retry"
                     try await bootstrapRemoteAgent(endpointID: endpointID, password: effectivePassword, probe: probe)
+
+                    stage = "runtime-config-retry"
+                    try await writeRemoteRuntimeConfig(
+                        endpointID: endpointID,
+                        password: effectivePassword,
+                        routePromptsToTerminal: AppSettings.shared.effectiveRoutePromptsToTerminal
+                    )
 
                     stage = "ensure-remote-agent"
                     try await ensureRemoteAgentRunning(endpointID: endpointID, password: effectivePassword)
@@ -401,6 +448,48 @@ final class RemoteConnectorManager: ObservableObject {
         )
         logger.notice(
             "Remote attach connected endpoint=\(endpoint.id.uuidString, privacy: .public) target=\(endpoint.sshTarget, privacy: .public)"
+        )
+    }
+
+    private func writeRemoteRuntimeConfig(
+        endpointID: UUID,
+        password: String?,
+        routePromptsToTerminal: Bool
+    ) async throws {
+        guard let endpoint = endpoint(for: endpointID),
+              let data = BridgeRuntimeConfigWriter.payloadData(routePromptsToTerminal: routePromptsToTerminal) else {
+            return
+        }
+
+        let remotePath = Self.remoteBridgeRuntimeConfigPath(installRoot: endpoint.remoteInstallRoot)
+        try await RemoteSSHCommandRunner.writeRemoteFileViaSSH(
+            target: endpoint.sshTarget,
+            port: endpoint.sshPort,
+            remotePath: remotePath,
+            contents: data,
+            password: password
+        )
+        try await writeRemoteBridgeLauncher(endpoint: endpoint, password: password)
+        logger.debug(
+            "Remote runtime config synced endpoint=\(endpoint.id.uuidString, privacy: .public) routePromptsToTerminal=\(routePromptsToTerminal, privacy: .public)"
+        )
+    }
+
+    private func writeRemoteBridgeLauncher(endpoint: RemoteEndpoint, password: String?) async throws {
+        let launcherPath = "\(endpoint.remoteInstallRoot)/bin/ping-island-bridge"
+        try await RemoteSSHCommandRunner.writeRemoteFileViaSSH(
+            target: endpoint.sshTarget,
+            port: endpoint.sshPort,
+            remotePath: launcherPath,
+            contents: Self.remoteBridgeLauncherScript().data(using: .utf8) ?? Data(),
+            password: password
+        )
+        _ = try await RemoteSSHCommandRunner.runSSH(
+            target: endpoint.sshTarget,
+            port: endpoint.sshPort,
+            password: password,
+            remoteCommand: "chmod 755 \(Self.shellQuote(launcherPath))",
+            acceptNewHostKey: true
         )
     }
 
@@ -680,6 +769,7 @@ final class RemoteConnectorManager: ObservableObject {
                 acceptNewHostKey: true
             )
         }
+        try await writeRemoteBridgeLauncher(endpoint: endpoint, password: password)
         logger.debug(
             "Remote bootstrap binary ready endpoint=\(endpoint.id.uuidString, privacy: .public)"
         )
@@ -1421,12 +1511,17 @@ final class RemoteConnectorManager: ObservableObject {
         """
         #!/bin/sh
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        export PING_ISLAND_BRIDGE_CONFIG="$SCRIPT_DIR/../bridge-config.json"
         COMPAT_LIB="$SCRIPT_DIR/../lib"
         if [ -x "$COMPAT_LIB/ld-linux-x86-64.so.2" ] && ldd "$SCRIPT_DIR/PingIslandBridge" 2>&1 | grep -q 'libc\\.so'; then
           exec "$COMPAT_LIB/ld-linux-x86-64.so.2" --library-path "$COMPAT_LIB" "$SCRIPT_DIR/PingIslandBridge" "$@"
         fi
         exec "$SCRIPT_DIR/PingIslandBridge" "$@"
         """
+    }
+
+    nonisolated static func remoteBridgeRuntimeConfigPath(installRoot: String) -> String {
+        "\(installRoot)/bridge-config.json"
     }
 
     nonisolated static func remoteBootstrapUninstallCommand(

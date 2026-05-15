@@ -111,6 +111,22 @@ struct MascotSettingsView: View {
                 icon: "exclamationmark.triangle.fill",
                 description: "审批、提问或等待人工介入时，宠物会切到警告状态动作。"
             )
+
+            HStack(spacing: 12) {
+                Image(systemName: "shield.fill")
+                    .font(.title3)
+                    .foregroundStyle(Color(red: 0.24, green: 0.88, blue: 0.48))
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(appLocalized: "空闲保护")
+                        .font(.subheadline.bold())
+                    Text(appLocalized: "全局键鼠静默达到设定时长后，宠物右下角会显示绿色盾牌，表示后续新审批和提问将保留在终端。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 

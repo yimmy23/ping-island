@@ -1,10 +1,34 @@
 import Foundation
+import Combine
 
 enum SessionProvider {
     case codex
     case claude
     case copilot
     case kimi
+    case gemini
+}
+
+enum AnimationLevel {
+    case full
+    case reduced
+    case staticFrames
+}
+
+struct EnergyPolicy {
+    var animationLevel: AnimationLevel = .full
+}
+
+final class EnergyGovernor: ObservableObject {
+    static let shared = EnergyGovernor()
+
+    @Published var policy = EnergyPolicy()
+}
+
+final class AppSettingsStore: ObservableObject {
+    static let shared = AppSettingsStore()
+
+    @Published var idleAutoRoutePromptsToTerminalActive = false
 }
 
 enum SessionClientBrand {

@@ -1,14 +1,14 @@
 import Foundation
 
 enum BridgeRuntimePaths {
-    static let appGroupIdentifier = "group.com.wudanwu.PingIsland"
-    static let legacySocketPath = "/tmp/island.sock"
-    static let bridgeConfigEnvironmentKey = "PING_ISLAND_BRIDGE_CONFIG"
-    static let socketPathEnvironmentKey = "ISLAND_SOCKET_PATH"
+    nonisolated static let appGroupIdentifier = "group.com.wudanwu.PingIsland"
+    nonisolated static let legacySocketPath = "/tmp/island.sock"
+    nonisolated static let bridgeConfigEnvironmentKey = "PING_ISLAND_BRIDGE_CONFIG"
+    nonisolated static let socketPathEnvironmentKey = "ISLAND_SOCKET_PATH"
 
-    private static let legacyConfigRelativePath = ".ping-island/bridge-config.json"
+    nonisolated private static let legacyConfigRelativePath = ".ping-island/bridge-config.json"
 
-    static var socketPath: String {
+    nonisolated static var socketPath: String {
 #if APP_STORE
         runtimeDirectoryURL.appendingPathComponent("i.sock").path
 #else
@@ -16,7 +16,7 @@ enum BridgeRuntimePaths {
 #endif
     }
 
-    static var runtimeConfigURL: URL {
+    nonisolated static var runtimeConfigURL: URL {
 #if APP_STORE
         runtimeDirectoryURL.appendingPathComponent("c.json")
 #else
@@ -25,7 +25,7 @@ enum BridgeRuntimePaths {
 #endif
     }
 
-    static var runtimeDirectoryURL: URL {
+    nonisolated static var runtimeDirectoryURL: URL {
 #if APP_STORE
         if let containerURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupIdentifier
@@ -37,14 +37,14 @@ enum BridgeRuntimePaths {
             .appendingPathComponent(".ping-island", isDirectory: true)
     }
 
-    static func prepareRuntimeDirectory() {
+    nonisolated static func prepareRuntimeDirectory() {
         try? FileManager.default.createDirectory(
             at: runtimeDirectoryURL,
             withIntermediateDirectories: true
         )
     }
 
-    static var launcherEnvironment: [String: String] {
+    nonisolated static var launcherEnvironment: [String: String] {
         [
             socketPathEnvironmentKey: socketPath,
             bridgeConfigEnvironmentKey: runtimeConfigURL.path

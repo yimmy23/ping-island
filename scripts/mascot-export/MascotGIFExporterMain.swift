@@ -14,6 +14,7 @@ private struct ExportTarget {
 struct MascotGIFExporterMain {
     static func main() throws {
         let options = try Options(arguments: Array(CommandLine.arguments.dropFirst()))
+        AppSettingsStore.shared.idleAutoRoutePromptsToTerminalActive = options.idleProtectionActive
         try options.prepareOutputDirectory()
 
         let targets = try options.exportTargets()
@@ -113,6 +114,7 @@ private struct Options {
     let requestedStatus: String
     let overrideFPS: Int?
     let overrideDuration: TimeInterval?
+    let idleProtectionActive: Bool
 
     init(arguments: [String]) throws {
         var outputDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -122,6 +124,7 @@ private struct Options {
         var requestedStatus = "working"
         var overrideFPS: Int?
         var overrideDuration: TimeInterval?
+        var idleProtectionActive = false
 
         var index = 0
         while index < arguments.count {
@@ -148,6 +151,8 @@ private struct Options {
             case "--duration":
                 index += 1
                 overrideDuration = try Self.doubleValue(after: argument, at: index, in: arguments)
+            case "--idle-protection":
+                idleProtectionActive = true
             case "--help", "-h":
                 throw ExportError.helpText
             default:
@@ -166,6 +171,7 @@ private struct Options {
         self.requestedStatus = requestedStatus
         self.overrideFPS = overrideFPS
         self.overrideDuration = overrideDuration
+        self.idleProtectionActive = idleProtectionActive
     }
 
     func prepareOutputDirectory() throws {
@@ -292,6 +298,7 @@ private enum ExportError: Error, CustomStringConvertible {
                   --status idle|working|warning|all
                   --fps N                Override frames per second
                   --duration SECONDS     Override animation duration
+                  --idle-protection      Show the idle route-to-terminal protection overlay
                 """
         }
     }

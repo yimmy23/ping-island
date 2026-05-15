@@ -96,6 +96,43 @@ func bridgeRuntimeConfigLoadsFromEnvironmentPath() async throws {
 }
 
 @Test
+func bridgeRuntimeConfigLoadedFromEnvironmentDropsApprovalIntervention() async throws {
+    try await withTemporaryDirectory { directory in
+        let configURL = directory.appending(path: "bridge-config.json")
+        try """
+        {
+          "routePromptsToTerminal": true
+        }
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+        let environment = [
+            BridgeRuntimeConfig.configPathEnvironmentKey: configURL.path(),
+            "TERM_PROGRAM": "iTerm.app",
+            "PWD": "/tmp/demo"
+        ]
+        let payload = """
+        {
+          "hook_event_name": "PermissionRequest",
+          "tool_name": "Bash",
+          "reason": "Needs to run tests",
+          "session_id": "abc123"
+        }
+        """.data(using: .utf8)!
+
+        let envelope = HookPayloadMapper.makeEnvelope(
+            source: .claude,
+            arguments: ["island-bridge", "--source", "claude"],
+            environment: environment,
+            stdinData: payload,
+            runtimeConfig: BridgeRuntimeConfig.load(environment: environment)
+        )
+
+        #expect(envelope.intervention == nil)
+        #expect(envelope.expectsResponse == false)
+        #expect(envelope.metadata["suppress_in_app_prompt"] == "true")
+    }
+}
+
+@Test
 func mapsGhosttyTerminalContextFromEnvironment() throws {
     let payload = """
     {
