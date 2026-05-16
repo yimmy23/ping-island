@@ -835,15 +835,90 @@ struct NotchView: View {
             isVisible = true
             cancelScheduledDetachmentHintPresentation()
             dismissDetachmentHint()
+            if oldStatus != .opened, newStatus == .opened {
+                recordIslandOpened()
+            }
             // Clear waiting-for-input timestamps only when manually opened (user acknowledged)
             if viewModel.openReason == .click || viewModel.openReason == .hover {
                 waitingForInputTimestamps.removeAll()
                 clearCompletionNotifications(keepPanelOpen: true)
             }
         case .closed:
+            if oldStatus == .opened {
+                recordIslandClosed()
+            }
             isVisible = !viewModel.shouldHideWindowPresentation
             maybePresentNextCompletionNotification()
             scheduleDetachmentHintPresentationIfNeeded(delay: Self.detachmentHintRetryDelay)
+        }
+    }
+
+    private func recordIslandOpened() {
+        let openSource = telemetryOpenSource(for: viewModel.openReason)
+        let contentRoute = telemetryContentRoute(for: viewModel.contentType)
+        let presentation = telemetryPresentationMode
+        Task {
+            await TelemetryService.shared.recordIslandOpened(
+                openSource: openSource,
+                contentRoute: contentRoute,
+                presentation: presentation
+            )
+        }
+    }
+
+    private func recordIslandClosed() {
+        let openSource = telemetryOpenSource(for: viewModel.openReason)
+        let contentRoute = telemetryContentRoute(for: viewModel.contentType)
+        let presentation = telemetryPresentationMode
+        Task {
+            await TelemetryService.shared.recordIslandClosed(
+                openSource: openSource,
+                contentRoute: contentRoute,
+                presentation: presentation
+            )
+        }
+    }
+
+    private var telemetryPresentationMode: String {
+        switch viewModel.presentationMode {
+        case .docked:
+            return "docked"
+        case .detached:
+            return "detached"
+        }
+    }
+
+    private func telemetryOpenSource(for reason: NotchOpenReason) -> String {
+        switch reason {
+        case .click:
+            return "click"
+        case .hover:
+            return "hover"
+        case .notification:
+            return "notification"
+        case .boot:
+            return "boot"
+        case .unknown:
+            return "unknown"
+        }
+    }
+
+    private func telemetryContentRoute(for contentType: NotchContentType) -> String {
+        if activeCompletionNotification != nil {
+            return "completion_notification"
+        }
+        if hasPendingPermission {
+            return "approval"
+        }
+        if hasHumanIntervention {
+            return "question"
+        }
+
+        switch contentType {
+        case .instances:
+            return "session_list"
+        case .chat:
+            return "session_detail"
         }
     }
 

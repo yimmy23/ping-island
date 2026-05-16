@@ -30,6 +30,7 @@ class SessionMonitor: ObservableObject {
     private var maintenanceTask: Task<Void, Never>?
     private let shouldRefreshUsage: Bool
     private var questionDraftCache = SessionQuestionDraftCache()
+    private var telemetryPendingAttentionSessionIDs: Set<String> = []
 
     init(
         runtimeCoordinator: any RuntimeCoordinating = RuntimeCoordinator.shared,
@@ -358,6 +359,10 @@ class SessionMonitor: ObservableObject {
                     sessionID: session.sessionId,
                     forSession: forSession
                 )
+                await TelemetryService.shared.recordAttentionResolved(
+                    session,
+                    resolution: forSession ? "approve_for_session" : "approve"
+                )
                 return
             }
 
@@ -367,6 +372,10 @@ class SessionMonitor: ObservableObject {
             if session.ingress == .codexAppServer, !shouldRespondToHookPermission {
                 let resolvedSessionId = await SessionStore.shared.resolvedCodexSessionId(for: sessionId)
                 await CodexAppServerMonitor.shared.approve(threadId: resolvedSessionId, forSession: forSession)
+                await TelemetryService.shared.recordAttentionResolved(
+                    session,
+                    resolution: forSession ? "approve_for_session" : "approve"
+                )
                 return
             }
 
@@ -390,6 +399,7 @@ class SessionMonitor: ObservableObject {
                 await SessionStore.shared.process(
                     .permissionApproved(sessionId: sessionId, toolUseId: permission.toolUseId)
                 )
+                await TelemetryService.shared.recordAttentionResolved(session, resolution: "approve_for_session")
                 return
             }
 
@@ -408,6 +418,7 @@ class SessionMonitor: ObservableObject {
             await SessionStore.shared.process(
                 .permissionApproved(sessionId: sessionId, toolUseId: permission.toolUseId)
             )
+            await TelemetryService.shared.recordAttentionResolved(session, resolution: "approve")
         }
     }
 
@@ -423,6 +434,7 @@ class SessionMonitor: ObservableObject {
                     sessionID: session.sessionId,
                     reason: reason
                 )
+                await TelemetryService.shared.recordAttentionResolved(session, resolution: "deny")
                 return
             }
 
@@ -432,6 +444,7 @@ class SessionMonitor: ObservableObject {
             if session.ingress == .codexAppServer, !shouldRespondToHookPermission {
                 let resolvedSessionId = await SessionStore.shared.resolvedCodexSessionId(for: sessionId)
                 await CodexAppServerMonitor.shared.deny(threadId: resolvedSessionId)
+                await TelemetryService.shared.recordAttentionResolved(session, resolution: "deny")
                 return
             }
 
@@ -454,6 +467,7 @@ class SessionMonitor: ObservableObject {
             await SessionStore.shared.process(
                 .permissionDenied(sessionId: sessionId, toolUseId: permission.toolUseId, reason: reason)
             )
+            await TelemetryService.shared.recordAttentionResolved(session, resolution: "deny")
         }
     }
 
@@ -469,12 +483,14 @@ class SessionMonitor: ObservableObject {
                     sessionID: session.sessionId,
                     answers: answers
                 )
+                await TelemetryService.shared.recordAttentionResolved(session, resolution: "answer")
                 return
             }
 
             if session.ingress == .codexAppServer {
                 let resolvedSessionId = await SessionStore.shared.resolvedCodexSessionId(for: sessionId)
                 if await CodexAppServerMonitor.shared.answer(threadId: resolvedSessionId, answers: answers) {
+                    await TelemetryService.shared.recordAttentionResolved(session, resolution: "answer")
                     return
                 }
                 guard let intervention = session.intervention,
@@ -495,6 +511,7 @@ class SessionMonitor: ObservableObject {
                             submittedAnswers: answers
                         )
                     )
+                    await TelemetryService.shared.recordAttentionResolved(session, resolution: "answer")
                 } catch {
                     NSLog("Failed to submit Codex request_user_input answer: \(error.localizedDescription)")
                 }
@@ -535,6 +552,7 @@ class SessionMonitor: ObservableObject {
                     submittedAnswers: answers
                 )
             )
+            await TelemetryService.shared.recordAttentionResolved(session, resolution: "answer")
             HookWalkthroughDemoRunner.shared.completeIfNeeded(
                 sessionId: sessionId,
                 intervention: intervention
@@ -709,8 +727,22 @@ class SessionMonitor: ObservableObject {
 
     private func refreshVisibleSessions() {
         let visibleSessions = filteredVisibleSessions(from: allSessions)
+        let pendingSessions = visibleSessions.filter { $0.needsAttention }
+        recordNewAttentionRequests(in: pendingSessions)
         instances = visibleSessions
-        pendingInstances = visibleSessions.filter { $0.needsAttention }
+        pendingInstances = pendingSessions
+    }
+
+    private func recordNewAttentionRequests(in pendingSessions: [SessionState]) {
+        let currentIDs = Set(pendingSessions.map(\.sessionId))
+        let newSessions = pendingSessions.filter { !telemetryPendingAttentionSessionIDs.contains($0.sessionId) }
+        telemetryPendingAttentionSessionIDs = currentIDs
+
+        for session in newSessions {
+            Task {
+                await TelemetryService.shared.recordAttentionRequested(session)
+            }
+        }
     }
 
     private func filteredVisibleSessions(from sessions: [SessionState]) -> [SessionState] {

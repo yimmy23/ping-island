@@ -54,13 +54,20 @@ Current event names:
 - `hook_install_completed`
 - `hook_reinstall_completed`
 - `integration_status_snapshot`
+- `island_opened`
+- `island_closed`
+- `attention_requested`
+- `attention_resolved`
 - `session_detected`
 - `session_completed`
 
 Current fields describe only product behavior, such as app version, build,
 distribution channel, macOS major version, architecture, language bucket,
 surface mode, client type, ingress type, install result, duration bucket, and
-tool count bucket.
+tool count bucket. Island interaction events include only coarse source,
+presentation, and content-route buckets. Notification and approval events
+include only attention type, resolution bucket, client/provider/ingress, and
+response-duration bucket.
 
 ## Explicitly Not Collected
 

@@ -69,6 +69,10 @@ enum TelemetryEventName: String, CaseIterable, Sendable {
     case hookInstallCompleted = "hook_install_completed"
     case hookReinstallCompleted = "hook_reinstall_completed"
     case integrationStatusSnapshot = "integration_status_snapshot"
+    case islandOpened = "island_opened"
+    case islandClosed = "island_closed"
+    case attentionRequested = "attention_requested"
+    case attentionResolved = "attention_resolved"
     case sessionDetected = "session_detected"
     case sessionCompleted = "session_completed"
 }
@@ -261,6 +265,57 @@ actor TelemetryService {
         )
     }
 
+    func recordIslandOpened(openSource: String, contentRoute: String, presentation: String) async {
+        await record(
+            .islandOpened,
+            properties: [
+                "open_source": openSource,
+                "content_route": contentRoute,
+                "presentation": presentation
+            ],
+            minimumInterval: 2,
+            throttleKey: "island_opened:\(presentation):\(openSource):\(contentRoute)"
+        )
+    }
+
+    func recordIslandClosed(openSource: String, contentRoute: String, presentation: String) async {
+        await record(
+            .islandClosed,
+            properties: [
+                "open_source": openSource,
+                "content_route": contentRoute,
+                "presentation": presentation
+            ],
+            minimumInterval: 2,
+            throttleKey: "island_closed:\(presentation):\(openSource):\(contentRoute)"
+        )
+    }
+
+    func recordAttentionRequested(_ session: SessionState) async {
+        await record(
+            .attentionRequested,
+            properties: attentionProperties(for: session),
+            minimumInterval: 60,
+            throttleKey: "attention_requested:\(session.sessionId):\(attentionType(for: session))"
+        )
+    }
+
+    func recordAttentionResolved(_ session: SessionState, resolution: String) async {
+        var properties = attentionProperties(for: session)
+        properties["resolution"] = resolution
+        if let requestedAt = session.attentionRequestedAt {
+            properties["duration_bucket"] = durationBucket(Date().timeIntervalSince(requestedAt))
+        } else {
+            properties["duration_bucket"] = "unknown"
+        }
+        await record(
+            .attentionResolved,
+            properties: properties,
+            minimumInterval: 30,
+            throttleKey: "attention_resolved:\(session.sessionId):\(resolution)"
+        )
+    }
+
     func recordSessionDetected(_ session: SessionState) async {
         guard recordedSessionIDs.insert(session.sessionId).inserted else { return }
         trimRecordedSessionIDsIfNeeded()
@@ -398,6 +453,12 @@ actor TelemetryService {
             return ["client", "result", "source"]
         case .integrationStatusSnapshot:
             return ["installed_count", "enabled_clients"]
+        case .islandOpened, .islandClosed:
+            return ["open_source", "content_route", "presentation"]
+        case .attentionRequested:
+            return ["client", "provider", "ingress", "attention_type"]
+        case .attentionResolved:
+            return ["client", "provider", "ingress", "attention_type", "resolution", "duration_bucket"]
         case .sessionDetected:
             return ["client", "provider", "ingress"]
         case .sessionCompleted:
@@ -420,6 +481,31 @@ actor TelemetryService {
 
     private func sanitizedClientID(_ value: String) -> String {
         Self.sanitizedValue(value.lowercased())
+    }
+
+    private func attentionProperties(for session: SessionState) -> [String: String] {
+        [
+            "client": safeClientID(for: session),
+            "provider": session.provider.rawValue,
+            "ingress": session.ingress.rawValue,
+            "attention_type": attentionType(for: session)
+        ]
+    }
+
+    private func attentionType(for session: SessionState) -> String {
+        if session.needsQuestionResponse {
+            return "question"
+        }
+        if session.needsApprovalResponse {
+            return "approval"
+        }
+        if session.intervention != nil {
+            return "intervention"
+        }
+        if session.phase.needsAttention {
+            return "attention"
+        }
+        return "unknown"
     }
 
     private func durationBucket(_ duration: TimeInterval) -> String {

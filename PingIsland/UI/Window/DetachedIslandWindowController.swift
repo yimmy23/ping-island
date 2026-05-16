@@ -1144,10 +1144,62 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     }
 
     private func applyBubbleStateChange(_ change: () -> Void) {
+        let previousState = interactionModel.bubbleState
         change()
         syncBubblePresentation(to: interactionModel.bubbleState)
         syncOutsideClickMonitor()
         reconcileHighlightedSessionState()
+        recordBubbleTelemetryTransition(from: previousState, to: interactionModel.bubbleState)
+    }
+
+    private func recordBubbleTelemetryTransition(
+        from previousState: DetachedIslandBubbleState,
+        to currentState: DetachedIslandBubbleState
+    ) {
+        guard previousState != currentState else { return }
+
+        if previousState == .hidden, currentState != .hidden {
+            let openSource = currentState == .hoverPreview ? "hover" : "click"
+            let contentRoute = telemetryContentRoute(for: currentState)
+            Task {
+                await TelemetryService.shared.recordIslandOpened(
+                    openSource: openSource,
+                    contentRoute: contentRoute,
+                    presentation: "detached"
+                )
+            }
+            return
+        }
+
+        if previousState != .hidden, currentState == .hidden {
+            let openSource = previousState == .hoverPreview ? "hover" : "click"
+            let contentRoute = telemetryContentRoute(for: previousState)
+            Task {
+                await TelemetryService.shared.recordIslandClosed(
+                    openSource: openSource,
+                    contentRoute: contentRoute,
+                    presentation: "detached"
+                )
+            }
+        }
+    }
+
+    private func telemetryContentRoute(for bubbleState: DetachedIslandBubbleState) -> String {
+        if activeCompletionNotification != nil {
+            return "completion_notification"
+        }
+        if IslandExpandedRouteResolver.highestPriorityAttentionSession(from: sessionMonitor.instances) != nil {
+            return "attention"
+        }
+
+        switch bubbleState {
+        case .hidden:
+            return "none"
+        case .hoverPreview:
+            return "session_preview"
+        case .pinned:
+            return "session_list"
+        }
     }
 
     private func handlePetTap() {
