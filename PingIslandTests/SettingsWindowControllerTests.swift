@@ -127,7 +127,7 @@ final class SettingsWindowControllerTests: XCTestCase {
         XCTAssertTrue(window.isVisible)
         XCTAssertFalse(window.isMiniaturized)
         XCTAssertEqual(window.contentRect(forFrameRect: window.frame).size.width, 760)
-        XCTAssertEqual(window.contentRect(forFrameRect: window.frame).size.height, 520)
+        XCTAssertEqual(window.contentRect(forFrameRect: window.frame).size.height, 560)
 
         controller.dismiss()
     }
