@@ -534,6 +534,7 @@
 "App Store 沙箱" = "App Store sandbox";
 "需要手动授权目录" = "Manual folder authorization required";
 "App Store 版本不会默认写入 ~/.claude、~/.codex 等配置。安装或重装 Hooks 时，请在系统弹窗中授权用户主目录。" = "The App Store build does not write ~/.claude, ~/.codex, or similar configuration by default. When installing or reinstalling hooks, authorize your home directory in the system prompt.";
+"演示" = "Demos";
 "重新体验首次引导" = "Replay first-run onboarding";
 "手动打开形态选择引导；选择刘海屏或独立悬浮宠物后，会继续进入 Hooks 演示。" = "Manually open the surface selection onboarding. After choosing the top Island or floating pet, Ping Island continues into the Hooks demo.";
 "体验 Hooks 演示" = "Try Hooks demo";
@@ -558,3 +559,14 @@
 "自定义事件…" = "Customize events…";
 "暂不安装" = "Skip for now";
 "未检测到可自动安装的客户端，可在设置中手动添加。" = "No installable clients detected. You can add them manually from Settings.";
+"帮助提升 Ping Island 体验" = "Help improve Ping Island";
+"发送匿名使用统计，帮助改进常用功能。不会包含会话内容、代码、路径或主机信息。" = "Send anonymous usage stats to improve common features. Session content, code, paths, and host info are never included.";
+"同意发送匿名、聚合的启动、功能开关、Hook 安装成功率和 Island 打开次数等白名单字段；不包含会话内容、代码、路径、项目名、主机名或 SSH 目标。" = "Allow anonymous, aggregated allowlist fields such as launches, feature toggles, hook install success rate, and Island opens. Session content, code, paths, project names, hostnames, and SSH targets are never included.";
+"帮助提升 Ping Island 体验？" = "Help improve Ping Island?";
+"暂不开启" = "Not now";
+"同意开启" = "Allow";
+"仅发送匿名统计，用于了解启动、功能使用和 Hook 安装成功率。不会包含会话内容、代码、路径或主机信息。" = "Only anonymous stats are sent, such as launches, feature usage, and hook install success. Session content, code, paths, and host info are never included.";
+"开启后仅发送匿名、聚合的启动次数、功能开关、客户端类型、Hook 安装成功率和 Island 打开次数等白名单字段；不包含 prompt、response、代码、路径、项目名、主机名或 SSH 目标。" = "When enabled, Ping Island only sends anonymous, aggregated allowlist fields such as launches, feature toggles, client type, hook install success rate, and Island opens. Prompts, responses, code, paths, project names, hostnames, and SSH targets are never included.";
+"匿名统计启动、功能使用、Hook 安装和会话状态；不包含内容、代码、路径或主机信息。" = "Anonymous stats for launches, feature usage, hook installs, and session state. No content, code, paths, or host info.";
+"未同意前不上传；开启后有每日上限，可随时关闭。" = "Nothing is uploaded before consent. Daily capped when enabled, and you can turn it off anytime.";
+"未同意前不上传。开启后每天最多发送少量白名单字段，用于判断常用功能和安装成功率。" = "Nothing is uploaded before consent. When enabled, Ping Island sends a small daily capped set of allowlist fields to understand common features and install success rates.";

@@ -139,7 +139,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 final class PresentationModeWelcomeWindowController: NSWindowController, NSWindowDelegate {
     static let shared = PresentationModeWelcomeWindowController()
 
-    private let fixedContentSize = NSSize(width: 760, height: 520)
+    private let fixedContentSize = NSSize(width: 760, height: 560)
     private let hostingController = NSHostingController(rootView: AnyView(EmptyView()))
     private let presentationAnimationDuration: TimeInterval = 0.22
     private let dismissalAnimationDuration: TimeInterval = 0.16
@@ -183,7 +183,9 @@ final class PresentationModeWelcomeWindowController: NSWindowController, NSWindo
         completion = onComplete
         hostingController.rootView = AnyView(
             AppLocalizedRootView {
-                PresentationModeWelcomeView(initialMode: AppSettings.surfaceMode) { [weak self] mode in
+                PresentationModeWelcomeView(initialMode: AppSettings.surfaceMode) { [weak self] mode, analyticsOptIn in
+                    AppSettings.analyticsEnabled = analyticsOptIn
+                    AppSettings.analyticsConsentPromptCompleted = true
                     self?.finish(with: mode)
                 }
             }
@@ -606,13 +608,14 @@ private struct HookInstallWelcomeView: View {
 }
 
 private struct PresentationModeWelcomeView: View {
-    let onComplete: (IslandSurfaceMode) -> Void
+    let onComplete: (IslandSurfaceMode, Bool) -> Void
 
     @State private var selectedMode: IslandSurfaceMode
+    @State private var analyticsOptIn = true
 
     init(
         initialMode: IslandSurfaceMode,
-        onComplete: @escaping (IslandSurfaceMode) -> Void
+        onComplete: @escaping (IslandSurfaceMode, Bool) -> Void
     ) {
         self.onComplete = onComplete
         _selectedMode = State(initialValue: initialMode)
@@ -661,6 +664,20 @@ private struct PresentationModeWelcomeView: View {
                     subtitle: nil
                 )
 
+                Toggle(isOn: $analyticsOptIn) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(appLocalized: "帮助提升 Ping Island 体验")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white.opacity(0.88))
+                        Text(appLocalized: "发送匿名使用统计，帮助改进常用功能。不会包含会话内容、代码、路径或主机信息。")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.58))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.checkbox)
+                .tint(.white)
+
                 HStack {
                     Text(appLocalized: "稍后可在 设置 -> 显示 中重新切换")
                         .font(.system(size: 13, weight: .semibold))
@@ -669,7 +686,7 @@ private struct PresentationModeWelcomeView: View {
                     Spacer(minLength: 16)
 
                     Button(action: {
-                        onComplete(selectedMode)
+                        onComplete(selectedMode, analyticsOptIn)
                     }) {
                         Text(appLocalized: "开始使用")
                             .font(.system(size: 15, weight: .bold))
@@ -687,7 +704,7 @@ private struct PresentationModeWelcomeView: View {
             .padding(.horizontal, 34)
             .padding(.vertical, 30)
         }
-        .frame(width: 760, height: 520)
+        .frame(width: 760, height: 560)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .shadow(color: Color.black.opacity(0.24), radius: 28, y: 16)
         .preferredColorScheme(.dark)

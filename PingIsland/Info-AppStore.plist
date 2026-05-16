@@ -20,5 +20,17 @@
     <string>Ping Island uses Apple Events to focus the matching iTerm, Ghostty, cmux, or Terminal window for a session.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright 2025. All rights reserved.</string>
+    <key>PINGTelemetryDailyEventLimit</key>
+    <string>$(PING_ISLAND_TELEMETRY_DAILY_EVENT_LIMIT)</string>
+    <key>PINGTelemetrySLSHost</key>
+    <string>$(PING_ISLAND_TELEMETRY_SLS_HOST)</string>
+    <key>PINGTelemetrySLSLogstore</key>
+    <string>$(PING_ISLAND_TELEMETRY_SLS_LOGSTORE)</string>
+    <key>PINGTelemetrySLSProject</key>
+    <string>$(PING_ISLAND_TELEMETRY_SLS_PROJECT)</string>
+    <key>PINGTelemetrySLSSource</key>
+    <string>$(PING_ISLAND_TELEMETRY_SLS_SOURCE)</string>
+    <key>PINGTelemetrySLSTopic</key>
+    <string>$(PING_ISLAND_TELEMETRY_SLS_TOPIC)</string>
 </dict>
 </plist>

@@ -8,12 +8,24 @@ used.
 
 ## Data Collection
 
-Ping Island does not sell personal information, does not use advertising
-tracking, and does not include third-party analytics in the app.
+Ping Island does not sell personal information and does not use advertising
+tracking.
 
-The app is designed to process session information locally on your Mac. The
-developer does not operate a Ping Island cloud service for the Mac App Store
-build, and the app does not send your coding session data to the developer.
+The app is designed to process session information locally on your Mac. Ping
+Island does not send your coding session content to the developer.
+
+Ping Island may offer optional anonymous usage telemetry. The first-run
+onboarding includes a preselected consent checkbox for helping improve Ping
+Island, and returning users may see a one-time Settings prompt. Telemetry is not
+uploaded until consent is confirmed, and it can be disabled in Settings at any
+time. When enabled, Ping Island may send a small allowlist of product usage
+events, such as app launches, Hook installation results, client type categories,
+and coarse session lifecycle buckets, to help improve the app.
+
+Anonymous telemetry does not include prompts, responses, code, diffs, terminal
+output, project paths, file paths, repository names, usernames, hostnames, SSH
+targets, IP addresses, raw hook payloads, diagnostic contents, secrets, tokens,
+or API keys.
 
 ## Data Processed Locally
 
@@ -67,6 +79,10 @@ Ping Island can work with third-party developer tools and services that you
 install or configure separately. Those tools, remote hosts, Apple services,
 GitHub, and any AI providers you use have their own privacy practices. This
 policy only covers Ping Island itself.
+
+If optional anonymous telemetry is enabled, Ping Island may use Alibaba Cloud
+Simple Log Service to store product usage events. See
+`docs/telemetry.md` for the current event and field allowlist.
 
 ## Contact
 

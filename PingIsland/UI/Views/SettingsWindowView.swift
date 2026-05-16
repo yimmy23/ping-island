@@ -338,7 +338,15 @@ final class SettingsPanelViewModel: ObservableObject {
         }
 #else
         HookInstaller.install(profile)
+        let didInstall = HookInstaller.isInstalled(profile)
 #endif
+        Task {
+            await TelemetryService.shared.recordHookInstall(
+                profileID: profile.id,
+                result: didInstall,
+                source: AppSettings.hookInstallOnboardingPending ? "first_run" : "settings"
+            )
+        }
         refreshHookInstallationStates()
         refreshBridgeHealthStatus()
     }
@@ -351,7 +359,15 @@ final class SettingsPanelViewModel: ObservableObject {
         }
 #else
         HookInstaller.install(profile, selection: selection)
+        let didInstall = HookInstaller.isInstalled(profile)
 #endif
+        Task {
+            await TelemetryService.shared.recordHookInstall(
+                profileID: profile.id,
+                result: didInstall,
+                source: AppSettings.hookInstallOnboardingPending ? "first_run" : "settings"
+            )
+        }
         refreshHookInstallationStates()
         refreshBridgeHealthStatus()
     }
@@ -381,6 +397,9 @@ final class SettingsPanelViewModel: ObservableObject {
             refreshHookInstallationStates()
             refreshBridgeHealthStatus()
             reinstallingHookProfileID = nil
+            Task {
+                await TelemetryService.shared.recordHookReinstall(profileID: profile.id, result: didInstall)
+            }
             hookReinstallFeedbacks[profile.id] = HookReinstallFeedback(
                 message: didInstall
                     ? AppLocalization.string("已更新 Hook 配置")
@@ -929,6 +948,7 @@ private struct SettingsPanelContentView: View {
     @State private var showingCustomHookInstallSheet = false
     @State private var showingRemoteHostSheet = false
     @State private var remotePasswordPromptRequest: RemotePasswordPromptRequest?
+    @State private var showingAnalyticsConsentPrompt = false
     @State private var consecutiveGeneralTapCount = 0
     @State private var isAccessibilityPollingActive = false
     @State private var arePreviewAnimationsActive = false
@@ -971,6 +991,7 @@ private struct SettingsPanelContentView: View {
             arePreviewAnimationsActive = isVisible
 
             scheduleCategoryRefresh(for: currentCategory, showLoading: false)
+            showAnalyticsConsentPromptIfNeeded()
         }
         .onDisappear {
             isAccessibilityPollingActive = false
@@ -997,6 +1018,7 @@ private struct SettingsPanelContentView: View {
             arePreviewAnimationsActive = isVisible
             if isVisible {
                 scheduleCategoryRefresh(for: currentCategory, showLoading: false)
+                showAnalyticsConsentPromptIfNeeded()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .settingsWindowCategorySelectionRequested)) { notification in
@@ -1013,6 +1035,20 @@ private struct SettingsPanelContentView: View {
         }
         .onChange(of: settings.appLanguage) { _, _ in
             viewModel.refreshLocalizedState()
+        }
+        .alert(
+            AppLocalization.string("帮助提升 Ping Island 体验？"),
+            isPresented: $showingAnalyticsConsentPrompt
+        ) {
+            Button(AppLocalization.string("暂不开启"), role: .cancel) {
+                settings.analyticsConsentPromptCompleted = true
+            }
+            Button(AppLocalization.string("同意开启")) {
+                settings.analyticsEnabled = true
+                settings.analyticsConsentPromptCompleted = true
+            }
+        } message: {
+            Text(appLocalized: "仅发送匿名统计，用于了解启动、功能使用和 Hook 安装成功率。不会包含会话内容、代码、路径或主机信息。")
         }
         .alert(
             "重新安装 Hooks？",
@@ -1425,6 +1461,15 @@ private struct SettingsPanelContentView: View {
         )
     }
 
+    private func showAnalyticsConsentPromptIfNeeded() {
+        guard !settings.analyticsConsentPromptCompleted,
+              !settings.analyticsEnabled,
+              !showingAnalyticsConsentPrompt else {
+            return
+        }
+        showingAnalyticsConsentPrompt = true
+    }
+
     private func shouldShowLoading(for category: SettingsCategory) -> Bool {
         switch category {
         case .display, .sound, .integration:
@@ -1758,6 +1803,33 @@ private struct SettingsPanelContentView: View {
 
     private var integrationContent: some View {
         VStack(alignment: .leading, spacing: 18) {
+            SettingsSectionCard(title: "审批与提问") {
+                SettingsToggleLine(
+                    title: "保留终端中的提问与审批",
+                    subtitle: "开启后 Ping Island 不再代答 Claude / Codex 等的工具审批和 AskUserQuestion，所有提问保留在终端中处理；状态指示仍会显示。",
+                    isOn: $settings.routePromptsToTerminal
+                )
+                SettingsLineDivider()
+
+                SettingsToggleLine(
+                    title: "空闲时自动保留到终端",
+                    subtitle: "键盘和鼠标静默达到设定时长后临时开启上方策略；恢复活跃后回到手动设置。",
+                    isOn: $settings.autoRoutePromptsToTerminalWhenIdleEnabled
+                )
+                SettingsLineDivider()
+
+                SettingsInfoLine(
+                    title: "静默时长",
+                    subtitle: settings.idleAutoRoutePromptsToTerminalActive
+                        ? "当前已进入空闲保护，后续新审批和提问会保留在终端。"
+                        : "达到该时长后自动进入空闲保护。"
+                ) {
+                    AutoRoutePromptsIdleDelayPicker(delay: $settings.autoRoutePromptsIdleDelay)
+                        .disabled(!settings.autoRoutePromptsToTerminalWhenIdleEnabled)
+                        .opacity(settings.autoRoutePromptsToTerminalWhenIdleEnabled ? 1 : 0.45)
+                }
+            }
+
 #if APP_STORE
             SettingsSectionCard(title: "App Store 沙箱") {
                 SettingsInfoLine(
@@ -1898,30 +1970,29 @@ private struct SettingsPanelContentView: View {
                 }
             }
 
-            SettingsSectionCard(title: "审批与提问") {
-                SettingsToggleLine(
-                    title: "保留终端中的提问与审批",
-                    subtitle: "开启后 Ping Island 不再代答 Claude / Codex 等的工具审批和 AskUserQuestion，所有提问保留在终端中处理；状态指示仍会显示。",
-                    isOn: $settings.routePromptsToTerminal
-                )
-                SettingsLineDivider()
-
-                SettingsToggleLine(
-                    title: "空闲时自动保留到终端",
-                    subtitle: "键盘和鼠标静默达到设定时长后临时开启上方策略；恢复活跃后回到手动设置。",
-                    isOn: $settings.autoRoutePromptsToTerminalWhenIdleEnabled
-                )
-                SettingsLineDivider()
-
-                SettingsInfoLine(
-                    title: "静默时长",
-                    subtitle: settings.idleAutoRoutePromptsToTerminalActive
-                        ? "当前已进入空闲保护，后续新审批和提问会保留在终端。"
-                        : "达到该时长后自动进入空闲保护。"
+            SettingsSectionCard(title: "演示") {
+                SettingsActionLine(
+                    title: "重新体验首次引导",
+                    subtitle: "手动打开形态选择引导；选择刘海屏或独立悬浮宠物后，会继续进入 Hooks 演示。"
                 ) {
-                    AutoRoutePromptsIdleDelayPicker(delay: $settings.autoRoutePromptsIdleDelay)
-                        .disabled(!settings.autoRoutePromptsToTerminalWhenIdleEnabled)
-                        .opacity(settings.autoRoutePromptsToTerminalWhenIdleEnabled ? 1 : 0.45)
+                    replayFirstRunOnboardingDemo()
+                } accessory: {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(SettingsCategory.integration.tint.opacity(0.95))
+                }
+                SettingsLineDivider()
+
+                SettingsActionLine(
+                    title: "体验 Hooks 演示",
+                    subtitle: "启动一轮可交互案例：干净桌面背景、审批提交、处理完成、完成提醒。顶部 Island 与独立悬浮宠物都支持。"
+                ) {
+                    SettingsWindowController.shared.dismiss()
+                    HookWalkthroughDemoRunner.shared.start()
+                } accessory: {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(TerminalColors.blue.opacity(0.95))
                 }
             }
 
@@ -1975,6 +2046,23 @@ private struct SettingsPanelContentView: View {
                 SettingsValueLine(title: "安装时间", value: versionMetadata)
                 SettingsLineDivider()
                 SettingsValueLine(title: "之前版本", value: previousVersion)
+            }
+
+            SettingsSectionCard(title: "隐私与分析") {
+                SettingsToggleLine(
+                    title: "匿名使用统计",
+                    subtitle: "匿名统计启动、功能使用、Hook 安装和会话状态；不包含内容、代码、路径或主机信息。",
+                    isOn: $settings.analyticsEnabled
+                )
+                SettingsLineDivider()
+                SettingsInfoLine(
+                    title: "采集范围",
+                    subtitle: "未同意前不上传；开启后有每日上限，可随时关闭。"
+                ) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.5))
+                }
             }
 
             SettingsSectionCard(title: "更新") {

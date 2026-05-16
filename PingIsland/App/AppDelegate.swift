@@ -27,6 +27,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !launchConfiguration.isRunningTests {
             UpdateManager.shared.start()
             UserIdleAutoProtection.shared.start()
+            Task {
+                await TelemetryService.shared.start()
+            }
         }
 
         if launchConfiguration.shouldInstallIntegrations {
@@ -88,6 +91,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Play the fixed client startup sound for the bundled 8-bit theme.
         Task { @MainActor in
             AppSettings.playClientStartupSound()
+        }
+
+        if !launchConfiguration.isRunningTests {
+            Task {
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                await TelemetryService.shared.recordAppLaunch()
+                await TelemetryService.shared.recordIntegrationSnapshot()
+            }
         }
     }
 
@@ -187,6 +198,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         screenObserver = nil
         UserIdleAutoProtection.shared.stop()
         startupSessionMonitor.stopMonitoring()
+        Task {
+            await TelemetryService.shared.stop()
+        }
     }
     private func ensureSingleInstance() -> Bool {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.wudanwu.PingIsland"

@@ -173,6 +173,34 @@ final class AppSettingsPersistenceTests: XCTestCase {
         XCTAssertEqual(defaults.object(forKey: "automaticUpdateChecksEnabled") as? Bool, false)
     }
 
+    func testAnalyticsEnabledDefaultsOffAndPersists() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+
+        XCTAssertFalse(store.analyticsEnabled)
+        XCTAssertFalse(store.analyticsConsentPromptCompleted)
+
+        store.analyticsEnabled = true
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertTrue(reloadedStore.analyticsEnabled)
+        XCTAssertTrue(reloadedStore.analyticsConsentPromptCompleted)
+        XCTAssertEqual(defaults.object(forKey: "analyticsEnabled") as? Bool, true)
+        XCTAssertEqual(defaults.object(forKey: "analyticsConsentPromptCompleted") as? Bool, true)
+    }
+
+    func testAnalyticsConsentPromptCompletionPersistsWithoutEnablingTelemetry() {
+        let defaults = makeDefaults()
+        let store = makeStore(defaults: defaults)
+
+        store.analyticsConsentPromptCompleted = true
+
+        let reloadedStore = makeStore(defaults: defaults)
+        XCTAssertFalse(reloadedStore.analyticsEnabled)
+        XCTAssertTrue(reloadedStore.analyticsConsentPromptCompleted)
+        XCTAssertNil(defaults.object(forKey: "analyticsEnabled"))
+        XCTAssertEqual(defaults.object(forKey: "analyticsConsentPromptCompleted") as? Bool, true)
+    }
+
     func testUsageVisibilityPersists() {
         let defaults = makeDefaults()
         let store = makeStore(defaults: defaults)

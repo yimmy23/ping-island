@@ -10,13 +10,15 @@ import Combine
 import Foundation
 
 enum AppSettingsDefaultKeys {
-    static let surfaceMode = "surfaceMode"
-    static let floatingPetAnchor = "floatingPetAnchor"
-    static let floatingPetSizeMode = "floatingPetSizeMode"
-    static let presentationModeOnboardingPending = "presentationModeOnboardingPending"
-    static let notchDetachmentHintPending = "notchDetachmentHintPending"
-    static let floatingPetSettingsHintPending = "floatingPetSettingsHintPending"
-    static let hookInstallOnboardingPending = "hookInstallOnboardingPending"
+    nonisolated static let surfaceMode = "surfaceMode"
+    nonisolated static let floatingPetAnchor = "floatingPetAnchor"
+    nonisolated static let floatingPetSizeMode = "floatingPetSizeMode"
+    nonisolated static let presentationModeOnboardingPending = "presentationModeOnboardingPending"
+    nonisolated static let notchDetachmentHintPending = "notchDetachmentHintPending"
+    nonisolated static let floatingPetSettingsHintPending = "floatingPetSettingsHintPending"
+    nonisolated static let hookInstallOnboardingPending = "hookInstallOnboardingPending"
+    nonisolated static let analyticsEnabled = TelemetryConsent.analyticsEnabledKey
+    nonisolated static let analyticsConsentPromptCompleted = "analyticsConsentPromptCompleted"
 }
 
 enum AppLanguage: String, CaseIterable, Identifiable {
@@ -408,6 +410,8 @@ final class AppSettingsStore: ObservableObject {
         static let routePromptsToTerminal = "routePromptsToTerminal"
         static let autoRoutePromptsToTerminalWhenIdleEnabled = "autoRoutePromptsToTerminalWhenIdleEnabled"
         static let autoRoutePromptsIdleDelay = "autoRoutePromptsIdleDelay"
+        static let analyticsEnabled = AppSettingsDefaultKeys.analyticsEnabled
+        static let analyticsConsentPromptCompleted = AppSettingsDefaultKeys.analyticsConsentPromptCompleted
     }
 
     // MARK: - Published Settings
@@ -595,6 +599,7 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(autoHideWhenIdle, forKey: Keys.autoHideWhenIdle)
+            recordTelemetrySettingChange(key: Keys.autoHideWhenIdle, value: autoHideWhenIdle.description)
         }
     }
 
@@ -609,6 +614,7 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(smartSuppression, forKey: Keys.smartSuppression)
+            recordTelemetrySettingChange(key: Keys.smartSuppression, value: smartSuppression.description)
         }
     }
 
@@ -660,6 +666,7 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(showUsage, forKey: Keys.showUsage)
+            recordTelemetrySettingChange(key: Keys.showUsage, value: showUsage.description)
         }
     }
 
@@ -726,6 +733,7 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(surfaceMode.rawValue, forKey: Keys.surfaceMode)
+            recordTelemetrySettingChange(key: Keys.surfaceMode, value: surfaceMode.rawValue)
         }
     }
 
@@ -782,6 +790,24 @@ final class AppSettingsStore: ObservableObject {
         didSet {
             guard !isBootstrapping else { return }
             defaults.set(automaticUpdateChecksEnabled, forKey: Keys.automaticUpdateChecksEnabled)
+        }
+    }
+
+    @Published var analyticsEnabled: Bool {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(analyticsEnabled, forKey: Keys.analyticsEnabled)
+            analyticsConsentPromptCompleted = true
+            Task {
+                await TelemetryService.shared.handleConsentChanged(enabled: analyticsEnabled)
+            }
+        }
+    }
+
+    @Published var analyticsConsentPromptCompleted: Bool {
+        didSet {
+            guard !isBootstrapping else { return }
+            defaults.set(analyticsConsentPromptCompleted, forKey: Keys.analyticsConsentPromptCompleted)
         }
     }
 
@@ -1345,6 +1371,18 @@ final class AppSettingsStore: ObservableObject {
             exists: persistedKeys.contains(Keys.automaticUpdateChecksEnabled),
             default: true
         ))
+        _analyticsEnabled = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.analyticsEnabled,
+            exists: persistedKeys.contains(Keys.analyticsEnabled),
+            default: false
+        ))
+        _analyticsConsentPromptCompleted = Published(initialValue: Self.boolValue(
+            from: defaults,
+            key: Keys.analyticsConsentPromptCompleted,
+            exists: persistedKeys.contains(Keys.analyticsConsentPromptCompleted),
+            default: false
+        ))
         _mascotOverrides = Published(initialValue: Self.sanitizedMascotOverrides(mascotOverrideRaw))
         _openActiveSessionShortcut = Published(initialValue: openActiveSessionShortcut)
         _openSessionListShortcut = Published(initialValue: openSessionListShortcut)
@@ -1389,6 +1427,20 @@ final class AppSettingsStore: ObservableObject {
             object: self,
             userInfo: ["routePromptsToTerminal": effective]
         )
+    }
+
+    private func recordTelemetrySettingChange(key: String, value: String) {
+        Task {
+            await TelemetryService.shared.record(
+                .settingChanged,
+                properties: [
+                    "setting_key": key,
+                    "value": value
+                ],
+                minimumInterval: 60,
+                throttleKey: "setting:\(key):\(value)"
+            )
+        }
     }
 }
 
@@ -1559,6 +1611,16 @@ enum AppSettings {
     static var hookInstallOnboardingPending: Bool {
         get { shared.hookInstallOnboardingPending }
         set { shared.hookInstallOnboardingPending = newValue }
+    }
+
+    static var analyticsEnabled: Bool {
+        get { shared.analyticsEnabled }
+        set { shared.analyticsEnabled = newValue }
+    }
+
+    static var analyticsConsentPromptCompleted: Bool {
+        get { shared.analyticsConsentPromptCompleted }
+        set { shared.analyticsConsentPromptCompleted = newValue }
     }
 
     static func shortcut(for action: GlobalShortcutAction) -> GlobalShortcut? {

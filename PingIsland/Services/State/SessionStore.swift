@@ -298,6 +298,9 @@ actor SessionStore {
         )
 
         sessions[handle.sessionID] = session
+        Task {
+            await TelemetryService.shared.recordSessionDetected(session)
+        }
     }
 
     private func processDesktopSessionDiscovered(_ info: ClaudeDesktopSessionInfo) {
@@ -328,6 +331,9 @@ actor SessionStore {
             createdAt: info.createdAt
         )
         sessions[info.sessionId] = session
+        Task {
+            await TelemetryService.shared.recordSessionDetected(session)
+        }
     }
 
     private func processDesktopTurnCompleted(sessionId: String) {
@@ -376,6 +382,9 @@ actor SessionStore {
         if isNewSession {
             sessions[sessionId] = session
             endOrphanedSessions(sameProviderAs: session, newSessionId: sessionId)
+            Task {
+                await TelemetryService.shared.recordSessionDetected(session)
+            }
         }
 
         let tree = (event.pid != nil || event.tty != nil) ? ProcessTreeBuilder.shared.buildTree() : [:]
@@ -487,6 +496,9 @@ actor SessionStore {
             cancelPendingQoderConversationPoll(sessionId: sessionId)
             cancelPendingCodeBuddyCLIQuestionPoll(sessionId: sessionId)
             scheduleFinalSessionSync(for: session)
+            Task {
+                await TelemetryService.shared.recordSessionCompleted(session)
+            }
             return
         }
 
@@ -2253,6 +2265,9 @@ actor SessionStore {
         cancelPendingCodexPlaceholderPrune(sessionId: resolvedSessionId)
         cancelPendingQoderConversationPoll(sessionId: resolvedSessionId)
         scheduleFinalSessionSync(for: session)
+        Task {
+            await TelemetryService.shared.recordSessionCompleted(session)
+        }
     }
 
     private func archiveSession(sessionId: String) async {
