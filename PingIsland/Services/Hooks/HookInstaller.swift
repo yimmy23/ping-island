@@ -659,6 +659,7 @@ struct HookInstaller {
         }
     }
 
+    @MainActor
     static func bridgeHealthStatus() -> BridgeHealthStatus {
         installBridgeLauncherIfNeeded()
 
