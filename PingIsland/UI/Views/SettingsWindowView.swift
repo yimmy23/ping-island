@@ -7,14 +7,14 @@ import UniformTypeIdentifiers
 
 enum SettingsCategory: String, CaseIterable, Identifiable {
     case general
-    case shortcuts
     case display
+    case analytics
     case mascot
     case sound
-    case analytics
     case integration
     case remote
     case labs
+    case shortcuts
     case about
 
     var id: String { rawValue }
@@ -5209,9 +5209,28 @@ private struct SettingsActionLine<Accessory: View>: View {
 
     var body: some View {
         Button(action: action) {
-            SettingsInfoLine(title: title, subtitle: subtitle) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(appLocalized: title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    if let subtitle {
+                        Text(appLocalized: subtitle)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.58))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
+
                 accessory
+                    .frame(minWidth: 36, minHeight: 36, alignment: .center)
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -6231,7 +6250,7 @@ private struct SoundStartupLine: View {
     let preview: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .center, spacing: 20) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(
@@ -6246,10 +6265,10 @@ private struct SoundStartupLine: View {
                     )
 
                 Image(systemName: "music.note")
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundColor(.white.opacity(0.92))
             }
-            .frame(width: 48, height: 48)
+            .frame(width: 52, height: 52)
             .shadow(color: Color(red: 0.96, green: 0.48, blue: 0.12).opacity(0.24), radius: 14, y: 7)
 
             SoundEventTextBlock(
@@ -6261,8 +6280,8 @@ private struct SoundStartupLine: View {
 
             SoundPreviewButton(isEnabled: true, action: preview)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 18)
+        .padding(.horizontal, 26)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -6291,15 +6310,16 @@ private struct SoundEventTextBlock: View {
 
 private struct SoundPreviewButton: View {
     let isEnabled: Bool
+    var size: CGFloat = 28
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: "play.fill")
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: size * 0.30, weight: .bold))
                 .foregroundColor(.white.opacity(isEnabled ? 0.86 : 0.32))
                 .offset(x: 1)
-                .frame(width: 42, height: 42)
+                .frame(width: size, height: size)
                 .background(
                     Circle()
                         .fill(Color.white.opacity(isEnabled ? 0.075 : 0.025))
@@ -6322,18 +6342,20 @@ private struct SoundControlCluster<PickerContent: View>: View {
     @ViewBuilder let picker: PickerContent
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Toggle("", isOn: $isEnabled)
-                .labelsHidden()
-                .settingsCompactSwitch(scale: 0.88)
-
+        HStack(alignment: .center, spacing: 8) {
             picker
                 .settingsMenuPicker(width: pickerWidth)
                 .disabled(!isEnabled)
+                .frame(width: pickerWidth, alignment: .trailing)
 
             SoundPreviewButton(isEnabled: isEnabled, action: preview)
+
+            Toggle("", isOn: $isEnabled)
+                .labelsHidden()
+                .settingsCompactSwitch(scale: 0.88)
+                .frame(width: 36, alignment: .center)
         }
-        .frame(width: pickerWidth + 98, alignment: .trailing)
+        .frame(width: pickerWidth + 80, alignment: .trailing)
     }
 }
 
@@ -6347,7 +6369,9 @@ private struct SoundEventSettingsLine: View {
         HStack(alignment: .center, spacing: 18) {
             SoundEventTextBlock(title: event.title, subtitle: event.subtitle)
 
-            SoundControlCluster(isEnabled: $isEnabled, pickerWidth: 174, preview: preview) {
+            Spacer(minLength: 24)
+
+            SoundControlCluster(isEnabled: $isEnabled, pickerWidth: 190, preview: preview) {
                 Picker(event.title, selection: $selectedSound) {
                     ForEach(NotificationSound.allCases, id: \.self) { sound in
                         Text(sound.rawValue).tag(sound)
@@ -6357,8 +6381,8 @@ private struct SoundEventSettingsLine: View {
                 .labelsHidden()
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 26)
+        .padding(.vertical, 18)
     }
 }
 
@@ -6384,16 +6408,20 @@ private struct SoundPackEventLine: View {
             }
             .layoutPriority(1)
 
-            HStack(spacing: 12) {
+            Spacer(minLength: 24)
+
+            HStack(spacing: 8) {
+                SoundPreviewButton(isEnabled: isEnabled, action: preview)
+
                 Toggle("", isOn: $isEnabled)
                     .labelsHidden()
                     .settingsCompactSwitch(scale: 0.88)
-
-                SoundPreviewButton(isEnabled: isEnabled, action: preview)
+                    .frame(width: 36, alignment: .center)
             }
+            .frame(width: 72, alignment: .trailing)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 26)
+        .padding(.vertical, 18)
     }
 }
 
@@ -6407,7 +6435,9 @@ private struct BundledSoundEventLine: View {
         HStack(alignment: .center, spacing: 18) {
             SoundEventTextBlock(title: event.title, subtitle: event.subtitle)
 
-            SoundControlCluster(isEnabled: $isEnabled, pickerWidth: 174, preview: preview) {
+            Spacer(minLength: 24)
+
+            SoundControlCluster(isEnabled: $isEnabled, pickerWidth: 190, preview: preview) {
                 Picker(event.title, selection: $selectedSound) {
                     ForEach(Island8BitSound.allOrdered) { sound in
                         Text(sound.label).tag(sound)
@@ -6417,7 +6447,7 @@ private struct BundledSoundEventLine: View {
                 .labelsHidden()
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 26)
+        .padding(.vertical, 18)
     }
 }
