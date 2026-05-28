@@ -5,6 +5,6 @@ enum SettingsWindowDefaults {
     static let defaultDetailWidth: CGFloat = 540
     static let defaultContentSize = CGSize(
         width: sidebarWidth + defaultDetailWidth,
-        height: 522
+        height: 640
     )
 }

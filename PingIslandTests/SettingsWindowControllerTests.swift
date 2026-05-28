@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import XCTest
 @testable import Ping_Island
 
@@ -115,6 +116,29 @@ final class SettingsWindowControllerTests: XCTestCase {
         controller.dismiss()
 
         XCTAssertEqual(visibilityChanges, [true, false])
+    }
+
+    func testCommandWClosesSettingsWindow() throws {
+        let controller = SettingsWindowController.shared
+        controller.dismiss()
+
+        controller.present()
+        let window = try XCTUnwrap(controller.window)
+        let event = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.command],
+            timestamp: 0,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: "w",
+            charactersIgnoringModifiers: "w",
+            isARepeat: false,
+            keyCode: UInt16(kVK_ANSI_W)
+        ))
+
+        XCTAssertTrue(window.performKeyEquivalent(with: event))
+        XCTAssertFalse(window.isVisible)
     }
 
     func testPresentationModeWelcomeWindowStaysVisibleUntilCompleted() throws {

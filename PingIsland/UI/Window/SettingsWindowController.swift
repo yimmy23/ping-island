@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import QuartzCore
 import SwiftUI
 
@@ -18,6 +19,35 @@ enum SettingsWindowCategorySelectionRequest {
 final class SettingsPanelWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if isCommandW(event) {
+            requestCloseFromKeyboard()
+            return true
+        }
+
+        return super.performKeyEquivalent(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if isCommandW(event) {
+            requestCloseFromKeyboard()
+            return
+        }
+
+        super.keyDown(with: event)
+    }
+
+    private func isCommandW(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        return event.keyCode == UInt16(kVK_ANSI_W) && flags == .command
+    }
+
+    private func requestCloseFromKeyboard() {
+        if delegate?.windowShouldClose?(self) != false {
+            close()
+        }
+    }
 }
 
 @MainActor
