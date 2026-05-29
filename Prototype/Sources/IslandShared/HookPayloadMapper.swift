@@ -116,6 +116,14 @@ public enum HookPayloadMapper {
                isCodeBuddyFamilyHookClient(clientKind) {
                 return codeBuddyStdoutPayload(response: response, decision: decision)
             }
+            if clientKind == "qwen-code" {
+                return qwenCodePermissionPayload(
+                    response: response,
+                    decision: decision,
+                    eventType: eventType,
+                    metadata: metadata
+                )
+            }
             switch decision {
             case .approve:
                 return #"""
@@ -1803,6 +1811,170 @@ public enum HookPayloadMapper {
         }
 
         return string
+    }
+
+    private static func qwenCodePermissionPayload(
+        response: BridgeResponse,
+        decision: InterventionDecision,
+        eventType: String,
+        metadata: [String: String]
+    ) -> String {
+        var decisionOutput: [String: Any]
+
+        switch decision {
+        case .approve:
+            decisionOutput = ["behavior": "allow"]
+        case .approveForSession:
+            decisionOutput = ["behavior": "allow"]
+            if eventType == "PermissionRequest",
+               let updatedPermissions = qwenCodeUpdatedPermissions(from: metadata),
+               !updatedPermissions.isEmpty {
+                decisionOutput["updatedPermissions"] = updatedPermissions
+            }
+        case .deny, .cancel:
+            decisionOutput = [
+                "behavior": "deny",
+                "message": response.reason ?? "Denied from Island"
+            ]
+        case .answer:
+            decisionOutput = ["behavior": "allow"]
+            if let updatedInput = response.updatedInput {
+                decisionOutput["updatedInput"] = updatedInput.mapValues(\.foundationObject)
+            }
+        }
+
+        let payload: [String: Any] = [
+            "hookSpecificOutput": [
+                "hookEventName": eventType,
+                "decision": decisionOutput
+            ]
+        ]
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+
+        return string
+    }
+
+    private static func qwenCodeUpdatedPermissions(from metadata: [String: String]) -> [String]? {
+        if let rules = decodedStringArray(from: firstNonEmpty(
+            metadata["updatedPermissions"],
+            metadata["updated_permissions"],
+            metadata["permission_rules"],
+            metadata["permissionRules"]
+        )) {
+            return rules
+        }
+
+        if let suggestions = decodedJSONArray(from: metadata["permission_suggestions"]) {
+            let suggestedRules = suggestions.flatMap { suggestion -> [String] in
+                guard let object = suggestion as? [String: Any] else {
+                    return (suggestion as? String).map { [$0] } ?? []
+                }
+
+                let suggestionType = (object["type"] as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+                guard suggestionType == nil || suggestionType == "allow" else {
+                    return []
+                }
+
+                return [
+                    "updatedPermissions",
+                    "updated_permissions",
+                    "permissionRules",
+                    "permission_rules",
+                    "permissions",
+                    "rules"
+                ].flatMap { key in stringArray(from: object[key]) }
+            }
+            if !suggestedRules.isEmpty {
+                return uniqueStrings(suggestedRules)
+            }
+        }
+
+        guard isQwenShellPermission(metadata),
+              let command = qwenShellCommand(from: metadata) else {
+            return nil
+        }
+        return ["Bash(\(command))"]
+    }
+
+    private static func isQwenShellPermission(_ metadata: [String: String]) -> Bool {
+        let toolName = (metadata["tool_name"] ?? metadata["toolName"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        return toolName == "runshellcommand" || toolName == "bash" || toolName == "shell"
+    }
+
+    private static func qwenShellCommand(from metadata: [String: String]) -> String? {
+        let rawInput = firstNonEmpty(metadata["tool_input_json"], metadata["toolInputJSON"])
+        guard let object = decodedJSONObject(from: rawInput) else {
+            return nil
+        }
+
+        return firstNonEmpty(
+            object["command"] as? String,
+            object["cmd"] as? String,
+            object["script"] as? String
+        )
+    }
+
+    private static func decodedJSONObject(from string: String?) -> [String: Any]? {
+        guard let string,
+              let data = string.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object
+    }
+
+    private static func decodedJSONArray(from string: String?) -> [Any]? {
+        guard let string,
+              let data = string.data(using: .utf8),
+              let array = try? JSONSerialization.jsonObject(with: data) as? [Any] else {
+            return nil
+        }
+        return array
+    }
+
+    private static func decodedStringArray(from string: String?) -> [String]? {
+        guard let string else { return nil }
+        if let array = decodedJSONArray(from: string) {
+            let values = array.compactMap { $0 as? String }
+            return values.isEmpty ? nil : values
+        }
+
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : [trimmed]
+    }
+
+    private static func stringArray(from value: Any?) -> [String] {
+        switch value {
+        case let strings as [String]:
+            return strings
+        case let values as [Any]:
+            return values.compactMap { $0 as? String }
+        case let string as String:
+            return [string]
+        default:
+            return []
+        }
+    }
+
+    private static func uniqueStrings(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { value in
+            seen.insert(value).inserted
+        }
+    }
+
+    private static func firstNonEmpty(_ values: String?...) -> String? {
+        values.compactMap { nonEmpty($0) }.first
     }
 
     private static func qoderWorkAnswerPayload(

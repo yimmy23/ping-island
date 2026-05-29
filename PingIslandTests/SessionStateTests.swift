@@ -438,6 +438,43 @@ final class SessionStateTests: XCTestCase {
         XCTAssertFalse(session.supportsSessionScopedApproval)
     }
 
+    func testQwenCodeWaitingForApprovalExposesAutoApproveAction() {
+        let intervention = SessionIntervention(
+            id: "tool-1",
+            kind: .approval,
+            title: "Qwen Code needs approval",
+            message: "Run shell command?",
+            options: [
+                SessionInterventionOption(id: "approve", title: "Allow Once", detail: nil),
+                SessionInterventionOption(id: "approveForSession", title: "Allow for Session", detail: nil),
+                SessionInterventionOption(id: "deny", title: "Deny", detail: nil)
+            ],
+            questions: [],
+            supportsSessionScope: false,
+            metadata: [:]
+        )
+        let session = SessionState(
+            sessionId: "qwen-auto-approve",
+            cwd: "/tmp/project",
+            provider: .claude,
+            clientInfo: SessionClientInfo(
+                kind: .custom,
+                profileID: "qwen-code",
+                name: "Qwen Code",
+                origin: "cli",
+                originator: "Qwen Code",
+                threadSource: "qwen-code-hooks"
+            ),
+            intervention: intervention,
+            phase: .waitingForApproval(
+                PermissionContext(toolUseId: "tool-1", toolName: "run_shell_command", toolInput: nil, receivedAt: Date())
+            )
+        )
+
+        XCTAssertEqual(session.scopedApprovalAction, .autoApprove)
+        XCTAssertTrue(session.supportsSessionScopedApproval)
+    }
+
     func testCodexAppServerWaitingForApprovalUsesAllowSessionAction() {
         let session = SessionState(
             sessionId: "codex-session-scope",

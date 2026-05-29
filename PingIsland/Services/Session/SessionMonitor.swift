@@ -1100,7 +1100,7 @@ class SessionMonitor: ObservableObject {
 
         return session.autoApprovePermissions
             && session.provider == .claude
-            && session.clientInfo.kind == .claudeCode
+            && (session.clientInfo.kind == .claudeCode || session.clientInfo.isQwenCodeClient)
     }
 
     private nonisolated static func resolvePendingApprovalToolUseId(

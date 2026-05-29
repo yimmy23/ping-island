@@ -981,7 +981,7 @@ struct SessionState: Equatable, Identifiable, Sendable {
         }
 
         if provider == .claude,
-           clientInfo.kind == .claudeCode,
+           (clientInfo.kind == .claudeCode || clientInfo.isQwenCodeClient),
            intervention?.offersSessionScopedApproval == true {
             return .autoApprove
         }

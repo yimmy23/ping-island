@@ -1988,6 +1988,96 @@ func qwenCodePermissionRequestQuestionMapsToQuestionIntervention() throws {
 }
 
 @Test
+func qwenCodeShellPermissionRequestOffersSessionApproval() throws {
+    let payload = """
+    {
+      "hook_event_name": "PermissionRequest",
+      "session_id": "qwen-code-shell",
+      "permission_mode": "default",
+      "tool_name": "run_shell_command",
+      "tool_input": {
+        "command": "find /tmp -maxdepth 1 -type f"
+      },
+      "permission_suggestions": [
+        {
+          "type": "allow",
+          "label": "Allow Command",
+          "description": "Execute: find /tmp -maxdepth 1 -type f"
+        },
+        {
+          "type": "deny",
+          "label": "Deny",
+          "description": "Block this command execution"
+        }
+      ]
+    }
+    """.data(using: .utf8)!
+
+    let envelope = HookPayloadMapper.makeEnvelope(
+        source: .claude,
+        arguments: [
+            "island-bridge",
+            "--source", "claude",
+            "--client-kind", "qwen-code",
+            "--client-name", "Qwen Code",
+            "--thread-source", "qwen-code-hooks"
+        ],
+        environment: ["PWD": "/tmp/demo"],
+        stdinData: payload
+    )
+
+    #expect(envelope.eventType == "PermissionRequest")
+    #expect(envelope.status?.kind == .waitingForApproval)
+    #expect(envelope.expectsResponse == true)
+    #expect(envelope.intervention?.kind == .approval)
+    #expect(envelope.intervention?.options.map(\.id) == ["approve", "approveForSession", "deny"])
+    #expect(envelope.metadata["permission_suggestions"]?.contains("Allow Command") == true)
+}
+
+@Test
+func qwenCodeApproveForSessionPayloadUpdatesShellPermission() throws {
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: BridgeResponse(requestID: UUID(), decision: .approveForSession),
+        eventType: "PermissionRequest",
+        metadata: [
+            "client_kind": "qwen-code",
+            "tool_name": "run_shell_command",
+            "tool_input_json": #"{"command":"find /tmp -maxdepth 1 -type f"}"#
+        ]
+    )
+    let json = try #require(
+        JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any]
+    )
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    #expect(hookSpecificOutput["hookEventName"] as? String == "PermissionRequest")
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
+    #expect(decision["updatedPermissions"] as? [String] == ["Bash(find /tmp -maxdepth 1 -type f)"])
+}
+
+@Test
+func qwenCodeApproveOncePayloadDoesNotUpdateShellPermission() throws {
+    let payload = HookPayloadMapper.stdoutPayload(
+        for: .claude,
+        response: BridgeResponse(requestID: UUID(), decision: .approve),
+        eventType: "PermissionRequest",
+        metadata: [
+            "client_kind": "qwen-code",
+            "tool_name": "run_shell_command",
+            "tool_input_json": #"{"command":"find /tmp -maxdepth 1 -type f"}"#
+        ]
+    )
+    let json = try #require(
+        JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any]
+    )
+    let hookSpecificOutput = try #require(json["hookSpecificOutput"] as? [String: Any])
+    let decision = try #require(hookSpecificOutput["decision"] as? [String: Any])
+    #expect(decision["behavior"] as? String == "allow")
+    #expect(decision["updatedPermissions"] == nil)
+}
+
+@Test
 func qwenCodeNotificationPermissionPromptCreatesApprovalIntervention() throws {
     let payload = """
     {

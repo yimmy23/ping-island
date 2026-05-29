@@ -471,7 +471,16 @@ private struct BridgeEnvelopeIntervention: Codable, Sendable {
         }
 
         var interventionMetadata: [String: String] = [:]
-        for key in ["tool_name", "toolName", "tool_input_json", "toolInputJSON", "tool_use_id"] {
+        for key in [
+            "tool_name",
+            "toolName",
+            "tool_input_json",
+            "toolInputJSON",
+            "tool_use_id",
+            "permission_suggestions",
+            "permission_rules",
+            "permissionRules"
+        ] {
             if let value = metadata[key], !value.isEmpty {
                 interventionMetadata[key] = value
             }
