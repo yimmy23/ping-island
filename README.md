@@ -7,7 +7,6 @@
   <a href="https://erha19.github.io/">Website</a> •
   <a href="#installation">Install</a> •
   <a href="#features">Features</a> •
-  <a href="#buddy-detach">Buddy Detach</a> •
   <a href="#supported-tools">Supported Tools</a> •
   <a href="#build-from-source">Build</a> •
   <a href="#contributors">Contributors</a> •
@@ -59,19 +58,56 @@
   <sub>Claude Code · Codex · Gemini CLI · Hermes Agent · Qwen Code · Kimi CLI · OpenClaw · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
 </p>
 
-<a id="buddy-detach"></a>
-## Buddy Detach in v0.5.0+
+<a id="installation"></a>
+## Installation
 
-Starting in `v0.5.0` - the first release after `v0.4.0` - Ping Island can detach the active Buddy from the notch. Press and hold the notch, drag the Buddy upward out of the notch area, and it becomes an independent floating companion that stays with you across other windows.
+### Install with Homebrew Cask
 
-<p align="center">
-  <img src="docs/images/ping-island-0.5.0-buddy-detach.png" width="960" alt="Ping Island v0.5.0 Buddy detach poster">
-</p>
+```bash
+brew tap erha19/tap
+brew install --cask ping-island
+```
 
-- **Three-step interaction** - press and hold, drag outward, then let go to keep the Buddy floating.
-- **Independent floating presence** - keep session awareness visible even when you are no longer watching the top notch.
-- **Free placement with low disruption** - move the Buddy where it helps without pinning it to the menu bar.
-- **Same Island context** - the floating Buddy still represents the same live session, mascot identity, and progress cues.
+### Download a Release
+
+1. Visit the [official website](https://erha19.github.io/ping-island/) for the product overview and latest download link, or go straight to [Releases](https://github.com/erha19/ping-island/releases).
+2. Download the latest DMG.
+3. Move `Ping Island.app` into your Applications folder.
+4. Launch the app and start the clients you want Ping Island to monitor.
+
+> On first launch, macOS may ask you to confirm the app or grant Accessibility / Apple Events permissions for focus features.
+
+<a id="build-from-source"></a>
+### Build from Source
+
+Requires macOS 14+ and an Xcode toolchain that can build the Xcode project and the Swift 6.1 `Prototype` package tests.
+
+```bash
+git clone https://github.com/erha19/ping-island.git
+cd ping-island
+
+# Debug build
+xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Debug build
+
+# Release build
+xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Release build
+```
+
+To create a locally shareable unsigned package for local testing:
+
+```bash
+./scripts/package-unsigned.sh
+```
+
+The script re-signs the built app bundle with a consistent ad-hoc signature before creating the `.dmg` and `.zip`, which helps embedded frameworks launch more reliably on another machine. The package is still unsigned for distribution and not notarized, so first launch may still require `Open` from Finder's context menu or manual quarantine removal.
+The generated files land in `releases/unsigned/` as `PingIsland-<version>.dmg` and `PingIsland-<version>.zip`.
+The DMG uses the repo-tracked installer artwork at `docs/images/ping-island-dmg-installer-background.png` by default; set `PING_ISLAND_DMG_BACKGROUND_SOURCE` if you want to preview a different background locally.
+
+To create signed and notarized release packages in GitHub Actions, configure the release secrets described in [docs/sparkle-release.md](docs/sparkle-release.md) and run `.github/workflows/release-packages.yml` against a `v*` tag or the manual workflow dispatch input. Homebrew Cask publishing is documented in [docs/homebrew-cask-release.md](docs/homebrew-cask-release.md).
+
+The same workflow also publishes a Linux `PingIslandBridge` asset that Ping Island can download when bootstrapping Linux SSH hosts.
+
+For the full notarized release flow and the GitHub Releases backed Sparkle appcast setup, see [docs/sparkle-release.md](docs/sparkle-release.md).
 
 ## What is Ping Island?
 
@@ -123,57 +159,6 @@ SSH support is a core workflow, not a sidecar script. Ping Island can bootstrap 
 
 The mascot GIFs used throughout this README are generated from the live `MascotView` implementation via `./scripts/render-mascots.sh`.
 The OpenClaw feature poster in `docs/images/ping-island-openclaw-poster.png` is generated via `./scripts/render-openclaw-poster.sh`.
-
-<a id="installation"></a>
-## Installation
-
-### Install with Homebrew Cask
-
-```bash
-brew tap erha19/tap
-brew install --cask ping-island
-```
-
-### Download a Release
-
-1. Visit the [official website](https://erha19.github.io/ping-island/) for the product overview and latest download link, or go straight to [Releases](https://github.com/erha19/ping-island/releases).
-2. Download the latest DMG.
-3. Move `Ping Island.app` into your Applications folder.
-4. Launch the app and start the clients you want Ping Island to monitor.
-
-> On first launch, macOS may ask you to confirm the app or grant Accessibility / Apple Events permissions for focus features.
-
-<a id="build-from-source"></a>
-### Build from Source
-
-Requires macOS 14+ and an Xcode toolchain that can build the Xcode project and the Swift 6.1 `Prototype` package tests.
-
-```bash
-git clone https://github.com/erha19/ping-island.git
-cd ping-island
-
-# Debug build
-xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Debug build
-
-# Release build
-xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Release build
-```
-
-To create a locally shareable unsigned package for local testing:
-
-```bash
-./scripts/package-unsigned.sh
-```
-
-The script re-signs the built app bundle with a consistent ad-hoc signature before creating the `.dmg` and `.zip`, which helps embedded frameworks launch more reliably on another machine. The package is still unsigned for distribution and not notarized, so first launch may still require `Open` from Finder's context menu or manual quarantine removal.
-The generated files land in `releases/unsigned/` as `PingIsland-<version>.dmg` and `PingIsland-<version>.zip`.
-The DMG uses the repo-tracked installer artwork at `docs/images/ping-island-dmg-installer-background.png` by default; set `PING_ISLAND_DMG_BACKGROUND_SOURCE` if you want to preview a different background locally.
-
-To create signed and notarized release packages in GitHub Actions, configure the release secrets described in [docs/sparkle-release.md](docs/sparkle-release.md) and run `.github/workflows/release-packages.yml` against a `v*` tag or the manual workflow dispatch input. Homebrew Cask publishing is documented in [docs/homebrew-cask-release.md](docs/homebrew-cask-release.md).
-
-The same workflow also publishes a Linux `PingIslandBridge` asset that Ping Island can download when bootstrapping Linux SSH hosts.
-
-For the full notarized release flow and the GitHub Releases backed Sparkle appcast setup, see [docs/sparkle-release.md](docs/sparkle-release.md).
 
 ## Testing
 

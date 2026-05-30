@@ -7,7 +7,6 @@
   <a href="https://erha19.github.io/">官网</a> •
   <a href="#installation">安装</a> •
   <a href="#features">功能</a> •
-  <a href="#buddy-detach">Buddy 离岛</a> •
   <a href="#supported-tools">支持的工具</a> •
   <a href="#build-from-source">构建</a> •
   <a href="docs/privacy-policy.md">隐私政策</a><br>
@@ -56,19 +55,52 @@
   <sub>Claude Code · Codex · Gemini CLI · Hermes Agent · Qwen Code · Kimi CLI · OpenClaw · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
 </p>
 
-<a id="buddy-detach"></a>
-## Buddy 离岛（v0.5.0+）
+<a id="installation"></a>
+## 安装
 
-从 `v0.5.0` 开始，也就是 `v0.4.0` 之后的首个版本，Ping Island 支持把当前 Buddy 宠物从刘海里拖出来。长按刘海后向上拖出刘海区域，松手后它就会变成独立悬浮的小伙伴，在你切换到其他窗口时继续陪着你。
+### 使用 Homebrew Cask 安装
 
-<p align="center">
-  <img src="docs/images/ping-island-0.5.0-buddy-detach-cn.png" width="960" alt="Ping Island v0.5.0 Buddy 离岛海报">
-</p>
+```bash
+brew tap erha19/tap
+brew install --cask ping-island
+```
 
-- **三步完成** - 长按刘海、向外拖出、松手后保持独立悬浮。
-- **独立悬浮陪伴** - 不必一直盯着顶部刘海，也能持续感知当前会话状态。
-- **自由拖动、不打断工作** - 宠物可以放到更顺手的位置，而不是只能固定在菜单栏顶部。
-- **会话上下文不断线** - 离岛后的 Buddy 仍然代表同一个实时会话、客户端形象和进度提示。
+### 下载发行版
+
+1. 先访问[官网](https://erha19.github.io/ping-island/)查看产品介绍和最新下载入口，或直接打开 [Releases](https://github.com/erha19/ping-island/releases)
+2. 下载最新的 DMG 或 zip 包
+3. 将 `Ping Island.app` 拖到 Applications
+4. 启动应用，并打开你希望 Ping Island 监控的客户端
+
+> 首次启动时，macOS 可能会要求你确认应用，或授予辅助功能 / Apple Events 权限以支持聚焦能力。
+
+<a id="build-from-source"></a>
+### 从源码构建
+
+需要 macOS 14+，以及能同时构建 Xcode 工程和 Swift 6.1 `Prototype` 测试包的 Xcode 工具链。
+
+```bash
+git clone https://github.com/erha19/ping-island.git
+cd ping-island
+
+# Debug 构建
+xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Debug build
+
+# Release 构建
+xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Release build
+```
+
+如果你想产出本地分发用的未签名安装包：
+
+```bash
+./scripts/package-unsigned.sh
+```
+
+默认会使用仓库里的 `docs/images/ping-island-dmg-installer-background.png` 作为 DMG 安装背景；如果你想在本地预览别的背景图，可以临时设置 `PING_ISLAND_DMG_BACKGROUND_SOURCE`。
+
+如果你想通过 GitHub Actions 产出带 `Developer ID` 签名并完成 notarization 的发布包，请先按 [docs/sparkle-release.md](docs/sparkle-release.md) 配好仓库 secrets，再运行 `.github/workflows/release-packages.yml`。Homebrew Cask 发布资源见 [docs/homebrew-cask-release.md](docs/homebrew-cask-release.md)。
+
+完整的 Sparkle / notarization 发布流程见 [docs/sparkle-release.md](docs/sparkle-release.md)。
 
 ## Ping Island 是什么？
 
@@ -136,53 +168,6 @@ Kimi CLI 通过官方 hooks 接入，Ping Island 会管理 `~/.kimi/config.toml`
 OpenClaw 当前通过 `~/.openclaw/hooks/` 下的托管 internal hook 目录接入，同时会从 `~/.openclaw/agents/main/sessions/` 读取本地 session transcript 以回填完整对话过程。
 
 SSH 远程支持是 Ping Island 的正式能力，而不是额外脚本。它可以把桥接程序引导到远程 macOS / Linux 主机上，重写远程 Claude 兼容 hooks 和 Qwen Code hooks、安装受支持的 OpenClaw internal hooks，让事件先进入桥接层，再通过双向转发回到你本机的菜单栏 UI。因此即使会话跑在远程 SSH 终端里，审批、追问、通知和一键跳回也仍然能落在同一个 Island 界面里。
-
-<a id="installation"></a>
-## 安装
-
-### 使用 Homebrew Cask 安装
-
-```bash
-brew tap erha19/tap
-brew install --cask ping-island
-```
-
-### 下载发行版
-
-1. 先访问[官网](https://erha19.github.io/ping-island/)查看产品介绍和最新下载入口，或直接打开 [Releases](https://github.com/erha19/ping-island/releases)
-2. 下载最新的 DMG 或 zip 包
-3. 将 `Ping Island.app` 拖到 Applications
-4. 启动应用，并打开你希望 Ping Island 监控的客户端
-
-> 首次启动时，macOS 可能会要求你确认应用，或授予辅助功能 / Apple Events 权限以支持聚焦能力。
-
-<a id="build-from-source"></a>
-### 从源码构建
-
-需要 macOS 14+，以及能同时构建 Xcode 工程和 Swift 6.1 `Prototype` 测试包的 Xcode 工具链。
-
-```bash
-git clone https://github.com/erha19/ping-island.git
-cd ping-island
-
-# Debug 构建
-xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Debug build
-
-# Release 构建
-xcodebuild -project PingIsland.xcodeproj -scheme PingIsland -configuration Release build
-```
-
-如果你想产出本地分发用的未签名安装包：
-
-```bash
-./scripts/package-unsigned.sh
-```
-
-默认会使用仓库里的 `docs/images/ping-island-dmg-installer-background.png` 作为 DMG 安装背景；如果你想在本地预览别的背景图，可以临时设置 `PING_ISLAND_DMG_BACKGROUND_SOURCE`。
-
-如果你想通过 GitHub Actions 产出带 `Developer ID` 签名并完成 notarization 的发布包，请先按 [docs/sparkle-release.md](docs/sparkle-release.md) 配好仓库 secrets，再运行 `.github/workflows/release-packages.yml`。Homebrew Cask 发布资源见 [docs/homebrew-cask-release.md](docs/homebrew-cask-release.md)。
-
-完整的 Sparkle / notarization 发布流程见 [docs/sparkle-release.md](docs/sparkle-release.md)。
 
 ## 测试
 
