@@ -5,6 +5,7 @@
 <p align="center">
   <b>macOS 菜单栏里的灵动岛风格 AI 编码会话监视器</b><br>
   <a href="https://erha19.github.io/">官网</a> •
+  <a href="#lets-try-it">演示</a> •
   <a href="#installation">安装</a> •
   <a href="#features">功能</a> •
   <a href="#supported-tools">支持的工具</a> •
@@ -53,6 +54,21 @@
 </p>
 <p align="center">
   <sub>Claude Code · Codex · Gemini CLI · Hermes Agent · Qwen Code · Kimi CLI · OpenClaw · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
+</p>
+
+<a id="lets-try-it"></a>
+## Let’s try it!
+
+把当前宠物从刘海里拖出来，让它在你切换窗口时也能继续显示会话状态。
+
+<p align="center">
+  <img src="docs/images/demos/ping-island-ask-tool-demo.gif" width="800" alt="Ping Island 宠物离岛交互演示">
+</p>
+
+在刘海屏 Mac 上，当 Agent 需要你处理时，Ping Island 会从刘海处展开，带上会话上下文和可操作按钮。
+
+<p align="center">
+  <img src="docs/images/demos/ping-island-question-demo.gif" width="800" alt="Ping Island 刘海屏交互演示">
 </p>
 
 <a id="installation"></a>

@@ -5,6 +5,7 @@
 <p align="center">
   <b>AI coding session monitor for the macOS menu bar</b><br>
   <a href="https://erha19.github.io/">Website</a> •
+  <a href="#lets-try-it">Try it</a> •
   <a href="#installation">Install</a> •
   <a href="#features">Features</a> •
   <a href="#supported-tools">Supported Tools</a> •
@@ -56,6 +57,21 @@
 </p>
 <p align="center">
   <sub>Claude Code · Codex · Gemini CLI · Hermes Agent · Qwen Code · Kimi CLI · OpenClaw · OpenCode · Cursor · Qoder · CodeBuddy · GitHub Copilot</sub>
+</p>
+
+<a id="lets-try-it"></a>
+## Let’s try it!
+
+Detach the active pet from the notch and keep session status nearby while you work across other windows.
+
+<p align="center">
+  <img src="docs/images/demos/ping-island-ask-tool-demo.gif" width="800" alt="Ping Island detached pet interaction demo">
+</p>
+
+On notch-screen Macs, Ping Island expands from the notch with session context and action controls when an agent needs attention.
+
+<p align="center">
+  <img src="docs/images/demos/ping-island-question-demo.gif" width="800" alt="Ping Island notch interaction demo">
 </p>
 
 <a id="installation"></a>
