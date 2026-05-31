@@ -2084,6 +2084,22 @@ private struct SettingsGlassSurface: NSViewRepresentable {
     }
 }
 
+private struct SettingsWindowDragHandle: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        DragHandleView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class DragHandleView: NSView {
+        override var mouseDownCanMoveWindow: Bool { false }
+
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
+        }
+    }
+}
+
 private enum SettingsPanelMetrics {
     static let windowSize = AppSettings.defaultSettingsWindowSize
     static let windowMinSize = AppSettings.minimumSettingsWindowSize
@@ -2494,7 +2510,9 @@ private struct SettingsPanelContentView: View {
                 }
             }
 
-            Spacer(minLength: 0)
+            SettingsWindowDragHandle()
+                .frame(maxWidth: .infinity, minHeight: 22, maxHeight: 22)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 8)
         .padding(.bottom, 2)

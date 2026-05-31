@@ -60,11 +60,6 @@ class NotchViewModel: ObservableObject {
     @Published private(set) var hasPhysicalNotch: Bool
 
     private static let defaultClosedHeight = ScreenNotchMetrics.fallbackClosedHeight
-    private static let defaultClosedWidth: CGFloat = 266
-    // Preserve the visible side rails that the default closed island has beyond
-    // the physical camera housing, so mascot/count content never sits under it.
-    private static let physicalNotchContentAllowance: CGFloat =
-        defaultClosedWidth - ScreenNotchMetrics.fallbackNotchWidth
     private static let clickedInstancesPanelWidthRatio: CGFloat = 0.44
     private static let clickedInstancesPanelMaximumWidth: CGFloat = 520
     private static let detachmentLongPressNarrowedWidthScale: CGFloat = 0.82
@@ -104,43 +99,11 @@ class NotchViewModel: ObservableObject {
     }
 
     private func resolvedClosedWidth(preferredModuleWidthOverride: CGFloat? = nil) -> CGFloat {
-        Self.resolvedClosedWidth(
-            deviceNotchRect: deviceNotchRect,
-            hasPhysicalNotch: hasPhysicalNotch,
-            preferredModuleWidth: preferredModuleWidthOverride ?? preferredModuleWidth
-        )
-    }
-
-    private static func detectedClosedWidth(
-        deviceNotchRect: CGRect,
-        hasPhysicalNotch: Bool
-    ) -> CGFloat {
-        guard hasPhysicalNotch else { return defaultClosedWidth }
-        let systemWidth = ceil(deviceNotchRect.width)
-        guard systemWidth > 0 else { return defaultClosedWidth }
-        return max(defaultClosedWidth, systemWidth + physicalNotchContentAllowance)
+        preferredModuleWidthOverride ?? preferredModuleWidth
     }
 
     private var preferredModuleWidth: CGFloat {
         CGFloat(AppSettingsStore.normalizedNotchModuleWidth(notchModuleWidthProvider()))
-    }
-
-    private static func resolvedClosedWidth(
-        deviceNotchRect: CGRect,
-        hasPhysicalNotch: Bool,
-        preferredModuleWidth: CGFloat
-    ) -> CGFloat {
-        if hasPhysicalNotch {
-            return max(
-                preferredModuleWidth,
-                detectedClosedWidth(
-                    deviceNotchRect: deviceNotchRect,
-                    hasPhysicalNotch: hasPhysicalNotch
-                )
-            )
-        }
-
-        return preferredModuleWidth
     }
 
     static func shouldAutoCollapseHoverPreview(
@@ -160,14 +123,8 @@ class NotchViewModel: ObservableObject {
     }
 
     private func narrowedClosedWidth(for baseWidth: CGFloat) -> CGFloat {
-        if hasPhysicalNotch {
-            let systemWidth = ceil(deviceNotchRect.width)
-            if systemWidth > 0 {
-                return systemWidth
-            }
-        }
-
         return max(
+            CGFloat(AppSettingsStore.minimumNotchModuleWidth),
             baseWidth * Self.detachmentLongPressNarrowedWidthScale,
             baseWidth - Self.detachmentLongPressMaximumShrink
         )
@@ -357,11 +314,7 @@ class NotchViewModel: ObservableObject {
             windowHeight: windowHeight
         )
         self.hasPhysicalNotch = hasPhysicalNotch
-        self.closedWidth = Self.resolvedClosedWidth(
-            deviceNotchRect: deviceNotchRect,
-            hasPhysicalNotch: hasPhysicalNotch,
-            preferredModuleWidth: CGFloat(AppSettingsStore.normalizedNotchModuleWidth(notchModuleWidthProvider()))
-        )
+        self.closedWidth = CGFloat(AppSettingsStore.normalizedNotchModuleWidth(notchModuleWidthProvider()))
         self.events = enableEventMonitoring ? EventMonitors.shared : nil
         self.fullscreenActivityProvider = fullscreenActivityProvider
         self.fullscreenBrowserHiddenProvider = fullscreenBrowserHiddenProvider

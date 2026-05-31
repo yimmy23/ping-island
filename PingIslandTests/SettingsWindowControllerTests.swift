@@ -80,6 +80,7 @@ final class SettingsWindowControllerTests: XCTestCase {
 
         XCTAssertTrue(window.isVisible)
         XCTAssertFalse(window.isMiniaturized)
+        XCTAssertFalse(window.isMovableByWindowBackground)
         XCTAssertEqual(window.contentRect(forFrameRect: window.frame).size.width, SettingsWindowDefaults.defaultContentSize.width)
         XCTAssertEqual(window.contentRect(forFrameRect: window.frame).size.height, SettingsWindowDefaults.defaultContentSize.height)
 
