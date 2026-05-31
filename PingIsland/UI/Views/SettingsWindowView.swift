@@ -3278,6 +3278,21 @@ private struct SettingsPanelContentView: View {
                     updateAccessory
                 }
 
+                if updateManager.canInstallPendingUpdateNow {
+                    SettingsLineDivider()
+
+                    SettingsActionLine(
+                        title: "立即重启安装",
+                        subtitle: "不等待空闲，立即退出 Ping Island 并完成已下载的更新"
+                    ) {
+                        updateManager.installAndRelaunch()
+                    } accessory: {
+                        Image(systemName: "arrow.clockwise.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(TerminalColors.green)
+                    }
+                }
+
                 if updateManager.canShowReleaseNotes {
                     SettingsLineDivider()
 
@@ -3515,8 +3530,12 @@ private struct SettingsPanelContentView: View {
             return AppLocalization.string("检查更新")
         case .checking:
             return AppLocalization.string("检查中...")
-        case .found, .downloading, .extracting, .readyToInstall, .installing:
+        case .found, .downloading, .extracting:
             return AppLocalization.string("静默更新中")
+        case .readyToInstall:
+            return AppLocalization.string("等待重启安装")
+        case .installing:
+            return AppLocalization.string("正在安装更新")
         case .error:
             return AppLocalization.string("重试更新")
         }
@@ -3543,7 +3562,7 @@ private struct SettingsPanelContentView: View {
         case .extracting:
             return AppLocalization.string("正在准备安装更新")
         case .readyToInstall(let version):
-            return AppLocalization.format("v%@ 已就绪，空闲时自动重启安装", version)
+            return AppLocalization.format("v%@ 已就绪，可立即重启安装，或等空闲时自动安装", version)
         case .installing:
             return AppLocalization.string("正在静默安装并重启")
         case .error:
