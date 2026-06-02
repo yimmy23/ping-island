@@ -80,13 +80,6 @@
 brew install --cask ping-island
 ```
 
-如果你之前用过旧的 `erha19/tap` cask，请先移除旧 tap，避免 Homebrew 继续优先解析旧来源：
-
-```bash
-brew untap erha19/tap
-brew install --cask ping-island
-```
-
 ### 下载发行版
 
 1. 先访问[官网](https://erha19.github.io/ping-island/)查看产品介绍和最新下载入口，或直接打开 [Releases](https://github.com/erha19/ping-island/releases)
