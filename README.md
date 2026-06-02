@@ -83,14 +83,6 @@ On notch-screen Macs, Ping Island expands from the notch with session context an
 brew install --cask ping-island
 ```
 
-If you previously installed from the old `erha19/tap` cask, remove that tap once
-so Homebrew resolves the official cask:
-
-```bash
-brew untap erha19/tap
-brew install --cask ping-island
-```
-
 ### Download a Release
 
 1. Visit the [official website](https://erha19.github.io/ping-island/) for the product overview and latest download link, or go straight to [Releases](https://github.com/erha19/ping-island/releases).
