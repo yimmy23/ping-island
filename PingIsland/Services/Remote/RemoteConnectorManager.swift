@@ -2204,7 +2204,10 @@ private enum RemoteSSHCommandRunner {
             arguments += ["-p", "\(port)"]
         }
         arguments.append(target)
-        arguments.append(remoteCommand)
+        // Wrap in /bin/sh to avoid fish (or other non-POSIX shells) interpreting
+        // the generated POSIX sh scripts and failing with syntax errors.
+        let encoded = Data(remoteCommand.utf8).base64EncodedString()
+        arguments.append("echo \(encoded) | base64 -d | /bin/sh")
         return arguments
     }
 
