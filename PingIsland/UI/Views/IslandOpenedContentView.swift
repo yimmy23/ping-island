@@ -51,7 +51,6 @@ struct IslandOpenedContentView: View {
                 sessions: hoverPreviewSessions,
                 sessionMonitor: sessionMonitor,
                 density: surface == .floating ? .detachedCompact : .regular,
-                suppressInAppPromptControls: settings.effectiveRoutePromptsToTerminal,
                 onQuestionInteractionStateChanged: { viewModel.setInlineTextInputActive($0) }
             )
         case .attentionNotification(let session):

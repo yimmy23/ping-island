@@ -159,8 +159,10 @@ struct CodexSessionView: View {
 
             MarkdownText(intervention.message, color: .white.opacity(0.72), fontSize: 12)
 
-            if shouldSuppressPromptControls {
+            if shouldSuppressPromptControls && intervention.kind == .approval {
                 terminalRoutedPromptNotice
+            } else if shouldSuppressPromptControls {
+                EmptyView()
             } else if intervention.kind == .approval {
                 approvalButtons(intervention)
             } else {

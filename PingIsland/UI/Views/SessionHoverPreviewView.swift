@@ -115,8 +115,8 @@ struct SessionHoverDashboardView: View {
                 }
 
                 ForEach(displayedSessions) { session in
-                    let isHighlighted = session.needsPromptNotification
-                    if session.needsPromptNotification {
+                    let isHighlighted = session.needsApprovalResponse || session.needsQuestionResponse
+                    if isHighlighted {
                         HoverSessionCard(
                             session: session,
                             sessionMonitor: sessionMonitor,
@@ -175,6 +175,7 @@ struct SessionAttentionNotificationView: View {
                     isHighlighted: session.needsPromptNotification,
                     density: density,
                     suppressInAppPromptControls: suppressInAppPromptControls,
+                    showsTerminalRoutedPromptNotice: true,
                     onQuestionInteractionStateChanged: onQuestionInteractionStateChanged,
                     onActionCompleted: onActionCompleted
                 )
@@ -314,6 +315,7 @@ struct HoverSessionCard: View {
     var isHighlighted = false
     var density: HoverPreviewDensity = .regular
     var suppressInAppPromptControls = false
+    var showsTerminalRoutedPromptNotice = false
     var onQuestionInteractionStateChanged: (Bool) -> Void = { _ in }
     var onActionCompleted: () -> Void = {}
     @State private var isHovered = false
@@ -347,10 +349,11 @@ struct HoverSessionCard: View {
                     intervention: intervention,
                     sessionMonitor: sessionMonitor,
                     suppressControls: shouldSuppressPromptControls,
+                    showsTerminalRoutedPromptNotice: showsTerminalRoutedPromptNotice,
                     onQuestionInteractionStateChanged: onQuestionInteractionStateChanged,
                     onActionCompleted: onActionCompleted
                 )
-            } else if session.suppressInAppPromptControls {
+            } else if session.suppressInAppPromptControls && showsTerminalRoutedPromptNotice {
                 HoverSessionHeader(session: session)
 
                 HoverTerminalRoutedPromptNotice(session: session)
@@ -538,6 +541,7 @@ private struct HoverQuestionInterventionCard: View {
     let intervention: SessionIntervention
     let sessionMonitor: SessionMonitor
     var suppressControls = false
+    var showsTerminalRoutedPromptNotice = false
     var onQuestionInteractionStateChanged: (Bool) -> Void = { _ in }
     let onActionCompleted: () -> Void
 
@@ -557,7 +561,9 @@ private struct HoverQuestionInterventionCard: View {
             }
 
             if suppressControls {
-                HoverTerminalRoutedPromptNotice(session: session)
+                if showsTerminalRoutedPromptNotice {
+                    HoverTerminalRoutedPromptNotice(session: session)
+                }
             } else if intervention.awaitsExternalContinuation,
                session.clientInfo.prefersAnsweredQuestionFollowupAction {
                 VStack(alignment: .leading, spacing: 10) {
