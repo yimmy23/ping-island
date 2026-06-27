@@ -34,6 +34,89 @@ final class SessionStoreCodexInterventionTests: XCTestCase {
         await store.process(.sessionArchived(sessionId: sessionId))
     }
 
+    func testCodexThreadListRefreshWithoutLifecycleDatesPreservesExistingActivity() async throws {
+        let sessionId = "codex-refresh-without-lifecycle-\(UUID().uuidString)"
+        let store = SessionStore.shared
+        let createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let updatedAt = createdAt.addingTimeInterval(3_600)
+
+        await store.upsertCodexSession(
+            sessionId: sessionId,
+            name: "Historical thread",
+            preview: "Earlier assistant reply",
+            cwd: "/tmp/project",
+            phase: .idle,
+            intervention: nil,
+            clientInfo: SessionClientInfo.codexApp(threadId: sessionId),
+            createdAt: createdAt,
+            activityAt: updatedAt
+        )
+
+        await store.upsertCodexSession(
+            sessionId: sessionId,
+            name: "Historical thread",
+            preview: "Earlier assistant reply",
+            cwd: "/tmp/project",
+            phase: .idle,
+            intervention: nil,
+            clientInfo: SessionClientInfo.codexApp(threadId: sessionId),
+            allowSyntheticActivityTimestamp: false
+        )
+
+        let session = await store.session(for: sessionId)
+        XCTAssertEqual(session?.createdAt, createdAt)
+        XCTAssertEqual(session?.lastActivity, updatedAt)
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
+    func testNewIdleCodexThreadListItemWithoutLifecycleDatesIsNotRecentActivity() async throws {
+        let sessionId = "codex-undated-idle-thread-\(UUID().uuidString)"
+        let store = SessionStore.shared
+        let historicalFallback = Date(timeIntervalSince1970: 0)
+
+        await store.upsertCodexSession(
+            sessionId: sessionId,
+            name: "Undated idle thread",
+            preview: "Earlier assistant reply",
+            cwd: "/tmp/project",
+            phase: .idle,
+            intervention: nil,
+            clientInfo: SessionClientInfo.codexApp(threadId: sessionId),
+            allowSyntheticActivityTimestamp: false
+        )
+
+        let storedSession = await store.session(for: sessionId)
+        let session = try XCTUnwrap(storedSession)
+        XCTAssertEqual(session.createdAt, historicalFallback)
+        XCTAssertEqual(session.lastActivity, historicalFallback)
+        let completedSession = SessionState(
+            sessionId: session.sessionId,
+            cwd: session.cwd,
+            provider: .codex,
+            clientInfo: session.clientInfo,
+            phase: .idle,
+            chatItems: [
+                ChatHistoryItem(
+                    id: "assistant",
+                    type: .assistant("Done earlier"),
+                    timestamp: historicalFallback
+                )
+            ],
+            lastActivity: session.lastActivity,
+            createdAt: session.createdAt
+        )
+        XCTAssertFalse(
+            SessionCompletionNotificationPolicy.shouldQueueCompletedNotification(
+                for: completedSession,
+                previousPhase: nil,
+                isEnabled: true
+            )
+        )
+
+        await store.process(.sessionArchived(sessionId: sessionId))
+    }
+
     func testCodexAppServerIdleRefreshDoesNotClearExternalOnlyIntervention() async {
         let sessionId = "codex-external-\(UUID().uuidString)"
         let store = SessionStore.shared

@@ -155,6 +155,30 @@ enum SessionCompletionStateEvaluator {
     }
 }
 
+final class SessionCompletionNotificationRegistry {
+    static let shared = SessionCompletionNotificationRegistry()
+
+    private var consumedCodexCompletionKeys = Set<String>()
+
+    private init() {}
+
+    func isConsumed(session: SessionState) -> Bool {
+        guard let key = codexCompletionKey(for: session) else { return false }
+        return consumedCodexCompletionKeys.contains(key)
+    }
+
+    func markConsumed(session: SessionState) {
+        guard let key = codexCompletionKey(for: session) else { return }
+        consumedCodexCompletionKeys.insert(key)
+    }
+
+    private func codexCompletionKey(for session: SessionState) -> String? {
+        guard session.provider == .codex else { return nil }
+        let activityMilliseconds = Int64((session.lastActivity.timeIntervalSince1970 * 1_000).rounded())
+        return "\(session.sessionId):\(activityMilliseconds)"
+    }
+}
+
 enum SessionCompletionNotificationPolicy {
     private static let notificationRecencyWindow: TimeInterval = 60
 
@@ -166,6 +190,15 @@ enum SessionCompletionNotificationPolicy {
     ) -> Bool {
         guard isEnabled else { return false }
         guard SessionCompletionStateEvaluator.isCompletedReadySession(session) else { return false }
+
+        if session.provider == .codex {
+            guard session.phase == .idle else { return false }
+            guard let previousPhase, isCodexCompletionSourcePhase(previousPhase) else {
+                return false
+            }
+            return wasTrackedOrRecentlyCreated(session, previousPhase: previousPhase, now: now)
+        }
+
         guard previousPhase != .waitingForInput else { return false }
         return wasTrackedOrRecentlyCreated(session, previousPhase: previousPhase, now: now)
     }
@@ -200,12 +233,49 @@ enum SessionCompletionNotificationPolicy {
         return wasTrackedOrRecentlyCreated(session, previousPhase: previousPhase, now: now)
     }
 
+    static func hasRecentNotificationActivity(
+        _ session: SessionState,
+        now: Date = Date()
+    ) -> Bool {
+        now.timeIntervalSince(session.lastActivity) <= notificationRecencyWindow
+    }
+
+    static func hasBlockingActiveSession(
+        for session: SessionState,
+        in sessions: [SessionState]
+    ) -> Bool {
+        sessions.contains { candidate in
+            guard candidate.stableId != session.stableId else { return false }
+            return isBlockingActiveSession(candidate)
+        }
+    }
+
+    private static func isCodexCompletionSourcePhase(_ phase: SessionPhase) -> Bool {
+        switch phase {
+        case .processing, .waitingForInput, .waitingForApproval:
+            return true
+        case .idle, .ended, .compacting:
+            return false
+        }
+    }
+
+    private static func isBlockingActiveSession(_ session: SessionState) -> Bool {
+        switch session.phase {
+        case .processing, .waitingForApproval, .compacting:
+            return true
+        case .waitingForInput:
+            return !SessionCompletionStateEvaluator.isCompletedReadySession(session)
+        case .idle, .ended:
+            return false
+        }
+    }
+
     private static func wasTrackedOrRecentlyCreated(
         _ session: SessionState,
         previousPhase: SessionPhase?,
         now: Date
     ) -> Bool {
-        guard now.timeIntervalSince(session.lastActivity) <= notificationRecencyWindow else {
+        guard hasRecentNotificationActivity(session, now: now) else {
             return false
         }
 

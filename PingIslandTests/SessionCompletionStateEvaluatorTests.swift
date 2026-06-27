@@ -236,6 +236,72 @@ final class SessionCompletionStateEvaluatorTests: XCTestCase {
         )
     }
 
+    func testCodexCompletionNotificationPolicyRequiresActiveToIdleEdge() {
+        let now = Date()
+        let session = makeCodexCompletedSession(now: now)
+        let approval = PermissionContext(
+            toolUseId: "tool-1",
+            toolName: "Bash",
+            toolInput: nil,
+            receivedAt: now.addingTimeInterval(-5)
+        )
+
+        XCTAssertTrue(
+            SessionCompletionNotificationPolicy.shouldQueueCompletedNotification(
+                for: session,
+                previousPhase: .processing,
+                isEnabled: true,
+                now: now
+            )
+        )
+        XCTAssertTrue(
+            SessionCompletionNotificationPolicy.shouldQueueCompletedNotification(
+                for: session,
+                previousPhase: .waitingForInput,
+                isEnabled: true,
+                now: now
+            )
+        )
+        XCTAssertTrue(
+            SessionCompletionNotificationPolicy.shouldQueueCompletedNotification(
+                for: session,
+                previousPhase: .waitingForApproval(approval),
+                isEnabled: true,
+                now: now
+            )
+        )
+        XCTAssertFalse(
+            SessionCompletionNotificationPolicy.shouldQueueCompletedNotification(
+                for: session,
+                previousPhase: .idle,
+                isEnabled: true,
+                now: now
+            )
+        )
+        XCTAssertFalse(
+            SessionCompletionNotificationPolicy.shouldQueueCompletedNotification(
+                for: session,
+                previousPhase: nil,
+                isEnabled: true,
+                now: now
+            )
+        )
+    }
+
+    func testCodexWaitingForInputDoesNotQueueCompletionNotification() {
+        let now = Date()
+        let session = makeCodexCompletedSession(phase: .waitingForInput, now: now)
+
+        XCTAssertFalse(
+            SessionCompletionNotificationPolicy.shouldQueueCompletedNotification(
+                for: session,
+                previousPhase: .processing,
+                isEnabled: true,
+                now: now
+            )
+        )
+    }
+
     func testCompletionNotificationPolicyAllowsTrackedEndedTransition() {
         let session = SessionState(
             sessionId: "tracked-ended",
@@ -319,6 +385,95 @@ final class SessionCompletionStateEvaluatorTests: XCTestCase {
                 isEnabled: true,
                 now: now
             )
+        )
+    }
+
+    func testCompletionNotificationPolicyDetectsActiveSessionBlocker() {
+        let codex = SessionState(
+            sessionId: "codex-completed",
+            cwd: "/tmp/project",
+            provider: .codex,
+            clientInfo: SessionClientInfo.codexApp(threadId: "codex-completed"),
+            phase: .idle,
+            chatItems: [
+                ChatHistoryItem(id: "assistant", type: .assistant("Done"), timestamp: Date())
+            ]
+        )
+        let activeClaude = SessionState(
+            sessionId: "claude-active",
+            cwd: "/tmp/project",
+            provider: .claude,
+            phase: .processing
+        )
+        let waitingClaude = SessionState(
+            sessionId: "claude-waiting",
+            cwd: "/tmp/project",
+            provider: .claude,
+            phase: .waitingForInput
+        )
+        let completedWaitingClaude = SessionState(
+            sessionId: "claude-completed",
+            cwd: "/tmp/project",
+            provider: .claude,
+            phase: .waitingForInput,
+            chatItems: [
+                ChatHistoryItem(id: "assistant", type: .assistant("Done"), timestamp: Date())
+            ]
+        )
+        let activeCodex = SessionState(
+            sessionId: "codex-active",
+            cwd: "/tmp/project",
+            provider: .codex,
+            clientInfo: SessionClientInfo.codexApp(threadId: "codex-active"),
+            phase: .processing
+        )
+
+        XCTAssertTrue(
+            SessionCompletionNotificationPolicy.hasBlockingActiveSession(
+                for: codex,
+                in: [codex, activeClaude]
+            )
+        )
+        XCTAssertTrue(
+            SessionCompletionNotificationPolicy.hasBlockingActiveSession(
+                for: codex,
+                in: [codex, waitingClaude]
+            )
+        )
+        XCTAssertFalse(
+            SessionCompletionNotificationPolicy.hasBlockingActiveSession(
+                for: codex,
+                in: [codex, completedWaitingClaude]
+            )
+        )
+        XCTAssertTrue(
+            SessionCompletionNotificationPolicy.hasBlockingActiveSession(
+                for: codex,
+                in: [codex, activeCodex]
+            )
+        )
+    }
+
+    private func makeCodexCompletedSession(
+        phase: SessionPhase = .idle,
+        now: Date
+    ) -> SessionState {
+        SessionState(
+            sessionId: "codex-completed-\(UUID().uuidString)",
+            cwd: "/tmp/project",
+            provider: .codex,
+            clientInfo: SessionClientInfo.codexApp(threadId: "codex-completed"),
+            phase: phase,
+            chatItems: [
+                ChatHistoryItem(
+                    id: "user",
+                    type: .user("Do it"),
+                    timestamp: now.addingTimeInterval(-10)
+                ),
+                ChatHistoryItem(id: "assistant", type: .assistant("Done"), timestamp: now)
+            ],
+            lastActivity: now,
+            createdAt: now.addingTimeInterval(-20)
         )
     }
 }

@@ -71,6 +71,7 @@ actor SessionStore {
     private let codexHookPlaceholderPruneDelayNs: UInt64 = 10_000_000_000
     private let codexAppServerPlaceholderPruneDelayNs: UInt64 = 60_000_000_000
     private let codexContinuationMergeWindow: TimeInterval = 10 * 60
+    private let codexUnknownHistoricalActivityDate = Date(timeIntervalSince1970: 0)
     private let qoderConversationPollIntervalNs: UInt64 = 250_000_000
     private let qoderConversationPollTimeoutNs: UInt64 = 120_000_000_000
     private let qoderSubagentAssociationWindow: TimeInterval = 2 * 60
@@ -2071,6 +2072,36 @@ actor SessionStore {
         return max(currentValue, newValue)
     }
 
+    private func resolvedCodexActivityAt(
+        explicitActivityAt: Date?,
+        existingLastActivity: Date?,
+        createdAt: Date?,
+        phase: SessionPhase,
+        allowSyntheticActivityTimestamp: Bool
+    ) -> Date {
+        if let explicitActivityAt {
+            return explicitActivityAt
+        }
+
+        guard !allowSyntheticActivityTimestamp else {
+            return Date()
+        }
+
+        if let existingLastActivity {
+            return existingLastActivity
+        }
+
+        if let createdAt {
+            return createdAt
+        }
+
+        if phase.isActive || phase.needsAttention {
+            return Date()
+        }
+
+        return codexUnknownHistoricalActivityDate
+    }
+
     private func mergedCreatedAt(
         existing currentValue: Date,
         incoming newValue: Date
@@ -3321,9 +3352,19 @@ actor SessionStore {
         clientInfo: SessionClientInfo? = nil,
         createdAt: Date? = nil,
         activityAt: Date? = nil,
-        metadata: [String: String] = [:]
+        metadata: [String: String] = [:],
+        allowSyntheticActivityTimestamp: Bool = true
     ) {
-        let incomingActivityAt = activityAt ?? Date()
+        let preliminarySessionId = resolveCodexSessionAlias(sessionId)
+        let incomingActivityAt = resolvedCodexActivityAt(
+            explicitActivityAt: activityAt,
+            existingLastActivity: sessions[preliminarySessionId]?.lastActivity,
+            createdAt: createdAt,
+            phase: phase,
+            allowSyntheticActivityTimestamp: allowSyntheticActivityTimestamp
+        )
+        let initialCreatedAt = createdAt
+            ?? (allowSyntheticActivityTimestamp ? Date() : incomingActivityAt)
         let resolvedSessionId = resolveOrAdoptCodexSession(
             incomingSessionId: sessionId,
             name: name,
@@ -3340,7 +3381,7 @@ actor SessionStore {
                 lastUserMessageDate: nil
             ),
             activityAt: incomingActivityAt,
-            createdAt: createdAt,
+            createdAt: initialCreatedAt,
             ingress: .codexAppServer
         )
         let restoredAssociation = persistedAssociation(for: .codex, sessionId: resolvedSessionId)
@@ -3366,7 +3407,7 @@ actor SessionStore {
             intervention: intervention,
             phase: phase,
             lastActivity: incomingActivityAt,
-            createdAt: createdAt ?? Date()
+            createdAt: initialCreatedAt
         )
         if let createdAt {
             session.createdAt = mergedCreatedAt(existing: session.createdAt, incoming: createdAt)

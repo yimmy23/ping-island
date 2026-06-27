@@ -952,7 +952,8 @@ actor CodexAppServerMonitor {
             intervention: pendingRequestsByThread[threadId]?.intervention,
             clientInfo: clientInfo,
             createdAt: lifecycleDates.createdAt,
-            activityAt: lifecycleDates.updatedAt
+            activityAt: lifecycleDates.updatedAt,
+            allowSyntheticActivityTimestamp: false
         )
     }
 
