@@ -899,9 +899,12 @@ actor CodexAppServerMonitor {
 
     private func ingestThreadList(_ response: [String: Any]) async {
         guard let data = response["data"] as? [[String: Any]] else { return }
-        lastThreadDiagnostics = data.map(Self.makeThreadDiagnosticsSnapshot(from:))
-        logger.info("Codex thread list received count=\(data.count, privacy: .public)")
-        for thread in data {
+        let visibleThreads = data.filter { !Self.shouldIgnoreAuxiliaryThread($0) }
+        lastThreadDiagnostics = visibleThreads.map(Self.makeThreadDiagnosticsSnapshot(from:))
+        logger.info(
+            "Codex thread list received count=\(data.count, privacy: .public) filtered=\(data.count - visibleThreads.count, privacy: .public)"
+        )
+        for thread in visibleThreads {
             await ingestThread(thread)
         }
     }
@@ -916,6 +919,12 @@ actor CodexAppServerMonitor {
 
     private func ingestThread(_ thread: [String: Any]) async {
         guard let threadId = thread["id"] as? String else { return }
+        if Self.shouldIgnoreAuxiliaryThread(thread) {
+            logger.notice("Ignoring auxiliary Codex thread=\(threadId, privacy: .public)")
+            removeThreadDiagnostics(threadId: threadId)
+            return
+        }
+
         // Cache approvalMode from app-server data so approval-policy checks
         // don't have to re-read the global state file on every request.
         let rawMode = thread["approvalMode"] as? String ?? thread["approval_mode"] as? String
@@ -1010,8 +1019,35 @@ actor CodexAppServerMonitor {
         )
     }
 
+    private static func shouldIgnoreAuxiliaryThread(_ thread: [String: Any]) -> Bool {
+        CodexAuxiliaryHookFilter.isCodexMemoryMaintenanceThread(
+            cwd: thread["cwd"] as? String,
+            title: thread["name"] as? String,
+            preview: thread["preview"] as? String,
+            metadata: [
+                "session_file_path": sanitizedThreadText(thread["sessionFilePath"] as? String)
+                    ?? sanitizedThreadText(thread["rolloutPath"] as? String)
+                    ?? sanitizedThreadText(thread["path"] as? String)
+                    ?? "",
+                "thread_source": sanitizedThreadText(thread["threadSource"] as? String)
+                    ?? sanitizedThreadText(thread["source"] as? String)
+                    ?? ""
+            ]
+        )
+    }
+
+    private static func sanitizedThreadText(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let collapsed = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return collapsed.isEmpty ? nil : collapsed
+    }
+
     private func parseThreadSnapshot(_ thread: [String: Any]) -> CodexThreadSnapshot? {
         guard let threadId = thread["id"] as? String else { return nil }
+        guard !Self.shouldIgnoreAuxiliaryThread(thread) else { return nil }
 
         // Keep the approval-mode cache fresh: thread/read and thread/list both
         // call this path, so any policy change made in Codex Desktop will be

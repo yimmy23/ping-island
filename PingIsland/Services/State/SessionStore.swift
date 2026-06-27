@@ -3356,6 +3356,20 @@ actor SessionStore {
         allowSyntheticActivityTimestamp: Bool = true
     ) {
         let preliminarySessionId = resolveCodexSessionAlias(sessionId)
+        if case .none = intervention,
+           CodexAuxiliaryHookFilter.isCodexMemoryMaintenanceThread(
+                cwd: cwd,
+                title: name,
+                preview: preview,
+                metadata: [
+                    "session_file_path": clientInfo?.sessionFilePath ?? "",
+                    "thread_source": clientInfo?.threadSource ?? ""
+                ]
+           ) {
+            removeCodexAuxiliarySession(sessionId: preliminarySessionId)
+            return
+        }
+
         let incomingActivityAt = resolvedCodexActivityAt(
             explicitActivityAt: activityAt,
             existingLastActivity: sessions[preliminarySessionId]?.lastActivity,
@@ -3541,6 +3555,20 @@ actor SessionStore {
         _ snapshot: CodexThreadSnapshot,
         ingress: SessionIngress = .codexAppServer
     ) {
+        if case .none = snapshot.intervention,
+           CodexAuxiliaryHookFilter.isCodexMemoryMaintenanceThread(
+                cwd: snapshot.cwd,
+                title: snapshot.name,
+                preview: snapshot.displayResultText ?? snapshot.preview,
+                metadata: [
+                    "session_file_path": snapshot.clientInfo?.sessionFilePath ?? "",
+                    "thread_source": snapshot.clientInfo?.threadSource ?? ""
+                ]
+           ) {
+            removeCodexAuxiliarySession(sessionId: resolveCodexSessionAlias(snapshot.threadId))
+            return
+        }
+
         let resolvedSessionId = ingress == .codexAppServer
             ? resolveOrAdoptCodexSession(
                 incomingSessionId: snapshot.threadId,
@@ -3694,6 +3722,18 @@ actor SessionStore {
                     explicitFilePath: watcherFilePath
                 )
             }
+        }
+    }
+
+    private func removeCodexAuxiliarySession(sessionId: String) {
+        let resolvedSessionId = resolveCodexSessionAlias(sessionId)
+        let existed = sessions.removeValue(forKey: resolvedSessionId) != nil
+        clearCodexSessionAliases(for: resolvedSessionId)
+        cancelPendingSync(sessionId: resolvedSessionId)
+        cancelPendingCodexPlaceholderPrune(sessionId: resolvedSessionId)
+        lastCodexRolloutParseAt.removeValue(forKey: resolvedSessionId)
+        if existed {
+            publishState()
         }
     }
 
@@ -4637,7 +4677,7 @@ actor SessionStore {
         }
 
         clearCodexSessionAliases(for: event.sessionId)
-        removeIgnoredCodexPlaceholderIfNeeded(sessionId: event.sessionId)
+        removeIgnoredCodexAuxiliarySessionIfNeeded(sessionId: event.sessionId)
         if event.event == "Stop" || event.event == "SessionEnd" {
             ignoredCodexAuxiliaryHookSessionIds.remove(event.sessionId)
         }
@@ -4648,13 +4688,29 @@ actor SessionStore {
     }
 
     private func removeIgnoredCodexPlaceholderIfNeeded(sessionId: String) {
+        removeIgnoredCodexAuxiliarySessionIfNeeded(sessionId: sessionId)
+    }
+
+    private func removeIgnoredCodexAuxiliarySessionIfNeeded(sessionId: String) {
         guard let session = sessions[sessionId],
-              isLikelyEmptyCodexPlaceholder(session) else {
+              isLikelyEmptyCodexPlaceholder(session) || isCodexMemoryMaintenanceSession(session) else {
             return
         }
 
-        sessions.removeValue(forKey: sessionId)
-        cancelPendingCodexPlaceholderPrune(sessionId: sessionId)
+        removeCodexAuxiliarySession(sessionId: sessionId)
+    }
+
+    private func isCodexMemoryMaintenanceSession(_ session: SessionState) -> Bool {
+        guard session.provider == .codex else { return false }
+        return CodexAuxiliaryHookFilter.isCodexMemoryMaintenanceThread(
+            cwd: session.cwd,
+            title: session.sessionName,
+            preview: session.previewText ?? session.conversationInfo.lastMessage ?? session.latestHookMessage,
+            metadata: [
+                "session_file_path": session.clientInfo.sessionFilePath ?? "",
+                "thread_source": session.clientInfo.threadSource ?? ""
+            ]
+        )
     }
 
     private func shouldIgnoreCodexHookEvent(_ event: HookEvent, existingSession: SessionState?) -> Bool {
@@ -4666,9 +4722,21 @@ actor SessionStore {
             return true
         }
 
-        guard event.clientInfo.sessionFilePath?.isEmpty != false else { return false }
         guard !event.expectsResponse else { return false }
         guard case .none = event.intervention else { return false }
+        if CodexAuxiliaryHookFilter.isCodexMemoryMaintenanceThread(
+            cwd: event.cwd,
+            title: existingSession?.sessionName,
+            preview: event.message,
+            metadata: [
+                "session_file_path": event.clientInfo.sessionFilePath ?? "",
+                "thread_source": event.clientInfo.threadSource ?? ""
+            ]
+        ) {
+            return true
+        }
+
+        guard event.clientInfo.sessionFilePath?.isEmpty != false else { return false }
         if let existingSession {
             guard isLikelyEmptyCodexPlaceholder(existingSession) else {
                 return false
