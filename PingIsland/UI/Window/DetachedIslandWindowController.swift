@@ -175,6 +175,7 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
     private var bubbleHoverGraceWorkItem: DispatchWorkItem?
     private var floatingSettingsHintDismissWorkItem: DispatchWorkItem?
     private var completionNotificationDismissWorkItem: DispatchWorkItem?
+    private var delayedManualAttentionWorkItem: DispatchWorkItem?
     private var outsideClickMonitor: EventMonitor?
     private var floatingDragStartOrigin: CGPoint?
     private var petMouseDownPoint: CGPoint?
@@ -609,6 +610,8 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         floatingSettingsHintDismissWorkItem = nil
         completionNotificationDismissWorkItem?.cancel()
         completionNotificationDismissWorkItem = nil
+        delayedManualAttentionWorkItem?.cancel()
+        delayedManualAttentionWorkItem = nil
         outsideClickMonitor?.stop()
         outsideClickMonitor = nil
         floatingDragStartOrigin = nil
@@ -1352,8 +1355,11 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
         guard let targetSession = manualAttentionTracker.consumeNewAttentionSession(
             from: sessionMonitor.instances
         ) else {
+            scheduleDelayedManualAttentionPresentationIfNeeded()
             return
         }
+
+        scheduleDelayedManualAttentionPresentationIfNeeded()
 
         clearCompletionNotifications(keepBubbleOpen: true)
 
@@ -1364,6 +1370,26 @@ final class DetachedIslandWindowController: NSWindowController, NSWindowDelegate
 
         updateHighlightedSessionStableID(nil)
         presentExistingAttentionIfNeeded()
+    }
+
+    private func scheduleDelayedManualAttentionPresentationIfNeeded() {
+        delayedManualAttentionWorkItem?.cancel()
+        delayedManualAttentionWorkItem = nil
+
+        guard let readyAt = manualAttentionTracker.nextDelayedAttentionDate(
+            from: sessionMonitor.instances
+        ) else {
+            return
+        }
+
+        let delay = max(0, readyAt.timeIntervalSinceNow)
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.delayedManualAttentionWorkItem = nil
+            self.handleManualAttentionChange()
+        }
+        delayedManualAttentionWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     private func reconcileHighlightedSessionState() {

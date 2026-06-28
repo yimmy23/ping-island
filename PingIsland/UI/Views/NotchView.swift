@@ -60,6 +60,7 @@ struct NotchView: View {
     @State private var isShowingDetachmentHint: Bool = false
     @State private var detachmentHintDismissWorkItem: DispatchWorkItem?
     @State private var detachmentHintPresentationWorkItem: DispatchWorkItem?
+    @State private var delayedManualAttentionWorkItem: DispatchWorkItem?
 
     @Namespace private var activityNamespace
 
@@ -361,6 +362,7 @@ struct NotchView: View {
             }
             .onDisappear {
                 cancelScheduledDetachmentHintPresentation()
+                cancelScheduledDelayedManualAttentionPresentation()
             }
             .onChange(of: viewModel.status) { oldStatus, newStatus in
                 handleStatusChange(from: oldStatus, to: newStatus)
@@ -1058,8 +1060,11 @@ struct NotchView: View {
 
     private func handleManualAttentionChange(_ instances: [SessionState]) {
         guard let targetSession = manualAttentionTracker.consumeNewAttentionSession(from: instances) else {
+            scheduleDelayedManualAttentionPresentationIfNeeded(instances)
             return
         }
+
+        scheduleDelayedManualAttentionPresentationIfNeeded(instances)
 
         if areReminderNotificationsSuppressed {
             return
@@ -1077,6 +1082,28 @@ struct NotchView: View {
         }
 
         viewModel.presentNotificationChat(for: targetSession)
+    }
+
+    private func scheduleDelayedManualAttentionPresentationIfNeeded(_ instances: [SessionState]) {
+        delayedManualAttentionWorkItem?.cancel()
+        delayedManualAttentionWorkItem = nil
+
+        guard let readyAt = manualAttentionTracker.nextDelayedAttentionDate(from: instances) else {
+            return
+        }
+
+        let delay = max(0, readyAt.timeIntervalSinceNow)
+        let workItem = DispatchWorkItem { [self] in
+            delayedManualAttentionWorkItem = nil
+            handleManualAttentionChange(sessionMonitor.instances)
+        }
+        delayedManualAttentionWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func cancelScheduledDelayedManualAttentionPresentation() {
+        delayedManualAttentionWorkItem?.cancel()
+        delayedManualAttentionWorkItem = nil
     }
 
     private func handleCompletedReadyChange(_ instances: [SessionState]) {
