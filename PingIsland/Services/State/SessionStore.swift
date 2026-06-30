@@ -549,7 +549,7 @@ actor SessionStore {
             newPhase: newPhase,
             currentIntervention: session.intervention
         )
-        let shouldPreserveQoderCLIQuestionIntervention = shouldPreserveQoderCLIQuestionIntervention(
+        let shouldPreserveQoderInlineQuestionIntervention = shouldPreserveQoderInlineQuestionIntervention(
             for: event,
             currentIntervention: session.intervention
         )
@@ -637,7 +637,7 @@ actor SessionStore {
             session.phase = .waitingForInput
         } else if shouldPreserveQwenQuestionIntervention {
             session.phase = .waitingForInput
-        } else if shouldPreserveQoderCLIQuestionIntervention {
+        } else if shouldPreserveQoderInlineQuestionIntervention {
             session.phase = .waitingForInput
         } else if shouldClearCurrentIntervention {
             clearCurrentIntervention(in: &session, nextPhase: session.phase)
@@ -2367,14 +2367,15 @@ actor SessionStore {
         return true
     }
 
-    private func shouldPreserveQoderCLIQuestionIntervention(
+    private func shouldPreserveQoderInlineQuestionIntervention(
         for event: HookEvent,
         currentIntervention: SessionIntervention?
     ) -> Bool {
+        let profileID = event.clientInfo.normalizedForClaudeRouting().profileID
         guard currentIntervention?.kind == .question,
               event.provider == .claude,
               event.event == "PostToolUse",
-              event.clientInfo.normalizedForClaudeRouting().profileID == "qoder-cli" else {
+              (profileID == "qoder-cli" || profileID == "qoderwork") else {
             return false
         }
 
