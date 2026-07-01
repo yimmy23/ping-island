@@ -83,6 +83,10 @@ public enum HookPayloadMapper {
     }
 
     public static func shouldDeliverEnvelope(_ envelope: BridgeEnvelope) -> Bool {
+        if envelope.shouldFilterBeforeApprovalHandling {
+            return false
+        }
+
         guard isQoderIDEHostedEnvelope(envelope) else {
             return true
         }

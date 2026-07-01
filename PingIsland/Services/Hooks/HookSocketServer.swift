@@ -377,7 +377,7 @@ private struct BridgeTerminalContext: Codable, Sendable {
     let tmuxPane: String?
 }
 
-private struct BridgeEnvelope: Codable, Sendable {
+private struct BridgeEnvelope: Decodable, Sendable {
     let id: UUID
     let provider: BridgeProvider
     let eventType: String
@@ -405,6 +405,8 @@ private struct BridgeEnvelope: Codable, Sendable {
         case intervention
         case expectsResponse
         case metadata
+        case clientKind
+        case clientName
         case sentAt
     }
 
@@ -437,6 +439,16 @@ private struct BridgeEnvelope: Codable, Sendable {
         intervention = try container.decodeIfPresent(BridgeEnvelopeIntervention.self, forKey: .intervention)
 
         var decodedMetadata = try container.decodeIfPresent([String: String].self, forKey: .metadata) ?? [:]
+        if decodedMetadata["client_kind"] == nil,
+           let clientKind = try container.decodeIfPresent(String.self, forKey: .clientKind),
+           !clientKind.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            decodedMetadata["client_kind"] = clientKind
+        }
+        if decodedMetadata["client_name"] == nil,
+           let clientName = try container.decodeIfPresent(String.self, forKey: .clientName),
+           !clientName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            decodedMetadata["client_name"] = clientName
+        }
         let expectation = try Self.decodeResponseExpectation(from: container)
         if decodedMetadata["tool_input_json"] == nil,
            let injectedToolInput = expectation.injectedToolInput,
