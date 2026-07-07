@@ -67,7 +67,7 @@ struct IslandTextField: NSViewRepresentable {
                 } else {
                     focus(textField)
                 }
-            } else if hasFocus {
+            } else if hasFocus && !parent.isEditable {
                 textField.window?.makeFirstResponder(nil)
             }
         }

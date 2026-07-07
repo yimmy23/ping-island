@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import Ping_Island
 
@@ -25,5 +26,38 @@ final class IslandTextFieldTests: XCTestCase {
             ) as? NSColor,
             NSColor.white.withAlphaComponent(0.38)
         )
+    }
+
+    func testEditableTextFieldKeepsFirstResponderDuringTransientFocusMismatch() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 240, height: 80),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let textField = IslandNSTextField(frame: NSRect(x: 20, y: 20, width: 180, height: 24))
+        let parent = IslandTextField(
+            placeholder: "Answer",
+            text: .constant(""),
+            isFocused: false,
+            isEditable: true
+        )
+        let coordinator = IslandTextField.Coordinator(parent: parent)
+        textField.delegate = coordinator
+        window.contentView = NSView(frame: window.contentView?.bounds ?? .zero)
+        window.contentView?.addSubview(textField)
+        defer { window.orderOut(nil) }
+
+        coordinator.focus(textField)
+        XCTAssertTrue(isEditing(textField, in: window))
+
+        coordinator.syncFocus(for: textField)
+
+        XCTAssertTrue(isEditing(textField, in: window))
+    }
+
+    private func isEditing(_ textField: IslandNSTextField, in window: NSWindow) -> Bool {
+        guard let firstResponder = window.firstResponder else { return false }
+        return firstResponder === textField || firstResponder === textField.currentEditor()
     }
 }
