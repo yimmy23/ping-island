@@ -716,9 +716,6 @@ class NotchViewModel: ObservableObject {
         if isIdleAutoHiddenActive && status != .opened {
             return true
         }
-        if isQuietBackgroundPresentationActive && status != .opened {
-            return true
-        }
         return false
     }
 
