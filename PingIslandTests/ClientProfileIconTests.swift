@@ -15,8 +15,8 @@ final class ClientProfileIconTests: XCTestCase {
             "cursor-hooks": "CursorLogo",
             "qoder-hooks": "QoderLogo",
             "qoder-cli-hooks": "QoderLogo",
-            "qoder-cn-hooks": "QoderLogo",
-            "qoder-cn-cli-hooks": "QoderLogo",
+            "qoder-cn-hooks": "QoderCNLogo",
+            "qoder-cn-cli-hooks": "QoderCNLogo",
             "qoderwork-hooks": "QoderWorkLogo",
             "copilot-hooks": "CopilotLogo",
             "opencode-hooks": "OpenCodeLogo",
@@ -39,7 +39,7 @@ final class ClientProfileIconTests: XCTestCase {
             "codebuddy-extension": "CodeBuddyLogo",
             "workbuddy-extension": "WorkBuddyLogo",
             "qoder-extension": "QoderLogo",
-            "qoder-cn-extension": "QoderLogo",
+            "qoder-cn-extension": "QoderCNLogo",
         ]
 
         for (profileID, assetName) in expectedAssets {
